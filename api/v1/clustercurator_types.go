@@ -58,7 +58,7 @@ type PreJob struct {
 	Image string `json:"image,omitempty"`
 
 	// This determines whether the job is executed
-	RunOnAction string `json:"runonaction,omitempty"`
+	RunOnAction Action `json:"runonaction,omitempty"`
 
 	Values map[string]interface{} `json:"values,omitempty"`
 }
