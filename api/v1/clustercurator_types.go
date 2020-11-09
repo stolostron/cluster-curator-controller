@@ -28,9 +28,6 @@ type ClusterCuratorSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Foo is an example field of ClusterCurator. Edit ClusterCurator_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
-
 	// Desired action: create/import/destroy/detach/noop
 	Action Action `json:"action,omitempty"`
 
@@ -79,21 +76,22 @@ type PostJob struct {
 }
 
 type Job struct {
-	Name   string                 // "my custom job name" #If they put ansible we run our job
-	Image  string                 // "" #OPTIONAL user override for future
+	Name   string                 `json:"name,omitempty"`  // "my custom job name" #If they put ansible we run our job
+	Image  string                 `json:"image,omitempty"` // "" #OPTIONAL user override for future
 	Values map[string]interface{} `json:"values,omitempty"`
 }
 
-type ConditionStatus struct {
+// ClusterCuratorStatus defines the observed state of ClusterCurator
+type ClusterCuratorStatus struct {
 	Conditions []Conditions `json:"conditionStatus,omitempty"`
 }
 
 type Conditions struct {
-	JobName         string //ansible-job-123
-	Type            string //preJobCompleted
-	ConditionStatus bool   //False
-	Message         string //Creating AnsibleJob ANSIBLEJOB_RESOURCE_NAME / Running AnsibleJob ANSIBLEJOB_RESOURCE_NAME / Completed AnsibleJob ANSIBLEJOB_RESOURCE_NAME / Failed AnsibleJob ANSIBLEJOB_RESOURCE_NAME
-	Reason          Reason //: Initializing / Running / Failed / Completed
+	JobName         string `json:"jobname,omitempty"`         //ansible-job-123
+	Type            string `json:"type,omitempty"`            //preJobCompleted
+	ConditionStatus bool   `json:"conditionstatus,omitempty"` //False
+	Message         string `json:"message,omitempty"`         //Creating AnsibleJob ANSIBLEJOB_RESOURCE_NAME / Running AnsibleJob ANSIBLEJOB_RESOURCE_NAME / Completed AnsibleJob ANSIBLEJOB_RESOURCE_NAME / Failed AnsibleJob ANSIBLEJOB_RESOURCE_NAME
+	Reason          Reason `json:"reason,omitempty"`          //: Initializing / Running / Failed / Completed
 }
 
 type Reason string
@@ -107,7 +105,7 @@ const (
 
 type ClusterHealth struct {
 	Status  Status
-	Details map[string]interface{}
+	Details map[string]interface{} `json:"clusterdetails,omitempty"`
 }
 
 type Status string
@@ -119,8 +117,9 @@ const (
 )
 
 type ManagedClusterHealth struct {
-	ManagedClusterStatus ManagedClusterStatus
-	Details              map[string]interface{}
+	ManagedClusterStatus ManagedClusterStatus `json:"managedclusterstatus,omitempty"`
+
+	Details map[string]interface{} `json:"managedclusterdetails,omitempty"`
 }
 
 type ManagedClusterStatus string
@@ -133,12 +132,6 @@ const (
 	Detaching ManagedClusterStatus = "Detaching"
 	Offline   ManagedClusterStatus = "Offline"
 )
-
-// ClusterCuratorStatus defines the observed state of ClusterCurator
-type ClusterCuratorStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-}
 
 // +kubebuilder:object:root=true
 
