@@ -21,6 +21,7 @@ type ClusterCuratorSpec struct {
 	PostJobs []PostJob `json:"postjobspec"`
 }
 
+// Action ...
 type Action string
 
 const (
