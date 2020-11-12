@@ -1,0 +1,9 @@
+#file extensions to ignore
+.copyrightignore
+.yml
+.yaml
+# directories to ingore
+build-harness/*
+build-harness-extensions/*
+# generated bindata
+pkg/bindata/bindata_generated.go

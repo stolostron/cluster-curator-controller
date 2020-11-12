@@ -1,7 +1,19 @@
-# Build the manager binary
-FROM golang:1.13 as builder
+FROM openshift/origin-release:golang-1.13 as builder
 
-WORKDIR /workspace
+ARG REMOTE_SOURCE
+ARG REMOTE_SOURCE_DIR
+ARG GITHUB_TOKEN
+ARG COMPONENT_VERSION
+
+ENV USE_VENDORIZED_BUILD_HARNESS=true
+ENV COMPONENT_NAME=rcm-controller
+ENV COMPONENT_VERSION="${COMPONENT_VERSION}"
+ENV COMPONENT_TAG_EXTENSION=" "
+
+COPY $REMOTE_SOURCE $REMOTE_SOURCE_DIR/app/
+WORKDIR $REMOTE_SOURCE_DIR/app
+RUN git config --global url."https://${GITHUB_TOKEN}:x-oauth-basic@github.com/".insteadOf "https://github.com/"
+RUN GOFLAGS="" go build ./cmd/manager
 # Copy the Go Modules manifests
 COPY go.mod go.mod
 COPY go.sum go.sum
