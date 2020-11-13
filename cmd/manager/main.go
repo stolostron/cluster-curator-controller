@@ -13,7 +13,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	"github.com/cluster-curator/controllers"
-	clustercuratorv1 "github.com/cluster-curator/pkg/apis/v1"
+	clustercuratorv1 "github.com/cluster-curator/pkg/apis/cluster/v1alpha1"
 	// +kubebuilder:scaffold:imports
 )
 
