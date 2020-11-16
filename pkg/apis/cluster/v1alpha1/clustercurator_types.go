@@ -3,6 +3,7 @@ package v1alpha1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 // ClusterCurator is the Custom Resource object which holds the desired state and current status
@@ -32,15 +33,15 @@ type ClusterCuratorSpec struct {
 
 	// PreJobs holds the job specifications
 	// +optional
-	PreJobs []JobSpec `json:"prejobs"`
+	PreJobs []JobSpec `json:"preJobs,omitempty"`
 
 	// PostJobs holds the job specifications
 	// +optional
-	PostJobs []JobSpec `json:"postjobs"`
+	PostJobs []JobSpec `json:"postJobs,omitempty"`
 
 	// Jobs holds the job specifications
 	// +optional
-	Jobs []JobConfig `json:"jobs"`
+	Job []JobSpec `json:"job,omitempty"`
 }
 
 // Action holds the information about create/import/destroy/detach/noop one of the action job should perform
@@ -84,29 +85,11 @@ type JobSpec struct {
 	// RunOnAction represents on which actoin this job should be executed
 	// action are create/import-only/destroy/detach
 	// +required
-	RunOnAction Action `json:"runonaction,omitempty"`
+	RunOnAction Action `json:"runOnAction,omitempty"`
 
 	// Values represents neccasary fields required to exceute the job
 	// +required
-	Values map[string]interface{} `json:"values,omitempty"`
-}
-
-// JobConfig holds desired configuration to create the job
-// +kubebuilder:validation:Required
-// +optional
-type JobConfig struct {
-	// name represents the name of the job
-	// +required
-	Name string `json:"name,omitempty"` // "my custom job name" #If they put ansible we run our job
-
-	// image represents image which will be used to run a job
-	// OPTIONAL required if NOT ansible
-	// +optional
-	Image string `json:"image,omitempty"` // "" #OPTIONAL user override for future
-
-	// Values represents neccasary fields required to exceute the job
-	// +required
-	Values map[string]interface{} `json:"values,omitempty"`
+	Values map[string]runtime.RawExtension `json:"values,omitempty"`
 }
 
 // ClusterCuratorStatus defines the observed state of ClusterCurator
