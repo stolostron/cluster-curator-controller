@@ -1,3 +1,5 @@
+// Copyright (c) 2020 Red Hat, Inc.
+
 // Package v1alpha1 contains API Schema definitions for the cluster v1alpha1 API group
 // +k8s:deepcopy-gen=package,register
 // +k8s:defaulter-gen=TypeMeta
