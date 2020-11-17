@@ -13,13 +13,9 @@ import (
 	"os"
 
 	"k8s.io/apimachinery/pkg/runtime"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-
-	clustercuratorv1 "github.com/open-cluster-management/cluster-curator-controller/pkg/apis/cluster/v1alpha1"
-	controllers "github.com/open-cluster-management/cluster-curator-controller/pkg/controller"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -28,12 +24,12 @@ var (
 	setupLog = ctrl.Log.WithName("setup")
 )
 
-func init() {
-	_ = clientgoscheme.AddToScheme(scheme)
+// func init() {
+// 	_ = clientgoscheme.AddToScheme(scheme)
 
-	_ = clustercuratorv1.AddToScheme(scheme)
-	// +kubebuilder:scaffold:scheme
-}
+// 	_ = clustercuratorv1.AddToScheme(scheme)
+// 	// +kubebuilder:scaffold:scheme
+// }
 
 func main() {
 	var metricsAddr string
@@ -46,7 +42,7 @@ func main() {
 
 	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+	_, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:             scheme,
 		MetricsBindAddress: metricsAddr,
 		Port:               9443,
@@ -58,19 +54,19 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&controllers.ClusterCuratorReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("ClusterCurator"),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "ClusterCurator")
-		os.Exit(1)
-	}
-	// +kubebuilder:scaffold:builder
+	// if err = (&controllers.ClusterCuratorReconciler{
+	// 	Client: mgr.GetClient(),
+	// 	Log:    ctrl.Log.WithName("controllers").WithName("ClusterCurator"),
+	// 	Scheme: mgr.GetScheme(),
+	// }).SetupWithManager(mgr); err != nil {
+	// 	setupLog.Error(err, "unable to create controller", "controller", "ClusterCurator")
+	// 	os.Exit(1)
+	// }
+	// // +kubebuilder:scaffold:builder
 
-	setupLog.Info("starting manager")
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-		setupLog.Error(err, "problem running manager")
-		os.Exit(1)
-	}
+	// setupLog.Info("starting manager")
+	// if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+	// 	setupLog.Error(err, "problem running manager")
+	// 	os.Exit(1)
+	// }
 }

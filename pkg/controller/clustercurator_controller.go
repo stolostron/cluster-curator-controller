@@ -9,8 +9,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	clustercuratorv1 "github.com/open-cluster-management/cluster-curator-controller/pkg/apis/cluster/v1alpha1"
 )
 
 // ClusterCuratorReconciler reconciles a ClusterCurator object
@@ -32,8 +30,8 @@ func (r *ClusterCuratorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 	return ctrl.Result{}, nil
 }
 
-func (r *ClusterCuratorReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&clustercuratorv1.ClusterCurator{}).
-		Complete(r)
-}
+// func (r *ClusterCuratorReconciler) SetupWithManager(mgr ctrl.Manager) error {
+// 	return ctrl.NewControllerManagedBy(mgr).
+// 		For(clustercuratorv1.ClusterCurator{}).
+// 		Complete(r)
+// }

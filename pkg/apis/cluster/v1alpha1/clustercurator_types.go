@@ -7,6 +7,7 @@ import (
 
 // ClusterCurator is the Custom Resource object which holds the desired state and current status
 // of an cluster. ClusterCurator is a namespace scoped resource
+// +k8s:deepcopy-gen=true
 type ClusterCurator struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata"`
@@ -66,6 +67,7 @@ const (
 // JobSpec holds desired configuration to create the job
 // +kubebuilder:validation:Required
 // +optional
+// +union
 type JobSpec struct {
 
 	// name represents the name of the job
@@ -87,7 +89,8 @@ type JobSpec struct {
 	RunOnAction Action `json:"runOnAction,omitempty"`
 
 	// Values represents neccasary fields required to exceute the job
-	// +required
+	// +kubebuilder:validation:Optional
+	//Values apiextensions.JSON `json:"values,omitempty"`
 	Values map[string]string `json:"values,omitempty"`
 }
 
