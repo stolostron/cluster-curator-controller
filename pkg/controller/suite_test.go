@@ -16,8 +16,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	clustercuratorv1 "github.com/cluster-curator/pkg/apis/cluster/v1alpha1"
-	// +kubebuilder:scaffold:imports
+	clustercuratorv1 "github.com/open-cluster-management/cluster-curator-controller/pkg/apis/cluster/v1alpha1"
 )
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to

@@ -18,8 +18,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	clustercuratorv1 "github.com/cluster-curator/pkg/apis/cluster/v1alpha1"
-	controllers "github.com/cluster-curator/pkg/controller"
+	clustercuratorv1 "github.com/open-cluster-management/cluster-curator-controller/pkg/apis/cluster/v1alpha1"
+	controllers "github.com/open-cluster-management/cluster-curator-controller/pkg/controller"
 	// +kubebuilder:scaffold:imports
 )
 

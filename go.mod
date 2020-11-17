@@ -1,4 +1,4 @@
-module github.com/cluster-curator
+module github.com/open-cluster-management/cluster-curator-controller
 
 go 1.13
 

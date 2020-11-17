@@ -3,7 +3,6 @@ package v1alpha1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 )
 
 // ClusterCurator is the Custom Resource object which holds the desired state and current status
@@ -89,7 +88,7 @@ type JobSpec struct {
 
 	// Values represents neccasary fields required to exceute the job
 	// +required
-	Values map[string]runtime.RawExtension `json:"values,omitempty"`
+	Values map[string]interface{} `json:"values,omitempty"`
 }
 
 // ClusterCuratorStatus defines the observed state of ClusterCurator
