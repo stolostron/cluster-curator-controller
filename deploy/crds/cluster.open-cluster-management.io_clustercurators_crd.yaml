@@ -18,9 +18,6 @@ spec:
           desired state and current status of an cluster. ClusterCurator is a namespace
           scoped resource
         properties:
-          json: 
-            x-kubernetes-preserve-unknown-fields: true
-            type: object
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
               of an object. Servers should convert recognized schemas to the latest
@@ -62,7 +59,7 @@ spec:
                       type: string
                     values:
                       additionalProperties:
-                        type: object
+                        type: string
                       description: Values represents neccasary fields required to
                         exceute the job
                       type: object
@@ -89,7 +86,7 @@ spec:
                       type: string
                     values:
                       additionalProperties:
-                        type: object
+                        type: string
                       description: Values represents neccasary fields required to
                         exceute the job
                       type: object
@@ -99,7 +96,7 @@ spec:
                 description: PreJobs holds the job specifications
                 items:
                   description: JobSpec holds desired configuration to create the job
-                  properties:                   
+                  properties:
                     image:
                       description: image represents image which will be used to run
                         a job OPTIONAL required if NOT ansible
@@ -116,7 +113,7 @@ spec:
                       type: string
                     values:
                       additionalProperties:
-                        type: object
+                        type: string
                       description: Values represents neccasary fields required to
                         exceute the job
                       type: object

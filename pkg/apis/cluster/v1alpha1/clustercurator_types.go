@@ -88,7 +88,7 @@ type JobSpec struct {
 
 	// Values represents neccasary fields required to exceute the job
 	// +required
-	Values map[string]interface{} `json:"values,omitempty"`
+	Values map[string]string `json:"values,omitempty"`
 }
 
 // ClusterCuratorStatus defines the observed state of ClusterCurator
