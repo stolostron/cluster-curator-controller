@@ -1,0 +1,86 @@
+language: go
+
+go:
+  - "1.14.x"
+
+services:
+  - docker
+
+branches:
+  only:
+    - master
+    - main
+    - /^release-[0-9]+\..*$/
+
+addons:
+  sonarcloud:
+    organization: "open-cluster-management"
+    token:
+      secure: "UnWF6FutDrJrJIdWlcZw5ALSIN8RPlYkBpQXf+Hu2XDNBpYw1iI/e8QrcnBHsgaVAps2yzO1hDS6y92NBZiBIT0Xl0VZrgQEKAjJPgMA+CmZIdjKuAMnDBPi/ukItkw1CbZA4FRc8M1DNtIE3jMN/ba1tUlTHCjEf2di/+NzkjIi6h7AVp43cK0lU6OZ80qimNvzYOX72C6JJAOj0alYPjsIRwUPv3YZmm13n+ncGMeFvdTFnw6geniwTb7v/zJgb5WDp6vLHk4x2OoGF8hwejOj/l/uzKh+lHltgi9wOnitoRjUQj7U+qhYSFlVjdH9/I3oKGev4/491+fIEvWNuIS5jZlurWReo8bb9lcBnu5jV/l7OK76QL2R9rnS4jrfO+tRv11OjygTzuZPA/NM8aXn00LQJnQUV3oPcGpe0jZrqFMNQ+lqT/ciblpH+dMeOTcUisHP80tdg+V+vXTS3HzVaWb0iBCeQcxsKopolAhwXYCOJI4oFfpP6ycduFSUiWl2NzBK8uovCUiYUbCMBmTmjmpSDnCDOdTsa145ST1NlYSO2uYllamzPHEK3FkrEk+uVwLjdn3OklF4+lSzhlCCT4qBwhMrjvoV88OdyT2iLzbHYD4LX7hK8D2zaLIWDOI7AUQFsGwRPyj/tnwJkr5zHa8/ebbcsNAQhVfQFrk="
+
+stages:
+  - unit-test
+  - build
+  - functional-test
+  - release-ff
+  - publish
+
+before_script:
+  #- git config --global url.git@github.com:open-cluster-management/.insteadOf https://github.com/open-cluster-management/
+  - make init
+
+jobs:
+  include:
+    - stage: unit-test
+      name: "Run unit tests"
+      script:
+        - if [ "$TRAVIS_PULL_REQUEST" != "false" ]; then export COMPONENT_TAG_EXTENSION="-PR${TRAVIS_PULL_REQUEST}-${TRAVIS_COMMIT}"; fi; 
+        - make sonar/go
+
+    - stage: build
+      name: "build image"
+      script:
+        - if [ "$TRAVIS_PULL_REQUEST" != "false" ]; then export COMPONENT_TAG_EXTENSION="-PR${TRAVIS_PULL_REQUEST}-${TRAVIS_COMMIT}"; fi;
+        - make component/init
+        - make check
+        - make component/build   # to remove overhead and keep output clean
+        - make component/push
+        - make security/scans
+    
+    # - stage: build
+    #   name: "build and push coverage image"
+    #   script:
+    #     - if [ "$TRAVIS_PULL_REQUEST" != "false" ]; then export COMPONENT_TAG_EXTENSION="-PR${TRAVIS_PULL_REQUEST}-${TRAVIS_COMMIT}"; fi;
+    #     - make component/build-coverage
+    #     - make component/push-coverage
+      
+    # - stage: build
+    #   name: "build and push e2e image"
+    #   if: type = pull_request
+    #   script:
+    #   - if [ "$TRAVIS_PULL_REQUEST" != "false" ]; then export COMPONENT_TAG_EXTENSION="-PR${TRAVIS_PULL_REQUEST}-${TRAVIS_COMMIT}"; fi;
+    #   - make component/build-e2e
+    #   - make component/push-e2e
+
+    # - stage: functional-test
+    #   name: "Run functional-test"
+    #   script:
+    #     - if [ "$TRAVIS_PULL_REQUEST" != "false" ]; then export COMPONENT_TAG_EXTENSION="-PR${TRAVIS_PULL_REQUEST}-${TRAVIS_COMMIT}"; fi; 
+    #     - make component/pull
+    #     - make component/test/functional
+    
+    # - stage: release-ff
+    #   name: "Push commits to current release branch"
+    #   if: type = push AND branch =~ /^master$/
+    #   script:
+    #     - make
+    #     - make release-ff
+
+    # - stage: publish
+    #   name: "Publish Image"
+    #   if: type = push AND branch =~ /^release-[0-9]+\..*$/
+    #   script:
+    #     - make jq/install 
+    #     - make pipeline-manifest/update PIPELINE_MANIFEST_COMPONENT_SHA256=${TRAVIS_COMMIT} PIPELINE_MANIFEST_COMPONENT_REPO=${TRAVIS_REPO_SLUG} PIPELINE_MANIFEST_BRANCH=${TRAVIS_BRANCH}
+    #   after_script:
+    #     - test "$TRAVIS_PULL_REQUEST" = "false" && test "$TRAVIS_TEST_RESULT" = "1" && ./build/slack-notification.sh || echo "Slack notification not sent"

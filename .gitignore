@@ -1,24 +1,36 @@
 
 # Binaries for programs and plugins
+# Files
 *.exe
 *.exe~
 *.dll
 *.so
 *.dylib
 bin
-
-# Test binary, build with `go test -c`
+.build-harness
+.build-harness-bootstrap
+OPENSOURCE.check
+.vscode
+cover.html
+cover-functional.html
+cover-functional-filtered.html
+*.tap
 *.test
+.DS_Store
 
-# Output of the go coverage tool, specifically when used with LiteIDE
-*.out
 
-# Kubernetes Generated files - skip generated files, except for vendored files
+# Folders
+.build-docker
+build/_output
+build-harness
+build-harness-extensions
+vendor
 
-!vendor/**/zz_generated.*
+test/e2e/resources/clusters
+test/e2e/resources/hubs
 
-# editor and IDE paraphernalia
-.idea
-*.swp
-*.swo
-*~
+!vbh/.build-harness-vendorized
+!vbh/build-harness
+!vbh/build-harness-extensions
+
+go-bindata.diff
