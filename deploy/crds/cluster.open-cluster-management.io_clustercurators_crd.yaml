@@ -40,102 +40,83 @@ spec:
                 type: string
               job:
                 description: Jobs holds the job specifications
-                items:
-                  description: JobSpec holds desired configuration to create the job
-                  properties:
-                    image:
-                      description: image represents image which will be used to run
-                        a job OPTIONAL required if NOT ansible
-                      type: string
-                    name:
-                      description: name represents the name of the job
-                      type: string
-                    runOnAction:
-                      description: RunOnAction represents on which actoin this job
-                        should be executed action are create/import-only/destroy/detach
-                      type: string
-                    type:
-                      description: type represents type of job
-                      type: string
-                    values:
-                      additionalProperties:
-                        type: string
-                      description: Values represents neccasary fields required to
-                        exceute the job Values apiextensions.JSON `json:"values,omitempty"`
-                      type: object
-                  type: object
-                type: array
+                properties:
+                  image:
+                    description: image represents image which will be used to run
+                      a job OPTIONAL required if NOT ansible
+                    type: string
+                  name:
+                    description: name represents the name of the job
+                    type: string
+                  runOnAction:
+                    description: RunOnAction represents on which actoin this job should
+                      be executed action are create/import-only/destroy/detach
+                    type: string
+                  type:
+                    description: type represents type of job
+                    type: string
+                  values:
+                    description: Values represents necassary fields required to exceute
+                      the job
+                    x-kubernetes-preserve-unknown-fields: true
+                type: object
               postJobs:
                 description: PostJobs holds the job specifications
-                items:
-                  description: JobSpec holds desired configuration to create the job
-                  properties:
-                    image:
-                      description: image represents image which will be used to run
-                        a job OPTIONAL required if NOT ansible
-                      type: string
-                    name:
-                      description: name represents the name of the job
-                      type: string
-                    runOnAction:
-                      description: RunOnAction represents on which actoin this job
-                        should be executed action are create/import-only/destroy/detach
-                      type: string
-                    type:
-                      description: type represents type of job
-                      type: string
-                    values:
-                      additionalProperties:
-                        type: string
-                      description: Values represents neccasary fields required to
-                        exceute the job Values apiextensions.JSON `json:"values,omitempty"`
-                      type: object
-                  type: object
-                type: array
+                properties:
+                  image:
+                    description: image represents image which will be used to run
+                      a job OPTIONAL required if NOT ansible
+                    type: string
+                  name:
+                    description: name represents the name of the job
+                    type: string
+                  runOnAction:
+                    description: RunOnAction represents on which actoin this job should
+                      be executed action are create/import-only/destroy/detach
+                    type: string
+                  type:
+                    description: type represents type of job
+                    type: string
+                  values:
+                    description: Values represents necassary fields required to exceute
+                      the job
+                    x-kubernetes-preserve-unknown-fields: true
+                type: object
               preJobs:
                 description: PreJobs holds the job specifications
-                items:
-                  description: JobSpec holds desired configuration to create the job
-                  properties:
-                    image:
-                      description: image represents image which will be used to run
-                        a job OPTIONAL required if NOT ansible
-                      type: string
-                    name:
-                      description: name represents the name of the job
-                      type: string
-                    runOnAction:
-                      description: RunOnAction represents on which actoin this job
-                        should be executed action are create/import-only/destroy/detach
-                      type: string
-                    type:
-                      description: type represents type of job
-                      type: string
-                    values:
-                      additionalProperties:
-                        type: string
-                      description: Values represents neccasary fields required to
-                        exceute the job Values apiextensions.JSON `json:"values,omitempty"`
-                      type: object
-                  type: object
-                type: array
+                properties:
+                  image:
+                    description: image represents image which will be used to run
+                      a job OPTIONAL required if NOT ansible
+                    type: string
+                  name:
+                    description: name represents the name of the job
+                    type: string
+                  runOnAction:
+                    description: RunOnAction represents on which actoin this job should
+                      be executed action are create/import-only/destroy/detach
+                    type: string
+                  type:
+                    description: type represents type of job
+                    type: string
+                  values:
+                    description: Values represents necassary fields required to exceute
+                      the job
+                    x-kubernetes-preserve-unknown-fields: true
+                type: object
             type: object
           status:
             description: status holds the information about the state of a cluster
               curator resource, managed cluster heealth and cluster health.  It is
               consistent with status information across the Kubernetes ecosystem.
             properties:
-              clusterhealth:
-                description: ClusterStatus represents state of cluster created using
-                  hive
-                type: object
               conditions:
                 description: conditions describe the state of cluster curator resource
                 items:
                   description: Conditions contains details for one aspect of the current
                     state of this API Resource.
                   properties:
-                    conditions:
+                    condition:
                       description: conditions describe the state of job resource
                       properties:
                         lastTransitionTime:
