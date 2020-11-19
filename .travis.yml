@@ -37,15 +37,15 @@ jobs:
         - if [ "$TRAVIS_PULL_REQUEST" != "false" ]; then export COMPONENT_TAG_EXTENSION="-PR${TRAVIS_PULL_REQUEST}-${TRAVIS_COMMIT}"; fi; 
         - make sonar/go
 
-    - stage: build
-      name: "build image"
-      script:
-        - if [ "$TRAVIS_PULL_REQUEST" != "false" ]; then export COMPONENT_TAG_EXTENSION="-PR${TRAVIS_PULL_REQUEST}-${TRAVIS_COMMIT}"; fi;
-        - make component/init
-        - make check
-        - make component/build   # to remove overhead and keep output clean
-        - make component/push
-        - make security/scans
+    # - stage: build
+    #   name: "build image"
+    #   script:
+    #     - if [ "$TRAVIS_PULL_REQUEST" != "false" ]; then export COMPONENT_TAG_EXTENSION="-PR${TRAVIS_PULL_REQUEST}-${TRAVIS_COMMIT}"; fi;
+    #     - make component/init
+    #     - make check
+    #     - make component/build   # to remove overhead and keep output clean
+    #     - make component/push
+    #     - make security/scans
     
     # - stage: build
     #   name: "build and push coverage image"

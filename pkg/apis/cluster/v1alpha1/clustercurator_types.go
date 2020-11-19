@@ -2,12 +2,12 @@
 package v1alpha1
 
 import (
+	apiextensions "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // ClusterCurator is the Custom Resource object which holds the desired state and current status
 // of an cluster. ClusterCurator is a namespace scoped resource
-// +k8s:deepcopy-gen=true
 type ClusterCurator struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata"`
@@ -23,6 +23,8 @@ type ClusterCurator struct {
 	Status ClusterCuratorStatus `json:"status"`
 }
 
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
 // ClusterCuratorSpec defines the desired configuration to ceate a job
 type ClusterCuratorSpec struct {
 
@@ -33,15 +35,15 @@ type ClusterCuratorSpec struct {
 
 	// PreJobs holds the job specifications
 	// +optional
-	PreJobs []JobSpec `json:"preJobs,omitempty"`
+	PreJobs JobSpec `json:"preJobs,omitempty"`
 
 	// PostJobs holds the job specifications
 	// +optional
-	PostJobs []JobSpec `json:"postJobs,omitempty"`
+	PostJobs JobSpec `json:"postJobs,omitempty"`
 
 	// Jobs holds the job specifications
 	// +optional
-	Job []JobSpec `json:"job,omitempty"`
+	Job JobSpec `json:"job,omitempty"`
 }
 
 // Action holds the information about create/import/destroy/detach/noop one of the action job should perform
@@ -88,10 +90,9 @@ type JobSpec struct {
 	// +required
 	RunOnAction Action `json:"runOnAction,omitempty"`
 
-	// Values represents neccasary fields required to exceute the job
+	// Values represents necassary fields required to exceute the job
 	// +kubebuilder:validation:Optional
-	//Values apiextensions.JSON `json:"values,omitempty"`
-	Values map[string]string `json:"values,omitempty"`
+	Values apiextensions.JSON `json:"values,omitempty"`
 }
 
 // ClusterCuratorStatus defines the observed state of ClusterCurator
@@ -102,7 +103,7 @@ type ClusterCuratorStatus struct {
 	// +optional
 	Conditions []Conditions `json:"conditions,omitempty"`
 
-	ClusterHealth ClusterStatus `json:"clusterhealth"`
+	//ClusterHealth ClusterStatus `json:"clusterhealth"`
 
 	//ManagedClusterHealth
 }
@@ -116,15 +117,15 @@ type Conditions struct {
 	// +patchMergeKey=type
 	// +patchStrategy=merge
 	// +optional
-	Condition metav1.Condition `json:"conditions,omitempty"  patchStrategy:"merge" patchMergeKey:"type"`
+	Condition metav1.Condition `json:"condition,omitempty"  patchStrategy:"merge" patchMergeKey:"type"`
 }
 
 // ClusterStatus represents state of cluster created using hive
 // +optional
-type ClusterStatus struct {
-	// Status  Status
-	// Details map[string]interface{} `json:"clusterdetails,omitempty"`
-}
+// type ClusterStatus struct {
+// 	// Status  Status
+// 	// Details map[string]interface{} `json:"clusterdetails,omitempty"`
+// }
 
 // type Status string
 
