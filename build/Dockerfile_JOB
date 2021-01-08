@@ -1,0 +1,6 @@
+FROM registry.access.redhat.com/ubi8/ubi-minimal
+
+# Add the program
+ADD build/_output/build-secrets .
+
+USER 1001

@@ -144,3 +144,19 @@ helpz:
 ifndef build-harness
 	$(eval MAKEFILE_LIST := Makefile build-harness/modules/go/Makefile)
 endif
+
+.PHONY: push-job
+push-job: build-job
+	docker push ${REPO_URL}/clustercurator-job:${VERSION}
+
+.PHONY: compile-job
+compile-job:
+	go mod tidy
+	go mod vendor
+	go build -o build/_output/build-secrets ./pkg/jobs
+
+.PHONY: build-job
+build-job: compile-job
+	cp build/Dockerfile_JOB Dockerfile
+	docker build . -t ${REPO_URL}/clustercurator-job:${VERSION}
+	rm Dockerfile
