@@ -145,18 +145,20 @@ ifndef build-harness
 	$(eval MAKEFILE_LIST := Makefile build-harness/modules/go/Makefile)
 endif
 
-.PHONY: push-job
-push-job: build-job
+.PHONY: push-curator
+push-curator: build-curator
 	docker push ${REPO_URL}/clustercurator-job:${VERSION}
 
-.PHONY: compile-job
-compile-job:
+.PHONY: compile-curator
+compile-curator:
 	go mod tidy
 	go mod vendor
-	go build -o build/_output/build-secrets ./pkg/jobs
+	go build -o build/_output/curator ./pkg/jobs/curator.go
+	go build -o build/_output/ansiblejob ./pkg/jobs/ansible.go
+	go build -o build/_output/cluster-curator-controller ./pkg/controller/controller.go
 
-.PHONY: build-job
-build-job: compile-job
+.PHONY: build-curator
+build-curator: compile-curator
 	cp build/Dockerfile_JOB Dockerfile
 	docker build . -t ${REPO_URL}/clustercurator-job:${VERSION}
 	rm Dockerfile
