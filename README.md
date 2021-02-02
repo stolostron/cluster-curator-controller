@@ -46,8 +46,8 @@ oc process -f deploy/jobs/provider-ns-rolebinding.yaml -p CP_NAME=my-cloud-provi
 2. Create a Cluster configMap template. Will be read-only to all service accounts in the cluster by default.
 ```bash
 # Provide your own values for:
-* TEMPLATE_NAME (aws-template)
-* TEMPLATE_NAMESPACE (default)
+# * TEMPLATE_NAME (aws-template)
+# * TEMPLATE_NAMESPACE (default)
 
 ## CREATE ##
 oc process -f deploy/cluster-templates-configmaps/aws-clusterdeployment.yaml -p TEMPLATE_NAME=aws-template TEMPLATE_NAMESPACE=default | oc apply -f -
@@ -56,7 +56,16 @@ oc process -f deploy/cluster-templates-configmaps/aws-clusterdeployment.yaml -p 
 oc process -f deploy/cluster-templates-configmaps/aws-clusterdeployment.yaml -p TEMPLATE_NAME=aws-template TEMPLATE_NAMESPACE=default | oc delete -f -
 ```
 3. Creating a cluster
-Apply the `./deploy/jobs/create-cluster.yaml`, this will create a ManagedCluster resource which the cluster-curator-controller, sees and creates a curator-job.  Check the ConfigMap for `ConfigMap.data.curator-job` and `ConfigMap.data.curator-job-container`. This will tell you which step (container) the job is running.  You can view the logs by combining the `curator-job` value and the curator-job-container value in the following command
+```bash
+# Generate a new YAML for your cluster
+# * CLUSTER_NAME (my-cluster)
+# * CLUSTER_IMAGE_SET (img4.6.15-x86-64-appsub)
+# * BASE_DOMAIN (my-domain.com)
+oc process -f deploy/jobs/create-cluster.yaml -p CLUSTER_NAME=my-cluster -p CLUSTER_IMAGE_SET=img4.6.15-x86-64-appsub -p BASE_DOMAIN=my-domain.com > my-cluster.yaml
+
+oc apply -f my-cluster.yaml
+```
+This will create a ManagedCluster resource which the cluster-curator-controller will identify and creates a curator-job.  Check the ConfigMap for `curator-job` and `curator-job-container`. This will tell you which step (container) the job is running.  You can view the logs by combining the `curator-job` value and the `curator-job-container` value in the following command
 ```bash
 # ConfigMap
 #   data:
@@ -68,5 +77,7 @@ oc logs job.batch/curator-job-MJE7f-m3M39 applycloudprovider-aws
 
 # Add a "-f" to the end if you want to tail the output
 ```
-If there is a failure, the job will show Failure.  Look at the `curator-job-container` value to see which step in the provisioning failed.
+If there is a failure, the job will show Failure.  Look at the `curator-job-container` value to see which step in the provisioning failed and review the logs above. If the `curator-job-contianer` is `monitor`, there may be an additional `provisioning` job. Check this log for additional information.
+
+The generated YAML can be committed to a Git repository. You can then use an ACM Subscription to apply the YAML (provision) on the ACM Hub.
  

@@ -1,0 +1,183 @@
+---
+apiVersion: v1
+kind: Template
+metadata:
+  name: cloud-provider-rbac
+objects:  
+- apiVersion: v1
+  kind: Namespace
+  metadata:
+    name: ${CLUSTER_NAME}
+- apiVersion: v1
+  kind: ConfigMap
+  metadata:
+    name: ${CLUSTER_NAME}
+    namespace: ${CLUSTER_NAME}
+    labels:
+      open-cluster-management: curator
+  data:
+    providerCredentialPath: default/aws4jnp
+    prehook-towertemplatename: Service now App Update
+    #posthook-towertemplatename:
+    clusterName: ${CLUSTER_NAME}
+    overrideJob: |-
+      apiVersion: batch/v1
+      kind: Job
+      metadata:
+        GenerateName: curator-job-
+      spec:
+        backoffLimit: 0
+        template:
+          spec:
+            serviceAccountName: cluster-installer
+            initContainers:
+            - name: applycloudprovider-aws
+              image: quay.io/jpacker/clustercurator-job@sha256:13c859f7aee263068ecc9bdedac333515c35832828332fadc8296262f943cdfa
+              command: ['./curator','applycloudprovider-aws']
+            - name: monitor
+              image: quay.io/jpacker/clustercurator-job@sha256:13c859f7aee263068ecc9bdedac333515c35832828332fadc8296262f943cdfa
+              command: ['./curator','monitor']
+            containers:
+            - name: complete
+              image: quay.io/jpacker/clustercurator-job@sha256:13c859f7aee263068ecc9bdedac333515c35832828332fadc8296262f943cdfa
+              imagePullPolicy: Always
+              command: ['echo','Done! create']
+            restartPolicy: Never
+- apiVersion: hive.openshift.io/v1
+  kind: ClusterDeployment
+  metadata:
+    name: ${CLUSTER_NAME}
+    namespace: ${CLUSTER_NAME}
+  spec:
+    baseDomain: ${BASE_DOMAIN}
+    clusterName: ${CLUSTER_NAME}
+    installAttemptsLimit: 1
+    controlPlaneConfig:
+      servingCertificates: {}
+    installed: false
+    platform:
+      aws:
+        credentialsSecretRef:
+          name: ${CLUSTER_NAME}-creds
+        region: ${REGION}
+    provisioning:
+      installConfigSecretRef:
+        name: ${CLUSTER_NAME}-install-config
+      sshPrivateKeySecretRef:
+        name: ${CLUSTER_NAME}-ssh-private-key
+      imageSetRef:
+        # Find releases at quay.io/openshift-release-dev/ocp-release
+        name: ${CLUSTER_IMAGE_SET}
+    pullSecretRef:
+      name: ${CLUSTER_NAME}-pull-secret
+- apiVersion: hive.openshift.io/v1
+  kind: MachinePool
+  metadata:
+    name: ${CLUSTER_NAME}-worker
+    namespace: ${CLUSTER_NAME}
+  spec:
+    clusterDeploymentRef:
+      name: ${CLUSTER_NAME}
+    name: worker
+    platform:
+      aws:
+        rootVolume:
+          iops: 100
+          size: 100
+          type: gp2
+        type: m5.xlarge
+    replicas: 3
+- apiVersion: v1
+  kind: Secret
+  metadata:
+    name: ${CLUSTER_NAME}-install-config
+    namespace: ${CLUSTER_NAME}
+  stringData:
+    install-config.yaml: |-
+      apiVersion: v1
+      metadata:
+        name: ${CLUSTER_NAME}
+      baseDomain: ${BASE_DOMAIN}
+      controlPlane:
+        hyperthreading: Enabled
+        name: master
+        replicas: 3
+        platform:
+          aws:
+            rootVolume:
+              iops: 4000
+              size: 100
+              type: io1
+            type: m5.xlarge
+      compute:
+      - hyperthreading: Enabled
+        name: worker
+        replicas: ${WORKER_COUNT}
+        platform:
+          aws:
+            rootVolume:
+              iops: 2000
+              size: 100
+              type: io1
+            type: m5.xlarge
+      networking:
+        clusterNetwork:
+        - cidr: 10.128.0.0/14
+          hostPrefix: 23
+        machineCIDR: 10.0.0.0/16
+        networkType: OpenShiftSDN
+        serviceNetwork:
+        - 172.30.0.0/16
+      platform:
+        aws:
+          region: ${REGION}
+      pullSecret: "" # skip, hive will inject based on it's Cloud Provider Secret
+      sshKey: ""     # skip, hive will inject based on it's Cloud Provider Secret
+- apiVersion: cluster.open-cluster-management.io/v1
+  kind: ManagedCluster
+  metadata:
+    labels:
+      name: ${CLUSTER_NAME}
+      vendor: OpenShift
+    name: ${CLUSTER_NAME}
+  spec:
+    hubAcceptsClient: true
+- apiVersion: agent.open-cluster-management.io/v1
+  kind: KlusterletAddonConfig
+  metadata:
+    name: ${CLUSTER_NAME}
+    namespace: ${CLUSTER_NAME}
+  spec:
+    clusterName: ${CLUSTER_NAME}
+    clusterNamespace: ${CLUSTER_NAME}
+    clusterLabels:
+      vendor: OpenShift
+    applicationManager:
+      enabled: true
+    policyController:
+      enabled: true
+    searchCollector:
+      enabled: true
+    certPolicyController:
+      enabled: true
+    iamPolicyController:
+      enabled: true
+    version: 2.1.0
+parameters:
+- description: The name for the new cluster
+  name: CLUSTER_NAME
+  required: true
+- description: The number of worker nodes to create
+  name: WORKER_COUNT
+  value: "3"
+- description: The base domain to be used
+  name: BASE_DOMAIN
+  required: true
+- description: AWS region to provision in
+  name: REGION
+  value: us-east-1
+  required: true
+- description: Image of OCP to use
+  name: CLUSTER_IMAGE_SET
+  required: true
+

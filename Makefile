@@ -148,7 +148,7 @@ endif
 .PHONY: push-curator
 push-curator: build-curator
 	docker push ${REPO_URL}/clustercurator-job:${VERSION}
-
+	./deploy/controller/process.sh
 .PHONY: compile-curator
 compile-curator:
 	go mod tidy

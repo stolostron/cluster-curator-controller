@@ -1,3 +1,4 @@
+namespace: open-cluster-management
 resources:
 - sa.yaml
 - clusterrole.yaml 
