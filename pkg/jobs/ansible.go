@@ -11,38 +11,26 @@ import (
 
 	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/ansible"
 	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/utils"
+	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-/*Path splitter NAMSPACE/RESOURCE_NAME
-func pathSplitterFromEnv(envVar string) (namespace string, resource string, err error) {
-	var path = os.Getenv(envVar)
-	if path == "" {
-		return "", "", errors.New("Environment variable " + envVar + " missing, format: NAMESPACE/RESOURCE_NAME")
+func findAnsibleTemplateNamefromConfigMap(cm *corev1.ConfigMap, jobType string) (string, error) {
+	if cm.Data[jobType+"-towertemplatename"] == "" {
+		return "", errors.New("Missing prehook-towertemplatename in job ConfigMap " + cm.Name)
 	}
-	values := strings.Split(path, "/")
-	if values[0] == "/" {
-		utils.CheckError(errors.New("NameSpace was not provided NAMESPACE/RESORUCE_NAME, found: " + path))
-	}
-	if len(values) != 2 {
-		utils.CheckError(errors.New("Resource name was not provided NAMESPACE/RESOURCE_NAME, found: " + path))
-	}
-	return values[0], values[1], nil
+	return cm.Data[jobType+"-towertemplatename"], nil
 }
-*/
 
-func findAnsibleTemplateNamefromConfigMap(config *rest.Config, configMapName string, namespace string, jobType string) (string, error) {
+func getConfigMap(config *rest.Config, configMapName string, namespace string) *corev1.ConfigMap {
 	kubeset, err := kubernetes.NewForConfig(config)
 	utils.CheckError(err)
 	cm, err := kubeset.CoreV1().ConfigMaps(namespace).Get(context.TODO(), configMapName, v1.GetOptions{})
 	utils.CheckError(err)
-	if cm.Data[jobType+"-towertemplatename"] == "" {
-		return "", errors.New("Missing prehook-towertemplatename in job ConfigMap " + configMapName)
-	}
-	return cm.Data[jobType+"-towertemplatename"], nil
+	return cm
 }
 
 /* Command: go run ./pkg/jobs/ansible.go
@@ -62,8 +50,8 @@ func main() {
 
 	configMapName := os.Getenv("JOB_CONFIGMAP")
 	if configMapName == "" {
-		log.Println("No ConfigMap, nothing to do")
-		os.Exit(0)
+		log.Println("No ConfigMap passed, use cluster name")
+		configMapName = namespace
 	}
 
 	jobType := os.Getenv("JOB_TYPE")
@@ -87,7 +75,9 @@ func main() {
 	}
 	utils.CheckError(err)
 
-	towerTemplateName, err := findAnsibleTemplateNamefromConfigMap(config, configMapName, namespace, jobType)
+	towerTemplateName, err := findAnsibleTemplateNamefromConfigMap(
+		getConfigMap(config, namespace, namespace),
+		jobType)
 	if err == nil {
 		ansible.RunAnsibleJob(config, namespace, jobType, towerTemplateName, "toweraccess", nil)
 	} else {

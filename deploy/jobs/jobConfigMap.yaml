@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: my-cluster
+  namespace: my-cluster
+  labels:
+    open-cluster-management: curator
+data:
+  providerCredentialPath: default/my-credential
+  prehook-towertemplatename: Service now App Update
+  posthook-towertemplatename:  Service now App Update

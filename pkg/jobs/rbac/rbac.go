@@ -31,6 +31,11 @@ func getRole() *rbacv1.Role {
 				Resources: []string{"configmaps", "jobs", "clusterdeployments", "ansiblejobs"},
 				Verbs:     []string{"get"},
 			},
+			rbacv1.PolicyRule{
+				APIGroups: []string{""},
+				Resources: []string{"configmaps"},
+				Verbs:     []string{"update"},
+			},
 		},
 	}
 	return curatorRole
@@ -70,21 +75,24 @@ func ApplyRBAC(config *rest.Config, namespace string) {
 	if _, err := kubeset.CoreV1().ServiceAccounts(namespace).Get(context.TODO(), "cluster-installer", v1.GetOptions{}); err != nil {
 		log.Println(" Creating serviceAccount cluster-installer")
 		_, err = kubeset.CoreV1().ServiceAccounts(namespace).Create(context.TODO(), getServiceAccount(), v1.CreateOptions{})
-		utils.CheckError(err)
+		utils.LogError(err)
 		log.Println(" Created serviceAccount ✓")
-	}
-
-	log.Println("Check if RoleBinding cluster-installer exists")
-	if _, err := kubeset.RbacV1().RoleBindings(namespace).Get(context.TODO(), "curator", v1.GetOptions{}); err != nil {
-		log.Println(" Creating RoleBinding cluster-installer")
-		_, err = kubeset.RbacV1().RoleBindings(namespace).Create(context.TODO(), getRoleBinding(namespace), v1.CreateOptions{})
-		log.Println(" Created RoleBinding ✓")
 	}
 
 	log.Println("Check if Role cluster-installer exists")
 	if _, err := kubeset.RbacV1().Roles(namespace).Get(context.TODO(), "curator", v1.GetOptions{}); err != nil {
-		log.Println(" Creating Role cluster-installer")
+		log.Println(" Creating Role curator")
 		_, err = kubeset.RbacV1().Roles(namespace).Create(context.TODO(), getRole(), v1.CreateOptions{})
+		utils.LogError(err)
 		log.Println(" Created Role ✓")
 	}
+
+	log.Println("Check if RoleBinding cluster-installer exists")
+	if _, err := kubeset.RbacV1().RoleBindings(namespace).Get(context.TODO(), "curator", v1.GetOptions{}); err != nil {
+		log.Println(" Creating RoleBinding curator")
+		_, err = kubeset.RbacV1().RoleBindings(namespace).Create(context.TODO(), getRoleBinding(namespace), v1.CreateOptions{})
+		utils.LogError(err)
+		log.Println(" Created RoleBinding ✓")
+	}
+
 }

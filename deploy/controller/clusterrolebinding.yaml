@@ -1,0 +1,13 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+    name: cluster-curator
+subjects:
+- kind: ServiceAccount
+  name: cluster-curator
+  namespace: open-cluster-management            ## CHANGE: ACM namespace
+roleRef:
+  kind: ClusterRole
+  name: cluster-curator
+  apiGroup: rbac.authorization.k8s.io

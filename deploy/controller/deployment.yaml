@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    name: curator-controller
+  name: curator-controller
+  namespace: open-cluster-management
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: curator-controller
+  template:
+    metadata:
+      labels:
+        name: curator-controller
+    spec:
+      serviceAccountName: cluster-curator
+      containers:
+      - image: quay.io/jpacker/clustercurator-job@sha256:f20db9c297ea6d6e7563028da90ca93ca3bd62270e5d3b4c22b1d135c82db02f
+        name: curator-controller
+        imagePullPolicy: Always
+        command: ["./cluster-curator-controller"]
+        imagePullPolicy: Always
+        env:
+        - name: IMAGE_TAG
+          value: "sha256:f20db9c297ea6d6e7563028da90ca93ca3bd62270e5d3b4c22b1d135c82db02f"
+
+

@@ -1,0 +1,28 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cluster-curator
+rules:
+- apiGroups: ["cluster.open-cluster-management.io"] 
+  resources: ["managedclusters"]
+  verbs: ["watch","list"]
+- apiGroups: ["batch","","rbac.authorization.k8s.io"] 
+  resources: ["jobs","serviceaccounts","roles","rolebindings"]
+  verbs: ["create","get"]
+- apiGroups: [""] 
+  resources: ["configmaps","serviceaccounts"]
+  verbs: ["list","get"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["update"]
+# To grant the role, you must have the role
+- apiGroups: ["tower.ansible.com", "", "hive.openshift.io"]
+  resources: ["ansiblejobs", "secrets", "clusterdeployments", "machinepools"]
+  verbs: ["create"]
+- apiGroups: ["", "hive.openshift.io"]
+  resources: ["clusterdeployments", "secrets"]
+  verbs: ["patch"]
+- apiGroups: ["", "batch", "hive.openshift.io", "tower.ansible.com"]
+  resources: ["configmaps", "jobs", "clusterdeployments", "ansiblejobs"]
+  verbs: ["get"]

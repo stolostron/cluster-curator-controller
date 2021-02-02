@@ -12,6 +12,7 @@ import (
 
 	hivev1 "github.com/openshift/hive/pkg/apis/hive/v1"
 	hiveclient "github.com/openshift/hive/pkg/client/clientset/versioned"
+	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -22,6 +23,13 @@ func CheckError(err error) {
 	if err != nil {
 		fmt.Print("\n\n")
 		log.Panicln(err.Error())
+	}
+}
+
+func LogError(err error) {
+	if err != nil {
+		fmt.Print("\n\n")
+		log.Println(err.Error())
 	}
 }
 
@@ -113,7 +121,7 @@ func MonitorDeployStatus(config *rest.Config, clusterName string) {
 		} else {
 			log.Print("Attempt: " + strconv.Itoa(i) + "/30, pause 10sec")
 			time.Sleep(10 * time.Second) //10s
-			if len(cluster.Status.Conditions) > 0 && *cluster.Spec.InstallAttemptsLimit != 0 {
+			if len(cluster.Status.Conditions) > 0 && (cluster.Spec.InstallAttemptsLimit == nil || *cluster.Spec.InstallAttemptsLimit != 0) {
 				log.Println(cluster.Status.Conditions)
 				log.Fatalln(errors.New("Failure detected"))
 			} else if i == 19 {
@@ -121,4 +129,14 @@ func MonitorDeployStatus(config *rest.Config, clusterName string) {
 			}
 		}
 	}
+}
+
+func RecordJobContainer(config *rest.Config, configMap *corev1.ConfigMap, containerName string) {
+	kubeset, _ := kubernetes.NewForConfig(config)
+	configMap.Data["curator-job-container"] = containerName
+	_, err := kubeset.CoreV1().ConfigMaps(configMap.Namespace).Update(context.TODO(), configMap, v1.UpdateOptions{})
+	if err != nil {
+		log.Println(err)
+	}
+
 }

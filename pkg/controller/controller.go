@@ -7,6 +7,7 @@ import (
 	"flag"
 	"log"
 	"os"
+	"strconv"
 	"time"
 
 	managedclusterclient "github.com/open-cluster-management/api/client/cluster/clientset/versioned"
@@ -24,7 +25,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-func filterConfigMaps(clusterName string) *amv1.ListOptions {
+func filterConfigMaps() *amv1.ListOptions {
 	listOptions := amv1.ListOptions{
 		LabelSelector: labels.Set(amv1.LabelSelector{MatchLabels: map[string]string{
 			"open-cluster-management": "curator",
@@ -51,9 +52,25 @@ func WatchManagedCluster(config *rest.Config) {
 			AddFunc: func(obj interface{}) {
 				mc := obj.(*mcv1.ManagedCluster)
 				log.Println("> Investigate Cluster " + mc.Name)
-				if cm, err := findJobConfigMap(config, mc); err == nil {
-					rbac.ApplyRBAC(config, mc.Name)
-					launcher.CreateJob(config, *cm)
+
+				for i := 5; i < 60; i = i * 2 { //40s wait
+					if cm, err := findJobConfigMap(config, mc); err == nil {
+						if cm.Data["curator-job"] == "" {
+							rbac.ApplyRBAC(config, mc.Name)
+							launcher.CreateJob(config, *cm)
+						} else {
+							log.Println(" Curator job has already run")
+						}
+						break
+					} else {
+						// If the managedCluster has status.capacity, it has been imported
+						if mc.Status.Capacity != nil {
+							break
+						}
+						log.Println("ConfigMap not found in namespace " + mc.Name + ", try again in " + strconv.Itoa(i) + "s")
+						log.Println(err)
+						time.Sleep(time.Duration(i) * time.Second) //10s
+					}
 				}
 			},
 			UpdateFunc: func(oldObj interface{}, newObj interface{}) {
@@ -75,8 +92,10 @@ func findJobConfigMap(config *rest.Config, mc *mcv1.ManagedCluster) (*v1.ConfigM
 	kubeset, err := kubernetes.NewForConfig(config)
 	utils.CheckError(err)
 	// Filtered search in the namespace
-	jobConfigMaps, err := kubeset.CoreV1().ConfigMaps(mc.Name).List(context.TODO(), *filterConfigMaps(mc.Name))
-	utils.CheckError(err)
+	jobConfigMaps, err := kubeset.CoreV1().ConfigMaps(mc.Name).List(context.TODO(), *filterConfigMaps())
+	if err != nil {
+		return nil, err
+	}
 	for _, cm := range jobConfigMaps.Items {
 		log.Println(" Found Configmap " + cm.Name)
 		return &cm, nil
