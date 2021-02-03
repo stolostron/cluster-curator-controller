@@ -4,7 +4,7 @@
 This project contains jobs and controllers for curating work around Cluster Provisioning. It is designed to extend the capabilities already present with Hive `ClusterDeployment` and Open-Cluster-Management `ManagedCluster` kinds.
 
 ## Architecture
-The control found here, monitors for `ManageCluster` kinds.  When new instances of the resource are created, this controller creates a default Kubernetes Job. applycloudprovider, pre-hook Ansible, activate-monitor and posthook Ansible.  The Job can be overridden with your own job flow.
+The controller found here, monitors for `ManageCluster` kinds.  When new instances of the resource are created, this controller creates a default Kubernetes Job that runs: `applycloudprovider`, `pre-hook Ansible`, `activate-monitor` and `posthook Ansible`.  The Job can be overridden with your own job flow.
 
 ## Controller:
 - cluster-curator-controller (ccc), watches for `ManagedCluster` kind create resource action.
@@ -38,10 +38,10 @@ Here is an example of each job described here. You can add and remove instances 
 * CLUSTER_NAME (my-cluster)
 
 ## CREATE ##
-oc process -f deploy/jobs/provider-ns-rolebinding.yaml -p CP_NAME=my-cloud-provider-secret -p CP_NAMESPACE=default -p CLUSTER_NAME=my-cluster | oc apply -f -
+oc process -f deploy/provider-credentials/rbac-cloudprovider.yaml -p CP_NAME=my-cloud-provider-secret -p CP_NAMESPACE=default -p CLUSTER_NAME=my-cluster | oc apply -f -
 
 ## DELETE ##
-oc process -f deploy/jobs/provider-ns-rolebinding.yaml -p CP_NAME=my-cloud-provider-secret -p CP_NAMESPACE=default -p CLUSTER_NAME=my-cluster | oc delete -f -
+oc process -f deploy/provider-credentials/rbac-cloudprovider.yaml -p CP_NAME=my-cloud-provider-secret -p CP_NAMESPACE=default -p CLUSTER_NAME=my-cluster | oc delete -f -
 ```
 2. Create a Cluster configMap template. Will be read-only to all service accounts in the cluster by default.
 ```bash
@@ -61,8 +61,10 @@ oc process -f deploy/cluster-templates-configmaps/aws-clusterdeployment.yaml -p 
 # * CLUSTER_NAME (my-cluster)
 # * CLUSTER_IMAGE_SET (img4.6.15-x86-64-appsub)
 # * BASE_DOMAIN (my-domain.com)
-oc process -f deploy/jobs/create-cluster.yaml -p CLUSTER_NAME=my-cluster -p CLUSTER_IMAGE_SET=img4.6.15-x86-64-appsub -p BASE_DOMAIN=my-domain.com > my-cluster.yaml
+# * PROVIDER_CREDENTIAL_PATH (default/secret-name)
+oc process -f deploy/jobs/create-cluster.yaml -p CLUSTER_NAME=my-cluster -p CLUSTER_IMAGE_SET=img4.6.15-x86-64-appsub -p BASE_DOMAIN=my-domain.com -p PROVIDER_CREDENTIAL_PATH=default/secret-name -o yaml --raw=true | sed -e 's/^apiVersion:/---\napiVersion:/g'> my-cluster.yaml
 
+# You can commit this yaml to Git as part of a GitOps flow or apply it directly to a cluster.
 oc apply -f my-cluster.yaml
 ```
 This will create a ManagedCluster resource which the cluster-curator-controller will identify and creates a curator-job.  Check the ConfigMap for `curator-job` and `curator-job-container`. This will tell you which step (container) the job is running.  You can view the logs by combining the `curator-job` value and the `curator-job-container` value in the following command
@@ -79,5 +81,5 @@ oc logs job.batch/curator-job-MJE7f-m3M39 applycloudprovider-aws
 ```
 If there is a failure, the job will show Failure.  Look at the `curator-job-container` value to see which step in the provisioning failed and review the logs above. If the `curator-job-contianer` is `monitor`, there may be an additional `provisioning` job. Check this log for additional information.
 
-The generated YAML can be committed to a Git repository. You can then use an ACM Subscription to apply the YAML (provision) on the ACM Hub.
+The generated YAML can be committed to a Git repository. You can then use an ACM Subscription to apply the YAML (provision) on the ACM Hub.  Repeat steps 1 & 3 to create new clusters.
  

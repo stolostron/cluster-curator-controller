@@ -16,7 +16,7 @@ objects:
     labels:
       open-cluster-management: curator
   data:
-    providerCredentialPath: default/aws4jnp
+    providerCredentialPath: ${PROVIDER_CREDNETIAL_PATH}
     prehook-towertemplatename: Service now App Update
     #posthook-towertemplatename:
     clusterName: ${CLUSTER_NAME}
@@ -179,5 +179,8 @@ parameters:
   required: true
 - description: Image of OCP to use
   name: CLUSTER_IMAGE_SET
+  required: true
+- description: Cloud Provider secret path
+  name: PROVIDER_CREDNETIAL_PATH
   required: true
 
