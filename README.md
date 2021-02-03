@@ -21,7 +21,7 @@ This deployment defaults to the namespace `open-cluster-management`. Each time a
 | :---------:| :---------: | :------------: | :----------------: | :----------------: |
 |applycloudprovider-aws | Creates AWS related crednetials for a cluster deployment | X | X | |
 |applycloudprovider-ansible | Creates the Ansible tower secret for a cluster deployment (included in applycloudprovider-aws) | X | X | |
-| create-was | Creates the ClusterDeployment, ManachinePool and install-config secret for a cluster deployment. |  | X | X |
+| create-aws | Creates the ClusterDeployment, ManachinePool and install-config secret for a cluster deployment. |  | X | X |
 | activate-monitor | Sets `ClusterDeployment.spec.installAttempsLimit: 1`, then monitors the deployment of the cluster | | X |  |
 | import | Creates the ManagedCluster and KlusterletAddonConfig for a cluster | | X | X |
 | prehook-ansiblejob posthook-ansiblejob | Creates an AnsibleJob resource and monitors it to completion |  | X |  |
@@ -29,7 +29,7 @@ This deployment defaults to the namespace `open-cluster-management`. Each time a
 Here is an example of each job described here. You can add and remove instances of the job containers as needed. You can also inject your own containers `./deploy/jobs/create-cluster.yaml`
 
 ## Doing a deploy
-### Prerequisits
+### Prerequisites
 1. Grant access to the Cloud Provider secret (needed for most containers in the job)
 ```bash
 # Provide your own values for:
@@ -37,8 +37,14 @@ Here is an example of each job described here. You can add and remove instances 
 * CP_NAMESPACE (default)
 * CLUSTER_NAME (my-cluster)
 
-## CREATE ##
+## CREATE ## (First time)
 oc process -f deploy/provider-credentials/rbac-cloudprovider.yaml -p CP_NAME=my-cloud-provider-secret -p CP_NAMESPACE=default -p CLUSTER_NAME=my-cluster | oc apply -f -
+
+## UPDATE ## If the rolebinding already exists
+# * CP_NAMESPACE where the Cloud Provider secret is created
+# * CP_NAME the name of your cloud provider, note the "-cpv" suffix in the command
+# * CLUSTER_NAME the name of our new cluster
+kubectl -n CP_NAMESPACE patch roleBinding CP_NAME-cpv --type=json -p='[{"op": "add", "path": "/subjects/-", "value": {"kind": "ServiceAccount","name":"cluster-installer","namespace":"CLUSTER_NAME"} }]'
 
 ## DELETE ##
 oc process -f deploy/provider-credentials/rbac-cloudprovider.yaml -p CP_NAME=my-cloud-provider-secret -p CP_NAMESPACE=default -p CLUSTER_NAME=my-cluster | oc delete -f -
