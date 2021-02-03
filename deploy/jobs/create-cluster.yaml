@@ -181,6 +181,6 @@ parameters:
   name: CLUSTER_IMAGE_SET
   required: true
 - description: Cloud Provider secret path
-  name: PROVIDER_CREDNETIAL_PATH
+  name: PROVIDER_CREDENTIAL_PATH
   required: true
 
