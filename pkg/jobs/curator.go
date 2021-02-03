@@ -100,21 +100,32 @@ func main() {
 	kubeset, err := kubernetes.NewForConfig(config)
 	utils.CheckError(err)
 
+	providerCredentialPath := os.Getenv("PROVIDER_CREDENTIAL_PATH")
+
 	var clusterConfigTemplate, clusterConfigOverride *corev1.ConfigMap
 	// Gets the Cluster Configuration overrides
 	clusterConfigOverride, err = kubeset.CoreV1().ConfigMaps(clusterName).Get(context.TODO(), clusterName, v1.GetOptions{})
-	utils.CheckError(err)
-	log.Println("Found clusterConfigOverride \"" + clusterConfigOverride.Data["clusterName"] + "\" ✓")
-	if clusterName != clusterConfigOverride.Data["clusterName"] {
-		utils.CheckError(errors.New("Cluster namespace " + clusterName + " does not match the cluster ConfigMap override " + clusterConfigOverride.Data["clusterName"]))
+	// Allow an override with the PROVIDER_CREDENTIAL_PATH
+	if err == nil {
+		utils.CheckError(err)
+		log.Println("Found clusterConfigOverride \"" + clusterConfigOverride.Data["clusterName"] + "\" ✓")
+		if clusterName != clusterConfigOverride.Data["clusterName"] {
+			utils.CheckError(errors.New("Cluster namespace " + clusterName + " does not match the cluster ConfigMap override " + clusterConfigOverride.Data["clusterName"]))
+		}
+		utils.RecordJobContainer(config, clusterConfigOverride, jobChoice)
+		providerCredentialPath = clusterConfigOverride.Data["providerCredentialPath"]
+	} else {
+		if providerCredentialPath == "" || !strings.Contains(jobChoice, "applycloudprovider-") {
+			utils.CheckError(err)
+		}
+		log.Println("Using PROVIDER_CREDNETIAL_PATH to find the Cloud Provider secret")
 	}
-	utils.RecordJobContainer(config, clusterConfigOverride, jobChoice)
 
 	secretData := make(map[string]string)
 	if strings.Contains(jobChoice, "applycloudprovider-") {
 		// Read Cloud Provider Secret and create Hive cluster secrets, Cloud Provider Credential, pull-secret & ssh-private-key
 		// Determine kube path for Provider credential
-		secretNamespace, secretName, err := pathSplitterFromEnv(clusterConfigOverride.Data["providerCredentialPath"])
+		secretNamespace, secretName, err := pathSplitterFromEnv(providerCredentialPath)
 		utils.CheckError(err)
 
 		log.Println("=> Applying Provider credential namespace \"" + secretNamespace + "\" secret \"" + secretName + "\" to cluster " + clusterName)
@@ -125,12 +136,10 @@ func main() {
 		utils.CheckError(err)
 		log.Println("Found Cloud Provider secret \"" + secret.GetName() + "\" ✓")
 		if jobChoice == "applycloudprovider-aws" {
-			utils.RecordJobContainer(config, clusterConfigOverride, "applycloudprovider-aws")
 			secrets.CreateAWSSecrets(kubeset, secretData, clusterName)
 			jobChoice = "applycloudprovider-ansible"
 		}
 		if jobChoice == "applycloudprovider-ansible" {
-			utils.RecordJobContainer(config, clusterConfigOverride, "applycloudprovider-ansible")
 			secrets.CreateAnsibleSecret(kubeset, secretData, clusterName)
 		}
 

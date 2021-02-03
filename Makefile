@@ -148,6 +148,8 @@ endif
 .PHONY: push-curator
 push-curator: build-curator
 	docker push ${REPO_URL}/clustercurator-job:${VERSION}
+	docker tag ${REPO_URL}/clustercurator-job:${VERSION} ${REPO_URL}/clustercurator-job:latest
+	docker push ${REPO_URL}/clustercurator-job:latest
 	./deploy/controller/process.sh
 .PHONY: compile-curator
 compile-curator:
