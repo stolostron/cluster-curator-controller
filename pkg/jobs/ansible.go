@@ -6,8 +6,9 @@ import (
 	"errors"
 	"flag"
 	"io/ioutil"
-	"log"
 	"os"
+
+	"k8s.io/klog/v2"
 
 	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/ansible"
 	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/utils"
@@ -42,7 +43,7 @@ func main() {
 	if namespace == "" {
 		data, err := ioutil.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
 		if err != nil {
-			log.Println("Missing the environment variable CLUSTER_NAME")
+			klog.Warning("Missing the environment variable CLUSTER_NAME")
 		}
 		utils.CheckError(err)
 		namespace = string(data)
@@ -50,7 +51,7 @@ func main() {
 
 	configMapName := os.Getenv("JOB_CONFIGMAP")
 	if configMapName == "" {
-		log.Println("No ConfigMap passed, use cluster name")
+		klog.V(2).Info("No ConfigMap passed, use cluster name")
 		configMapName = namespace
 	}
 
@@ -67,10 +68,10 @@ func main() {
 	var config *rest.Config
 
 	if _, err = os.Stat(homePath + "/.kube/config"); !os.IsNotExist(err) {
-		log.Println("Connecting with local kubeconfig")
+		klog.V(2).Info("Connecting with local kubeconfig")
 		config, err = clientcmd.BuildConfigFromFlags("", *kubeconfig)
 	} else {
-		log.Println("Connecting using In Cluster Config")
+		klog.V(2).Info("Connecting using In Cluster Config")
 		config, err = rest.InClusterConfig()
 	}
 	utils.CheckError(err)
@@ -81,8 +82,8 @@ func main() {
 	if err == nil {
 		ansible.RunAnsibleJob(config, namespace, jobType, towerTemplateName, "toweraccess", nil)
 	} else {
-		log.Println(err)
+		utils.LogError(err)
 	}
 
-	log.Println("Done!")
+	klog.V(2).Info("Done!")
 }

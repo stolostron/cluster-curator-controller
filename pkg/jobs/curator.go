@@ -6,9 +6,10 @@ import (
 	"errors"
 	"flag"
 	"io/ioutil"
-	"log"
 	"os"
 	"strings"
+
+	"k8s.io/klog/v2"
 
 	yaml "github.com/ghodss/yaml"
 	managedclusterclient "github.com/open-cluster-management/api/client/cluster/clientset/versioned"
@@ -58,7 +59,7 @@ func main() {
 	if clusterName == "" {
 		data, err := ioutil.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
 		if err != nil {
-			log.Println("Missing the environment variable CLUSTER_NAME")
+			klog.Warning("Missing the environment variable CLUSTER_NAME")
 		}
 		utils.CheckError(err)
 		clusterName = string(data)
@@ -72,10 +73,10 @@ func main() {
 	var config *rest.Config
 
 	if _, err = os.Stat(homePath + "/.kube/config"); !os.IsNotExist(err) {
-		log.Println("Connecting with local kubeconfig")
+		klog.V(2).Info("Connecting with local kubeconfig")
 		config, err = clientcmd.BuildConfigFromFlags("", *kubeconfig)
 	} else {
-		log.Println("Connecting using In Cluster Config")
+		klog.V(2).Info("Connecting using In Cluster Config")
 		config, err = rest.InClusterConfig()
 	}
 	utils.CheckError(err)
@@ -90,7 +91,7 @@ func main() {
 		default:
 			utils.CheckError(errors.New("Invalid Parameter: \"" + os.Args[1] + "\"\nCommand: ./curator [create|import|applycloudprovider]"))
 		}
-		log.Println("Mode: " + os.Args[1] + " Cluster")
+		klog.V(2).Info("Mode: " + os.Args[1] + " Cluster")
 	} else {
 		utils.CheckError(errors.New("Invalid Parameter: \"" + os.Args[1] + "\"\nCommand: ./curator [create|import|applycloudprovider]"))
 	}
@@ -108,7 +109,7 @@ func main() {
 	// Allow an override with the PROVIDER_CREDENTIAL_PATH
 	if err == nil {
 		utils.CheckError(err)
-		log.Println("Found clusterConfigOverride \"" + clusterConfigOverride.Data["clusterName"] + "\" ✓")
+		klog.V(2).Info("Found clusterConfigOverride \"" + clusterConfigOverride.Data["clusterName"] + "\" ✓")
 		if clusterName != clusterConfigOverride.Data["clusterName"] {
 			utils.CheckError(errors.New("Cluster namespace " + clusterName + " does not match the cluster ConfigMap override " + clusterConfigOverride.Data["clusterName"]))
 		}
@@ -118,7 +119,7 @@ func main() {
 		if providerCredentialPath == "" || !strings.Contains(jobChoice, "applycloudprovider-") {
 			utils.CheckError(err)
 		}
-		log.Println("Using PROVIDER_CREDNETIAL_PATH to find the Cloud Provider secret")
+		klog.V(0).Info("Using PROVIDER_CREDNETIAL_PATH to find the Cloud Provider secret")
 	}
 
 	secretData := make(map[string]string)
@@ -128,13 +129,13 @@ func main() {
 		secretNamespace, secretName, err := pathSplitterFromEnv(providerCredentialPath)
 		utils.CheckError(err)
 
-		log.Println("=> Applying Provider credential namespace \"" + secretNamespace + "\" secret \"" + secretName + "\" to cluster " + clusterName)
+		klog.V(2).Info("=> Applying Provider credential namespace \"" + secretNamespace + "\" secret \"" + secretName + "\" to cluster " + clusterName)
 		secret, err := kubeset.CoreV1().Secrets(secretNamespace).Get(context.TODO(), secretName, v1.GetOptions{})
 		utils.CheckError(err)
 
 		err = yaml.Unmarshal(secret.Data["metadata"], &secretData)
 		utils.CheckError(err)
-		log.Println("Found Cloud Provider secret \"" + secret.GetName() + "\" ✓")
+		klog.V(0).Info("Found Cloud Provider secret \"" + secret.GetName() + "\" ✓")
 		if jobChoice == "applycloudprovider-aws" {
 			secrets.CreateAWSSecrets(kubeset, secretData, clusterName)
 			jobChoice = "applycloudprovider-ansible"
@@ -156,17 +157,17 @@ func main() {
 		// Gets the Cluster Configuration Template, defaults!
 		clusterConfigTemplate, err = kubeset.CoreV1().ConfigMaps(cmNameSpace).Get(context.TODO(), ClusterCMTemplate, v1.GetOptions{})
 		utils.CheckError(err)
-		log.Println("Found clusterConfigTemplate \"" + cmNameSpace + "/" + ClusterCMTemplate + "\" ✓")
+		klog.V(0).Info("Found clusterConfigTemplate \"" + cmNameSpace + "/" + ClusterCMTemplate + "\" ✓")
 	}
 
 	if jobChoice == "create-aws" {
 		// Transfer extra keys from Cloud Provider Secret if not overridden
 		if secretData["baseDomain"] != "" && clusterConfigOverride.Data["baseDomain"] == "" {
 			clusterConfigOverride.Data["baseDomain"] = secretData["baseDomain"]
-			log.Println("Using baseDomain from Cloud Provider, \"" + clusterConfigOverride.Data["baseDomain"] + "\"")
+			klog.V(2).Info("Using baseDomain from Cloud Provider, \"" + clusterConfigOverride.Data["baseDomain"] + "\"")
 		}
 
-		log.Println("=> Creating Cluster in namespace \"" + clusterName + "\" using ConfigMap Template \"" + cmNameSpace + "/" + ClusterCMTemplate + "\" and ConfigMap Override \"" + clusterName)
+		klog.V(0).Info("=> Creating Cluster in namespace \"" + clusterName + "\" using ConfigMap Template \"" + cmNameSpace + "/" + ClusterCMTemplate + "\" and ConfigMap Override \"" + clusterName)
 		hiveset, err := hiveclient.NewForConfig(config)
 		utils.CheckError(err)
 
@@ -179,7 +180,7 @@ func main() {
 	}
 	// Create a client for the manageclusterV1 CustomResourceDefinitions
 	if jobChoice == "import" {
-		log.Println("=> Importing Cluster in namespace \"" + clusterName + "\" using ConfigMap Template \"" + cmNameSpace + "/" + ClusterCMTemplate + "\" and ConfigMap Override \"" + clusterName)
+		klog.V(0).Info("=> Importing Cluster in namespace \"" + clusterName + "\" using ConfigMap Template \"" + cmNameSpace + "/" + ClusterCMTemplate + "\" and ConfigMap Override \"" + clusterName)
 		managedclusterclient, err := managedclusterclient.NewForConfig(config)
 		utils.CheckError(err)
 
@@ -187,5 +188,5 @@ func main() {
 		importer.CreateManagedCluster(managedclusterclient, clusterConfigTemplate, clusterConfigOverride)
 	}
 
-	log.Println("Done!")
+	klog.V(2).Info("Done!")
 }

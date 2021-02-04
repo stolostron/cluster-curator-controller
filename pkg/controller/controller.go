@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"flag"
-	"log"
 	"os"
 	"strconv"
 	"time"
@@ -23,6 +22,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/klog/v2"
 )
 
 func filterConfigMaps() *amv1.ListOptions {
@@ -51,15 +51,17 @@ func WatchManagedCluster(config *rest.Config) {
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {
 				mc := obj.(*mcv1.ManagedCluster)
-				log.Println("> Investigate Cluster " + mc.Name)
+				klog.V(2).Info("> Investigate Cluster " + mc.Name)
 
 				for i := 5; i < 60; i = i * 2 { //40s wait
 					if cm, err := findJobConfigMap(config, mc); err == nil {
 						if cm.Data["curator-job"] == "" {
-							rbac.ApplyRBAC(config, mc.Name)
-							launcher.CreateJob(config, *cm)
+							err := rbac.ApplyRBAC(config, mc.Name)
+							utils.LogError(err)
+							err = launcher.CreateJob(config, *cm)
+							utils.LogError(err)
 						} else {
-							log.Println(" Curator job has already run")
+							klog.Warning(" Curator job has already run")
 						}
 						break
 					} else {
@@ -67,8 +69,8 @@ func WatchManagedCluster(config *rest.Config) {
 						if mc.Status.Capacity != nil {
 							break
 						}
-						log.Println("ConfigMap not found in namespace " + mc.Name + ", try again in " + strconv.Itoa(i) + "s")
-						log.Println(err)
+						klog.V(2).Info("ConfigMap not found in namespace " + mc.Name + ", try again in " + strconv.Itoa(i) + "s")
+						utils.LogError(err)
 						time.Sleep(time.Duration(i) * time.Second) //10s
 					}
 				}
@@ -97,15 +99,17 @@ func findJobConfigMap(config *rest.Config, mc *mcv1.ManagedCluster) (*v1.ConfigM
 		return nil, err
 	}
 	for _, cm := range jobConfigMaps.Items {
-		log.Println(" Found Configmap " + cm.Name)
+		klog.V(2).Info(" Found Configmap " + cm.Name)
 		return &cm, nil
 	}
-	log.Println(" No job ConfigMap found for " + mc.Name + "/" + mc.Name)
+	klog.Warning(" No job ConfigMap found for " + mc.Name + "/" + mc.Name)
 	return nil, errors.New("Did not find a ConfigMap")
 }
 
 func main() {
 
+	klog.InitFlags(nil)
+	flag.Set("v", "2")
 	// Build a connection to the ACM Hub OCP
 	homePath := os.Getenv("HOME")
 	kubeconfig := flag.String("kubeconfig", homePath+"/.kube/config", "")
@@ -114,10 +118,10 @@ func main() {
 	var config *rest.Config
 
 	if _, err := os.Stat(homePath + "/.kube/config"); !os.IsNotExist(err) {
-		log.Println("Connecting with local kubeconfig")
+		klog.V(2).Info("Connecting with local kubeconfig")
 		config, err = clientcmd.BuildConfigFromFlags("", *kubeconfig)
 	} else {
-		log.Println("Connecting using In Cluster Config")
+		klog.V(2).Info("Connecting using In Cluster Config")
 		config, err = rest.InClusterConfig()
 	}
 	WatchManagedCluster(config)

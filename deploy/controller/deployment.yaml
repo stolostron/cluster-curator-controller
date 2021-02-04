@@ -1,51 +1,26 @@
-{
-    "kind": "List",
-    "apiVersion": "v1",
-    "metadata": {},
-    "items": [
-        {
-            "apiVersion": "apps/v1",
-            "kind": "Deployment",
-            "metadata": {
-                "labels": {
-                    "name": "curator-controller"
-                },
-                "name": "curator-controller"
-            },
-            "spec": {
-                "replicas": 1,
-                "selector": {
-                    "matchLabels": {
-                        "name": "curator-controller"
-                    }
-                },
-                "template": {
-                    "metadata": {
-                        "labels": {
-                            "name": "curator-controller"
-                        }
-                    },
-                    "spec": {
-                        "containers": [
-                            {
-                                "command": [
-                                    "./cluster-curator-controller"
-                                ],
-                                "env": [
-                                    {
-                                        "name": "IMAGE_TAG",
-                                        "value": "sha256:13c859f7aee263068ecc9bdedac333515c35832828332fadc8296262f943cdfa"
-                                    }
-                                ],
-                                "image": "quay.io/jpacker/clustercurator-job@sha256:13c859f7aee263068ecc9bdedac333515c35832828332fadc8296262f943cdfa",
-                                "imagePullPolicy": "Always",
-                                "name": "curator-controller"
-                            }
-                        ],
-                        "serviceAccountName": "cluster-curator"
-                    }
-                }
-            }
-        }
-    ]
-}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    name: curator-controller
+  name: curator-controller
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: curator-controller
+  template:
+    metadata:
+      labels:
+        name: curator-controller
+    spec:
+      containers:
+      - command:
+        - ./cluster-curator-controller
+        env:
+        - name: IMAGE_TAG
+          value: sha256:099b2ebf8f804d7df798fb188398430258f583423aaa00d5c39eb5745d26e64c
+        image: quay.io/jpacker/clustercurator-job@sha256:099b2ebf8f804d7df798fb188398430258f583423aaa00d5c39eb5745d26e64c
+        imagePullPolicy: Always
+        name: curator-controller
+      serviceAccountName: cluster-curator

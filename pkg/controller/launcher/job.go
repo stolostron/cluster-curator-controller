@@ -3,15 +3,15 @@ package launcher
 import (
 	"context"
 	"encoding/json"
-	"log"
+	"errors"
 	"os"
 
-	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/utils"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"k8s.io/klog/v2"
 	"sigs.k8s.io/yaml"
 )
 
@@ -99,19 +99,20 @@ func getBatchJob(configMapName string) *batchv1.Job {
 	return newJob
 }
 
-func CreateJob(config *rest.Config, jobConfigMap corev1.ConfigMap) {
+func CreateJob(config *rest.Config, jobConfigMap corev1.ConfigMap) error {
 	kubeset, err := kubernetes.NewForConfig(config)
-	utils.CheckError(err)
+	if err != nil {
+		return err
+	}
 	clusterName := jobConfigMap.Namespace
 	if jobConfigMap.Data["providerCredentialPath"] == "" {
-		log.Println("Missing providerCredentialPath in " + clusterName + "-job ConfigMap")
-		return
+		return errors.New("Missing providerCredentialPath in " + clusterName + "-job ConfigMap")
 	}
 	newJob := getBatchJob(jobConfigMap.Name)
 	// Allow us to override the job in the configMap
-	log.Print("Creating Curator job curator-job in namespace " + clusterName)
+	klog.V(0).Info("Creating Curator job curator-job in namespace " + clusterName)
 	if jobConfigMap.Data["overrideJob"] != "" {
-		log.Print(" Overriding the Curator job with overrideJob from the " + clusterName + "-job ConfigMap")
+		klog.V(0).Info(" Overriding the Curator job with overrideJob from the " + clusterName + "-job ConfigMap")
 		newJob = &batchv1.Job{}
 		//hivev1.ClusterDeployment is defined with json for unmarshaling
 		jobJSON, err := yaml.YAMLToJSON([]byte(jobConfigMap.Data["overrideJob"]))
@@ -122,15 +123,16 @@ func CreateJob(config *rest.Config, jobConfigMap corev1.ConfigMap) {
 	if err == nil {
 		curatorJob, err := kubeset.BatchV1().Jobs(clusterName).Create(context.TODO(), newJob, v1.CreateOptions{})
 		if err == nil {
-			log.Print(" Created Curator job  ✓")
+			klog.V(0).Info(" Created Curator job  ✓")
 			jobConfigMap.Data["curator-job"] = curatorJob.Name
 			_, err = kubeset.CoreV1().ConfigMaps(clusterName).Update(context.TODO(), &jobConfigMap, v1.UpdateOptions{})
 			if err != nil {
-				log.Println(err)
+				return err
 			}
 		}
 	}
 	if err != nil {
-		log.Println(err)
+		return err
 	}
+	return nil
 }

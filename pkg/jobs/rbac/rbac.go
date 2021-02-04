@@ -2,7 +2,8 @@ package rbac
 
 import (
 	"context"
-	"log"
+
+	"k8s.io/klog/v2"
 
 	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/utils"
 	corev1 "k8s.io/api/core/v1"
@@ -67,32 +68,38 @@ func getServiceAccount() *corev1.ServiceAccount {
 	return serviceAccount
 }
 
-func ApplyRBAC(config *rest.Config, namespace string) {
+func ApplyRBAC(config *rest.Config, namespace string) error {
 	kubeset, err := kubernetes.NewForConfig(config)
 	utils.CheckError(err)
 
-	log.Println("Check if serviceAccount cluster-installer exists")
+	klog.V(2).Info("Check if serviceAccount cluster-installer exists")
 	if _, err := kubeset.CoreV1().ServiceAccounts(namespace).Get(context.TODO(), "cluster-installer", v1.GetOptions{}); err != nil {
-		log.Println(" Creating serviceAccount cluster-installer")
+		klog.V(2).Info(" Creating serviceAccount cluster-installer")
 		_, err = kubeset.CoreV1().ServiceAccounts(namespace).Create(context.TODO(), getServiceAccount(), v1.CreateOptions{})
-		utils.LogError(err)
-		log.Println(" Created serviceAccount ✓")
+		if err = utils.LogError(err); err != nil {
+			return err
+		}
+		klog.V(0).Info(" Created serviceAccount ✓")
 	}
 
-	log.Println("Check if Role cluster-installer exists")
+	klog.V(2).Info("Check if Role cluster-installer exists")
 	if _, err := kubeset.RbacV1().Roles(namespace).Get(context.TODO(), "curator", v1.GetOptions{}); err != nil {
-		log.Println(" Creating Role curator")
+		klog.V(2).Info(" Creating Role curator")
 		_, err = kubeset.RbacV1().Roles(namespace).Create(context.TODO(), getRole(), v1.CreateOptions{})
-		utils.LogError(err)
-		log.Println(" Created Role ✓")
+		if err = utils.LogError(err); err != nil {
+			return err
+		}
+		klog.V(0).Info(" Created Role ✓")
 	}
 
-	log.Println("Check if RoleBinding cluster-installer exists")
+	klog.V(2).Info("Check if RoleBinding cluster-installer exists")
 	if _, err := kubeset.RbacV1().RoleBindings(namespace).Get(context.TODO(), "curator", v1.GetOptions{}); err != nil {
-		log.Println(" Creating RoleBinding curator")
+		klog.V(2).Info(" Creating RoleBinding curator")
 		_, err = kubeset.RbacV1().RoleBindings(namespace).Create(context.TODO(), getRoleBinding(namespace), v1.CreateOptions{})
-		utils.LogError(err)
-		log.Println(" Created RoleBinding ✓")
+		if err = utils.LogError(err); err != nil {
+			return err
+		}
+		klog.V(0).Info(" Created RoleBinding ✓")
 	}
-
+	return nil
 }

@@ -3,7 +3,7 @@ package ansible
 
 import (
 	"context"
-	"log"
+	"errors"
 	"time"
 
 	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/utils"
@@ -12,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
+	"k8s.io/klog/v2"
 )
 
 func getAnsibleJob() *unstructured.Unstructured {
@@ -42,8 +43,8 @@ func getAnsibleJob() *unstructured.Unstructured {
  *  jobTemplateName  #Tower Template job to run
  *  secretRef		 # The secret to connect to Tower in the cluster namespace, ie. toweraccess
  */
-func RunAnsibleJob(config *rest.Config, namespace string, jobtype string, jobTemplateName string, secretRef string, extraVars map[string]string) *unstructured.Unstructured {
-	log.Println("* Run " + jobtype + " AnsibleJob")
+func RunAnsibleJob(config *rest.Config, namespace string, jobtype string, jobTemplateName string, secretRef string, extraVars map[string]string) (*unstructured.Unstructured, error) {
+	klog.V(2).Info("* Run " + jobtype + " AnsibleJob")
 	dynclient, err := dynamic.NewForConfig(config)
 	utils.CheckError(err)
 	ansibleJobName := jobtype + "-job"
@@ -57,30 +58,30 @@ func RunAnsibleJob(config *rest.Config, namespace string, jobtype string, jobTem
 	ansibleJob.Object["spec"].(map[string]interface{})["job_template_name"] = jobTemplateName
 	ansibleJob.Object["spec"].(map[string]interface{})["tower_auth_secret"] = secretRef
 
-	log.Println("Creating AnsibleJob " + ansibleJobName + " in namespace " + namespace)
+	klog.V(0).Info("Creating AnsibleJob " + ansibleJobName + " in namespace " + namespace)
 	jobResource, err := dynclient.Resource(ansibleJobRes).Namespace(namespace).Create(context.TODO(), ansibleJob, v1.CreateOptions{})
 	utils.CheckError(err)
-	log.Println("Created AnsibleJob ✓")
+	klog.V(2).Info("Created AnsibleJob ✓")
 
-	log.Println("* Monitoring AnsibleJob " + namespace + "/" + jobResource.GetName())
+	klog.V(0).Info("* Monitoring AnsibleJob " + namespace + "/" + jobResource.GetName())
 	// Monitor the AnsibeJob resource
 	for {
 		jobResource, err = dynclient.Resource(ansibleJobRes).Namespace(namespace).Get(context.TODO(), ansibleJobName, v1.GetOptions{})
 		if jobResource.Object != nil && jobResource.Object["status"] != nil &&
 			jobResource.Object["status"].(map[string]interface{})["ansibleJobResult"] != nil {
 			if jobStatus := jobResource.Object["status"].(map[string]interface{})["ansibleJobResult"].(map[string]interface{})["status"]; jobStatus != "" {
-				log.Printf("found result status %v", jobStatus)
+				klog.V(2).Info("found result status %v", jobStatus)
 				if jobStatus == "successful" {
-					log.Println("AnsibleJob " + namespace + "/" + ansibleJobName + " finished successfully ✓")
+					klog.V(2).Info("AnsibleJob " + namespace + "/" + ansibleJobName + " finished successfully ✓")
 					break
 				} else if jobStatus == "error" {
-					log.Println("AnsibleJob " + namespace + "/" + ansibleJobName + " exited with an error")
-					log.Fatalf("Status: \n\n%v", jobResource.Object["status"])
+					klog.Warningf("Status: \n\n%v", jobResource.Object["status"])
+					return nil, errors.New("AnsibleJob " + namespace + "/" + ansibleJobName + " exited with an error")
 				}
 			}
 		}
-		log.Println("AnsibleJob " + namespace + "/" + ansibleJobName + " is still running")
+		klog.V(2).Info("AnsibleJob " + namespace + "/" + ansibleJobName + " is still running")
 		time.Sleep(5 * time.Second)
 	}
-	return jobResource
+	return jobResource, nil
 }
