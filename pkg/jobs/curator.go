@@ -122,6 +122,7 @@ func main() {
 		klog.V(0).Info("Using PROVIDER_CREDNETIAL_PATH to find the Cloud Provider secret")
 	}
 
+	// Always create the Ansible secret, plus Cloud provider secrets if requested
 	secretData := make(map[string]string)
 	if strings.Contains(jobChoice, "applycloudprovider-") {
 		// Read Cloud Provider Secret and create Hive cluster secrets, Cloud Provider Credential, pull-secret & ssh-private-key
@@ -138,12 +139,12 @@ func main() {
 		klog.V(0).Info("Found Cloud Provider secret \"" + secret.GetName() + "\" ✓")
 		if jobChoice == "applycloudprovider-aws" {
 			secrets.CreateAWSSecrets(kubeset, secretData, clusterName)
-			jobChoice = "applycloudprovider-ansible"
+		} else if jobChoice == "applycloudprovider-gcp" {
+			secrets.CreateGCPSecrets(kubeset, secretData, clusterName)
+		} else if jobChoice == "applycloudprovider-azure" {
+			secrets.CreateAzureSecrets(kubeset, secretData, clusterName)
 		}
-		if jobChoice == "applycloudprovider-ansible" {
-			secrets.CreateAnsibleSecret(kubeset, secretData, clusterName)
-		}
-
+		secrets.CreateAnsibleSecret(kubeset, secretData, clusterName)
 	}
 
 	var cmNameSpace, ClusterCMTemplate string

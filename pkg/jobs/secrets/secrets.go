@@ -42,6 +42,40 @@ func CreateAnsibleSecret(kubeset *kubernetes.Clientset, cpSecretData map[string]
 func CreateAWSSecrets(kubeset *kubernetes.Clientset, cpSecretData map[string]string, clusterName string) error {
 
 	// Generate the AWS Credential secret
+	osServicePrincipal := map[string]string{
+		"clientId":       cpSecretData["clientId"],
+		"clientSecret":   cpSecretData["clientSecret"],
+		"tenantId":       cpSecretData["tenantId"],
+		"subscriptionId": cpSecretData["subscriptionId"],
+	}
+	bytes, err := json.Marshal(osServicePrincipal)
+	if err = utils.LogError(err); err != nil {
+		return err
+	}
+	stringData := map[string]string{
+		"osServicePrincipal.json": string(bytes),
+	}
+	if err := createPatchSecret(kubeset, stringData, clusterName+"-creds", clusterName, corev1.SecretTypeOpaque); err != nil {
+		return err
+	}
+	return createCommonSecrets(kubeset, cpSecretData, clusterName)
+}
+
+func CreateGCPSecrets(kubeset *kubernetes.Clientset, cpSecretData map[string]string, clusterName string) error {
+
+	// Generate the AWS Credential secret
+	stringData := map[string]string{
+		"osServiceAccount.json": cpSecretData["gcServiceAccountKey"],
+	}
+	if err := createPatchSecret(kubeset, stringData, clusterName+"-creds", clusterName, corev1.SecretTypeOpaque); err != nil {
+		return err
+	}
+	return createCommonSecrets(kubeset, cpSecretData, clusterName)
+}
+
+func CreateAzureSecrets(kubeset *kubernetes.Clientset, cpSecretData map[string]string, clusterName string) error {
+
+	// Generate the AWS Credential secret
 	stringData := map[string]string{
 		"aws_access_key_id":     cpSecretData["awsAccessKeyID"],
 		"aws_secret_access_key": cpSecretData["awsSecretAccessKeyID"],
@@ -49,9 +83,12 @@ func CreateAWSSecrets(kubeset *kubernetes.Clientset, cpSecretData map[string]str
 	if err := createPatchSecret(kubeset, stringData, clusterName+"-creds", clusterName, corev1.SecretTypeOpaque); err != nil {
 		return err
 	}
+	return createCommonSecrets(kubeset, cpSecretData, clusterName)
+}
 
+func createCommonSecrets(kubeset *kubernetes.Clientset, cpSecretData map[string]string, clusterName string) error {
 	// Generate Pull Secret
-	stringData = map[string]string{
+	stringData := map[string]string{
 		".dockerconfigjson": cpSecretData["pullSecret"],
 	}
 	if err := createPatchSecret(kubeset, stringData, clusterName+"-pull-secret", clusterName, corev1.SecretTypeDockerConfigJson); err != nil {
