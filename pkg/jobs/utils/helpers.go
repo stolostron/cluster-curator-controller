@@ -4,7 +4,8 @@ package utils
 import (
 	"context"
 	"errors"
-	"fmt"
+	"flag"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -19,21 +20,42 @@ import (
 	"k8s.io/client-go/rest"
 )
 
+func InitKlog() {
+
+	klog.InitFlags(nil)
+	flag.Set("v", "2")
+	logLevel := os.Getenv("LOG_LEVEL")
+	if logLevel != "" {
+		flag.Set("v", string(logLevel))
+	}
+
+}
+
 // Simple error function
 func CheckError(err error) {
 	if err != nil {
-		fmt.Print("\n\n")
-		klog.Error(err.Error())
+		klog.Fatal(err.Error())
 	}
 }
 
 func LogError(err error) error {
 	if err != nil {
-		fmt.Print("\n\n")
 		klog.Warning(err.Error())
 		return err
 	}
 	return nil
+}
+
+//Path splitter NAMSPACE/RESOURCE_NAME
+func PathSplitterFromEnv(path string) (namespace string, resource string, err error) {
+	values := strings.Split(path, "/")
+	if values[0] == "/" {
+		return "", "", errors.New("NameSpace was not provided NAMESPACE/RESORUCE_NAME, found: " + path)
+	}
+	if len(values) != 2 {
+		return "", "", errors.New("Resource name was not provided NAMESPACE/RESOURCE_NAME, found: " + path)
+	}
+	return values[0], values[1], nil
 }
 
 // Use to apply overrides for strings

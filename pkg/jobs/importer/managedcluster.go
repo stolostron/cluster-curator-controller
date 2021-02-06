@@ -18,7 +18,19 @@ import (
 	syaml "k8s.io/apimachinery/pkg/runtime/serializer/yaml"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
+	"k8s.io/klog/v2"
 )
+
+func Task(config *rest.Config, clusterName string, clusterConfigTemplate *corev1.ConfigMap, clusterConfigOverride *corev1.ConfigMap) {
+	klog.V(0).Info("=> Importing Cluster in namespace \"" + clusterName + "\" using ConfigMap Template \"" + clusterConfigTemplate.Name + "/" + clusterConfigTemplate.Namespace + "\" and ConfigMap Override \"" + clusterName)
+	managedclusterclient, err := managedclusterclient.NewForConfig(config)
+	utils.CheckError(err)
+
+	dynclient, err := dynamic.NewForConfig(config)
+	utils.CheckError(err)
+	CreateKlusterletAddonConfig(dynclient, clusterConfigTemplate, clusterConfigOverride)
+	CreateManagedCluster(managedclusterclient, clusterConfigTemplate, clusterConfigOverride)
+}
 
 func CreateManagedCluster(managedclusterset *managedclusterclient.Clientset, configMapTemplate *corev1.ConfigMap, configMapOverride *corev1.ConfigMap) {
 	newCluster := &managedclusterv1.ManagedCluster{}
@@ -41,9 +53,8 @@ func CreateManagedCluster(managedclusterset *managedclusterclient.Clientset, con
 	log.Println("Created ManagedCluster ✓")
 }
 
-func CreateKlusterletAddonConfig(config *rest.Config, configMapTemplate *corev1.ConfigMap, configMapOverride *corev1.ConfigMap) {
-	dynclient, err := dynamic.NewForConfig(config)
-	utils.CheckError(err)
+func CreateKlusterletAddonConfig(dynclient dynamic.Interface, configMapTemplate *corev1.ConfigMap, configMapOverride *corev1.ConfigMap) {
+
 	kacobj := &unstructured.Unstructured{}
 	decoded := syaml.NewDecodingSerializer(unstructured.UnstructuredJSONScheme)
 	_, gvk, err := decoded.Decode([]byte(configMapTemplate.Data["klusterletAddonConfig"]), nil, kacobj)

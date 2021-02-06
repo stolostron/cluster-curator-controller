@@ -17,7 +17,26 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"k8s.io/klog/v2"
 )
+
+func Aws(config *rest.Config, clusterName string, clusterConfigTemplate *corev1.ConfigMap, clusterConfigOverride *corev1.ConfigMap, secretData map[string]string) {
+	// Transfer extra keys from Cloud Provider Secret if not overridden
+	if secretData["baseDomain"] != "" && clusterConfigOverride.Data["baseDomain"] == "" {
+		clusterConfigOverride.Data["baseDomain"] = secretData["baseDomain"]
+		klog.V(2).Info("Using baseDomain from Cloud Provider, \"" + clusterConfigOverride.Data["baseDomain"] + "\"")
+	}
+
+	klog.V(0).Info("=> Creating Cluster in namespace \"" + clusterName + "\" using ConfigMap Template \"" + clusterConfigTemplate.Name + "/" + clusterConfigTemplate.Namespace + "\" and ConfigMap Override \"" + clusterName)
+	kubeset, err := kubernetes.NewForConfig(config)
+	utils.CheckError(err)
+	hiveset, err := hiveclient.NewForConfig(config)
+	utils.CheckError(err)
+
+	CreateInstallConfig(kubeset, clusterConfigTemplate, clusterConfigOverride, secretData["sshPublickey"])
+	CreateClusterDeployment(hiveset, clusterConfigTemplate, clusterConfigOverride)
+	CreateMachinePool(hiveset, clusterConfigTemplate, clusterConfigOverride)
+}
 
 func ActivateDeploywithConfig(config *rest.Config, clusterName string) {
 	hiveset, err := hiveclient.NewForConfig(config)

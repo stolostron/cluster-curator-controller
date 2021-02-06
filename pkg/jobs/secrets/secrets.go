@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"strings"
 
+	"gopkg.in/yaml.v2"
 	"k8s.io/klog/v2"
 
 	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/utils"
@@ -20,6 +21,23 @@ type patchStringValue struct {
 	Op    string            `json:"op"`
 	Path  string            `json:"path"`
 	Value map[string]string `json:"value"`
+}
+
+func GetSecretData(kubeset *kubernetes.Clientset, providerCredentialPath string) *map[string]string {
+	secretData := make(map[string]string)
+	// Read Cloud Provider Secret and create Hive cluster secrets, Cloud Provider Credential, pull-secret & ssh-private-key
+	// Determine kube path for Provider credential
+	secretNamespace, secretName, err := utils.PathSplitterFromEnv(providerCredentialPath)
+	utils.CheckError(err)
+
+	klog.V(2).Info("=> Retrieving  Provider credential namespace \"" + secretNamespace + "\" secret \"" + secretName + "\"")
+	secret, err := kubeset.CoreV1().Secrets(secretNamespace).Get(context.TODO(), secretName, v1.GetOptions{})
+	utils.CheckError(err)
+
+	err = yaml.Unmarshal(secret.Data["metadata"], &secretData)
+	utils.CheckError(err)
+	klog.V(0).Info("Found Cloud Provider secret \"" + secret.GetName() + "\" ✓")
+	return &secretData
 }
 
 func CreateAnsibleSecret(kubeset *kubernetes.Clientset, cpSecretData map[string]string, clusterName string) error {

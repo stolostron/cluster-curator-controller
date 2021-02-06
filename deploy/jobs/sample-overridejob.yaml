@@ -21,7 +21,7 @@ spec:
         command: ['./curator','applycloudprovider-aws']
       - name: prehook-ansiblejob
         image: quay.io/jpacker/clustercurator-job:latest
-        command: ['./ansiblejob']
+        command: ['./curator','ansiblejob']
         env:
           - name:  "JOB_TYPE"
             value: "prehook"
@@ -40,7 +40,7 @@ spec:
         command: ['./curator','monitor']
       - name: posthook-ansiblejob
         image: quay.io/jpacker/clustercurator-job:latest
-        command: ['./ansiblejob']
+        command: ['./curator','ansiblejob']
         env:
           - name:  "JOB_TYPE"
             value: "posthook"

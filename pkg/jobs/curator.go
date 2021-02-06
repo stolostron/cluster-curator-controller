@@ -11,8 +11,7 @@ import (
 
 	"k8s.io/klog/v2"
 
-	yaml "github.com/ghodss/yaml"
-	managedclusterclient "github.com/open-cluster-management/api/client/cluster/clientset/versioned"
+	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/ansible"
 	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/create"
 	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/importer"
 	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/secrets"
@@ -24,18 +23,6 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
-
-//Path splitter NAMSPACE/RESOURCE_NAME
-func pathSplitterFromEnv(path string) (namespace string, resource string, err error) {
-	values := strings.Split(path, "/")
-	if values[0] == "/" {
-		utils.CheckError(errors.New("NameSpace was not provided NAMESPACE/RESORUCE_NAME, found: " + path))
-	}
-	if len(values) != 2 {
-		utils.CheckError(errors.New("Resource name was not provided NAMESPACE/RESOURCE_NAME, found: " + path))
-	}
-	return values[0], values[1], nil
-}
 
 /* Command: go run ./pkg/jobs/aws.go [create|import|applycloudprovider]
  *
@@ -54,6 +41,8 @@ func pathSplitterFromEnv(path string) (namespace string, resource string, err er
 func main() {
 	var kubeconfig *string
 	var err error
+
+	utils.InitKlog()
 
 	var clusterName = os.Getenv("CLUSTER_NAME")
 	if clusterName == "" {
@@ -83,7 +72,7 @@ func main() {
 
 	if len(os.Args) == 2 {
 		switch os.Args[1] {
-		case "applycloudprovider-aws", "applycloudprovider-ansible", "import", "create-aws", "monitor":
+		case "applycloudprovider-aws", "applycloudprovider-ansible", "import", "create-aws", "monitor", "ansiblejob":
 		case "activate-monitor":
 			hiveset, err := hiveclient.NewForConfig(config)
 			utils.CheckError(err)
@@ -108,10 +97,12 @@ func main() {
 	clusterConfigOverride, err = kubeset.CoreV1().ConfigMaps(clusterName).Get(context.TODO(), clusterName, v1.GetOptions{})
 	// Allow an override with the PROVIDER_CREDENTIAL_PATH
 	if err == nil {
-		utils.CheckError(err)
 		klog.V(2).Info("Found clusterConfigOverride \"" + clusterConfigOverride.Data["clusterName"] + "\" ✓")
+		if clusterConfigOverride.Data["clusterName"] == "" {
+			clusterConfigOverride.Data["clusterName"] = clusterName
+		}
 		if clusterName != clusterConfigOverride.Data["clusterName"] {
-			utils.CheckError(errors.New("Cluster namespace " + clusterName + " does not match the cluster ConfigMap override " + clusterConfigOverride.Data["clusterName"]))
+			utils.CheckError(errors.New("Cluster namespace \"" + clusterName + "\" does not match the cluster ConfigMap override \"" + clusterConfigOverride.Data["clusterName"] + "\""))
 		}
 		utils.RecordJobContainer(config, clusterConfigOverride, jobChoice)
 		providerCredentialPath = clusterConfigOverride.Data["providerCredentialPath"]
@@ -123,28 +114,18 @@ func main() {
 	}
 
 	// Always create the Ansible secret, plus Cloud provider secrets if requested
-	secretData := make(map[string]string)
+	var secretData *map[string]string
 	if strings.Contains(jobChoice, "applycloudprovider-") {
-		// Read Cloud Provider Secret and create Hive cluster secrets, Cloud Provider Credential, pull-secret & ssh-private-key
-		// Determine kube path for Provider credential
-		secretNamespace, secretName, err := pathSplitterFromEnv(providerCredentialPath)
-		utils.CheckError(err)
-
-		klog.V(2).Info("=> Applying Provider credential namespace \"" + secretNamespace + "\" secret \"" + secretName + "\" to cluster " + clusterName)
-		secret, err := kubeset.CoreV1().Secrets(secretNamespace).Get(context.TODO(), secretName, v1.GetOptions{})
-		utils.CheckError(err)
-
-		err = yaml.Unmarshal(secret.Data["metadata"], &secretData)
-		utils.CheckError(err)
-		klog.V(0).Info("Found Cloud Provider secret \"" + secret.GetName() + "\" ✓")
+		secretData = secrets.GetSecretData(kubeset, providerCredentialPath)
+		klog.V(2).Info("=> Applying Provider credential \"" + providerCredentialPath + "\" to cluster " + clusterName)
 		if jobChoice == "applycloudprovider-aws" {
-			secrets.CreateAWSSecrets(kubeset, secretData, clusterName)
+			secrets.CreateAWSSecrets(kubeset, *secretData, clusterName)
 		} else if jobChoice == "applycloudprovider-gcp" {
-			secrets.CreateGCPSecrets(kubeset, secretData, clusterName)
+			secrets.CreateGCPSecrets(kubeset, *secretData, clusterName)
 		} else if jobChoice == "applycloudprovider-azure" {
-			secrets.CreateAzureSecrets(kubeset, secretData, clusterName)
+			secrets.CreateAzureSecrets(kubeset, *secretData, clusterName)
 		}
-		secrets.CreateAnsibleSecret(kubeset, secretData, clusterName)
+		secrets.CreateAnsibleSecret(kubeset, *secretData, clusterName)
 	}
 
 	var cmNameSpace, ClusterCMTemplate string
@@ -152,7 +133,7 @@ func main() {
 	if jobChoice == "import" || strings.Contains(jobChoice, "create-") {
 
 		// Determine kube path for Cluster Template
-		cmNameSpace, ClusterCMTemplate, err = pathSplitterFromEnv(clusterConfigOverride.Data["clusterConfigTemplatePath"])
+		cmNameSpace, ClusterCMTemplate, err = utils.PathSplitterFromEnv(clusterConfigOverride.Data["clusterConfigTemplatePath"])
 		utils.CheckError(err)
 
 		// Gets the Cluster Configuration Template, defaults!
@@ -162,31 +143,18 @@ func main() {
 	}
 
 	if jobChoice == "create-aws" {
-		// Transfer extra keys from Cloud Provider Secret if not overridden
-		if secretData["baseDomain"] != "" && clusterConfigOverride.Data["baseDomain"] == "" {
-			clusterConfigOverride.Data["baseDomain"] = secretData["baseDomain"]
-			klog.V(2).Info("Using baseDomain from Cloud Provider, \"" + clusterConfigOverride.Data["baseDomain"] + "\"")
-		}
-
-		klog.V(0).Info("=> Creating Cluster in namespace \"" + clusterName + "\" using ConfigMap Template \"" + cmNameSpace + "/" + ClusterCMTemplate + "\" and ConfigMap Override \"" + clusterName)
-		hiveset, err := hiveclient.NewForConfig(config)
-		utils.CheckError(err)
-
-		create.CreateInstallConfig(kubeset, clusterConfigTemplate, clusterConfigOverride, secretData["sshPublickey"])
-		create.CreateClusterDeployment(hiveset, clusterConfigTemplate, clusterConfigOverride)
-		create.CreateMachinePool(hiveset, clusterConfigTemplate, clusterConfigOverride)
+		create.Aws(config, clusterName, clusterConfigTemplate, clusterConfigOverride, *secretData)
 	}
 	if strings.Contains(jobChoice, "monitor") {
 		utils.MonitorDeployStatus(config, clusterName)
 	}
 	// Create a client for the manageclusterV1 CustomResourceDefinitions
 	if jobChoice == "import" {
-		klog.V(0).Info("=> Importing Cluster in namespace \"" + clusterName + "\" using ConfigMap Template \"" + cmNameSpace + "/" + ClusterCMTemplate + "\" and ConfigMap Override \"" + clusterName)
-		managedclusterclient, err := managedclusterclient.NewForConfig(config)
-		utils.CheckError(err)
+		importer.Task(config, clusterName, clusterConfigTemplate, clusterConfigOverride)
+	}
 
-		importer.CreateKlusterletAddonConfig(config, clusterConfigTemplate, clusterConfigOverride)
-		importer.CreateManagedCluster(managedclusterclient, clusterConfigTemplate, clusterConfigOverride)
+	if jobChoice == "ansiblejob" {
+		ansible.Job(config, clusterConfigOverride)
 	}
 
 	klog.V(2).Info("Done!")

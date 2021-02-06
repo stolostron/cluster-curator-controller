@@ -6,6 +6,20 @@ metadata:
   labels:
     open-cluster-management: curator
 data:
-  providerCredentialPath: default/my-credential
-  prehook-towertemplatename: Service now App Update
-  posthook-towertemplatename:  Service now App Update
+  providerCredentialPath: default/aws4jnp
+  prehook: |-
+    - name: Service now App Update
+      extra_vars:
+        sn_severity: 1
+        sn_priority: 1
+        appName: prehook job
+        target_clusters:
+          - jnp
+  posthook: |-
+     - name: Service now App Update
+      extra_vars:
+        sn_severity: 2
+        sn_priority: 2
+        appName: posthook job
+        target_clusters:
+          - jnp

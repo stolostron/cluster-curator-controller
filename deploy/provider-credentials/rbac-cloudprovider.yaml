@@ -23,6 +23,9 @@ objects:
   - kind: ServiceAccount
     name: cluster-installer
     namespace: ${CLUSTER_NAME}           ## CHANGE
+  #- kind: Group
+  #  name: system:serviceaccounts
+  #  apiGroup: rbac.authorization.k8s.io
   roleRef:
     kind: Role
     name: ${CP_NAME}-cpv

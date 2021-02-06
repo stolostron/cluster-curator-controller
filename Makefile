@@ -156,7 +156,6 @@ compile-curator:
 	go mod tidy
 	go mod vendor
 	go build -o build/_output/curator ./pkg/jobs/curator.go
-	go build -o build/_output/ansiblejob ./pkg/jobs/ansible.go
 	go build -o build/_output/cluster-curator-controller ./pkg/controller/controller.go
 
 .PHONY: build-curator

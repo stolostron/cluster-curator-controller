@@ -2,7 +2,6 @@ FROM registry.access.redhat.com/ubi8/ubi-minimal:latest
 
 # Add the program
 ADD build/_output/curator .
-ADD build/_output/ansiblejob .
 ADD build/_output/cluster-curator-controller .
 
 USER 1001
