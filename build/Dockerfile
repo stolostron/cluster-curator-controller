@@ -1,4 +1,4 @@
-FROM openshift/origin-release:golang-1.13 as builder
+FROM openshift/origin-release:golang-1.15 as builder
 
 ARG REMOTE_SOURCE
 ARG REMOTE_SOURCE_DIR
@@ -6,7 +6,8 @@ ARG REMOTE_SOURCE_DIR
 COPY $REMOTE_SOURCE $REMOTE_SOURCE_DIR/app/
 WORKDIR $REMOTE_SOURCE_DIR/app
 
-RUN GOFLAGS="" go build ./cmd/manager
+RUN GOFLAGS="" go build -o build/_output/curator ./pkg/jobs/curator.go
+RUN GOFLAGS="" go build -o build/_output/cluster-curator-controller ./pkg/controller/controller.go
 
 FROM registry.access.redhat.com/ubi8/ubi-minimal:latest
 RUN microdnf update
@@ -26,7 +27,8 @@ ENV OPERATOR=/usr/local/bin/$COMPONENT_NAME \
     USER_UID=10001 \
     USER_NAME=$COMPONENT_NAME
 
-COPY --from=builder $REMOTE_SOURCE_DIR/app/manager ${OPERATOR}
+COPY --from=builder $REMOTE_SOURCE_DIR/app/build/_output/curator .
+COPY --from=builder $REMOTE_SOURCE_DIR/app/build/_output/cluster-curator-controller .
 COPY --from=builder $REMOTE_SOURCE_DIR/app/build/bin/entrypoint /usr/local/bin
 COPY --from=builder $REMOTE_SOURCE_DIR/app/build/bin/user_setup /usr/local/bin
 

@@ -159,7 +159,7 @@ compile-curator:
 	go build -o build/_output/cluster-curator-controller ./pkg/controller/controller.go
 
 .PHONY: build-curator
-build-curator: compile-curator
-	cp build/Dockerfile_JOB Dockerfile
-	docker build . -t ${REPO_URL}/clustercurator-job:${VERSION}
-	rm Dockerfile
+build-curator: 
+	#cp build/Dockerfile_JOB Dockerfile
+	docker build -f build/Dockerfile_JOB . -t ${REPO_URL}/clustercurator-job:${VERSION}
+	#rm Dockerfile
