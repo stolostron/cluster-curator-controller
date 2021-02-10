@@ -57,7 +57,7 @@ func getBatchJob(configMapName string) *batchv1.Job {
 						corev1.Container{
 							Name:            "prehook-ansiblejob",
 							Image:           "quay.io/jpacker/clustercurator-job" + imageTag,
-							Command:         []string{"./ansiblejob"},
+							Command:         []string{"./curator", "ansiblejob"},
 							ImagePullPolicy: corev1.PullAlways,
 							Env: []corev1.EnvVar{
 								corev1.EnvVar{
@@ -69,18 +69,18 @@ func getBatchJob(configMapName string) *batchv1.Job {
 						corev1.Container{
 							Name:            "monitor-provisioning",
 							Image:           "quay.io/jpacker/clustercurator-job" + imageTag,
-							Command:         []string{"./curator", "monitor"},
+							Command:         []string{"./curator", "activate-monitor"},
 							ImagePullPolicy: corev1.PullAlways,
 						},
 						corev1.Container{
 							Name:            "posthook-ansiblejob",
 							Image:           "quay.io/jpacker/clustercurator-job" + imageTag,
-							Command:         []string{"./ansiblejob"},
+							Command:         []string{"./curator", "ansiblejob"},
 							ImagePullPolicy: corev1.PullAlways,
 							Env: []corev1.EnvVar{
 								corev1.EnvVar{
 									Name:  "JOB_TYPE",
-									Value: "prehook",
+									Value: "posthook",
 								},
 							},
 						},
