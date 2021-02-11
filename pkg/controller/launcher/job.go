@@ -17,13 +17,25 @@ import (
 
 const OverrideJob = "overrideJob"
 
-func getBatchJob(configMapName string) *batchv1.Job {
-	imageTag := os.Getenv("IMAGE_TAG")
-	if imageTag == "" {
-		imageTag = ":latest"
-	} else {
-		imageTag = "@" + imageTag
+type JobSettings struct {
+	ImageTag      string
+	ConfigMapName string
+}
+
+func getJobSetings(configMapName string) *JobSettings {
+	js := &JobSettings{
+		ImageTag:      os.Getenv("IMAGE_TAG"),
+		ConfigMapName: configMapName,
 	}
+	if js.ImageTag == "" {
+		js.ImageTag = ":latest"
+	} else {
+		js.ImageTag = "@" + js.ImageTag
+	}
+	return js
+}
+
+func getBatchJob(js *JobSettings) *batchv1.Job {
 	newJob := &batchv1.Job{
 		ObjectMeta: v1.ObjectMeta{
 			GenerateName: "curator-job-",
@@ -33,7 +45,7 @@ func getBatchJob(configMapName string) *batchv1.Job {
 			Annotations: map[string]string{
 				"apply-cloud-provider": "Creating secrets",
 				"prehook-ansiblejob":   "Running pre-provisioning Ansible Job",
-				"monitor-provisioning": "Provisioning Cluster",
+				"activate-monitor":     "Start Provisioning Cluster and monitor to completion",
 				"posthook-ansiblejob":  "Running post-provisioning Ansible Job",
 			},
 		},
@@ -46,19 +58,19 @@ func getBatchJob(configMapName string) *batchv1.Job {
 					InitContainers: []corev1.Container{
 						corev1.Container{
 							Name:            "applycloudprovider-ansible",
-							Image:           "quay.io/jpacker/clustercurator-job:" + imageTag,
+							Image:           "quay.io/jpacker/clustercurator-job:" + js.ImageTag,
 							Command:         []string{"./curator", "applycloudprovider-ansible"},
 							ImagePullPolicy: corev1.PullAlways,
 							Env: []corev1.EnvVar{
 								corev1.EnvVar{
 									Name:  "JOB_CONFIGMAP",
-									Value: configMapName,
+									Value: js.ConfigMapName,
 								},
 							},
 						},
 						corev1.Container{
 							Name:            "prehook-ansiblejob",
-							Image:           "quay.io/jpacker/clustercurator-job" + imageTag,
+							Image:           "quay.io/jpacker/clustercurator-job" + js.ImageTag,
 							Command:         []string{"./curator", "ansiblejob"},
 							ImagePullPolicy: corev1.PullAlways,
 							Env: []corev1.EnvVar{
@@ -70,13 +82,13 @@ func getBatchJob(configMapName string) *batchv1.Job {
 						},
 						corev1.Container{
 							Name:            "monitor-provisioning",
-							Image:           "quay.io/jpacker/clustercurator-job" + imageTag,
+							Image:           "quay.io/jpacker/clustercurator-job" + js.ImageTag,
 							Command:         []string{"./curator", "activate-monitor"},
 							ImagePullPolicy: corev1.PullAlways,
 						},
 						corev1.Container{
 							Name:            "posthook-ansiblejob",
-							Image:           "quay.io/jpacker/clustercurator-job" + imageTag,
+							Image:           "quay.io/jpacker/clustercurator-job" + js.ImageTag,
 							Command:         []string{"./curator", "ansiblejob"},
 							ImagePullPolicy: corev1.PullAlways,
 							Env: []corev1.EnvVar{
@@ -90,7 +102,7 @@ func getBatchJob(configMapName string) *batchv1.Job {
 					Containers: []corev1.Container{
 						corev1.Container{
 							Name:    "complete",
-							Image:   "quay.io/jpacker/clustercurator-job" + imageTag,
+							Image:   "quay.io/jpacker/clustercurator-job" + js.ImageTag,
 							Command: []string{"echo", "Done!"},
 						},
 					},
@@ -110,7 +122,8 @@ func CreateJob(config *rest.Config, jobConfigMap corev1.ConfigMap) error {
 	if jobConfigMap.Data["providerCredentialPath"] == "" {
 		return errors.New("Missing providerCredentialPath in " + clusterName + "-job ConfigMap")
 	}
-	newJob := getBatchJob(jobConfigMap.Name)
+	newJob := getBatchJob(getJobSetings(jobConfigMap.Name))
+
 	// Allow us to override the job in the configMap
 	klog.V(0).Info("Creating Curator job curator-job in namespace " + clusterName)
 	if jobConfigMap.Data[OverrideJob] != "" {
