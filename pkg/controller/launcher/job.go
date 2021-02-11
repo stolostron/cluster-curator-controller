@@ -15,6 +15,8 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
+const OverrideJob = "overrideJob"
+
 func getBatchJob(configMapName string) *batchv1.Job {
 	imageTag := os.Getenv("IMAGE_TAG")
 	if imageTag == "" {
@@ -111,11 +113,11 @@ func CreateJob(config *rest.Config, jobConfigMap corev1.ConfigMap) error {
 	newJob := getBatchJob(jobConfigMap.Name)
 	// Allow us to override the job in the configMap
 	klog.V(0).Info("Creating Curator job curator-job in namespace " + clusterName)
-	if jobConfigMap.Data["overrideJob"] != "" {
+	if jobConfigMap.Data[OverrideJob] != "" {
 		klog.V(0).Info(" Overriding the Curator job with overrideJob from the " + clusterName + "-job ConfigMap")
 		newJob = &batchv1.Job{}
 		//hivev1.ClusterDeployment is defined with json for unmarshaling
-		jobJSON, err := yaml.YAMLToJSON([]byte(jobConfigMap.Data["overrideJob"]))
+		jobJSON, err := yaml.YAMLToJSON([]byte(jobConfigMap.Data[OverrideJob]))
 		if err == nil {
 			err = json.Unmarshal(jobJSON, &newJob)
 		}

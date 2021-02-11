@@ -4,7 +4,6 @@ package main
 import (
 	"context"
 	"errors"
-	"flag"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -16,12 +15,11 @@ import (
 	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/importer"
 	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/secrets"
 	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/utils"
+	"github.com/open-cluster-management/library-go/pkg/config"
 	hiveclient "github.com/openshift/hive/pkg/client/clientset/versioned"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
 )
 
 /* Command: go run ./pkg/jobs/aws.go [create|import|applycloudprovider]
@@ -39,7 +37,6 @@ import (
  *    export CLUSTER_CONFIG_TEMPLATE_PATH=  # The NAMESPACE/CONFIGMAP_NAME for the cluster template
  */
 func main() {
-	var kubeconfig *string
 	var err error
 
 	utils.InitKlog()
@@ -55,19 +52,7 @@ func main() {
 	}
 
 	// Build a connection to the ACM Hub OCP
-	homePath := os.Getenv("HOME")
-	kubeconfig = flag.String("kubeconfig", homePath+"/.kube/config", "")
-	flag.Parse()
-
-	var config *rest.Config
-
-	if _, err = os.Stat(homePath + "/.kube/config"); !os.IsNotExist(err) {
-		klog.V(2).Info("Connecting with local kubeconfig")
-		config, err = clientcmd.BuildConfigFromFlags("", *kubeconfig)
-	} else {
-		klog.V(2).Info("Connecting using In Cluster Config")
-		config, err = rest.InClusterConfig()
-	}
+	config, err := config.LoadConfig("", "", "")
 	utils.CheckError(err)
 
 	if len(os.Args) == 2 {

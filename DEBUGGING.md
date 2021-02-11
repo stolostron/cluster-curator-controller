@@ -19,7 +19,7 @@ subjects:
   namespace: my-cluster                 ## CHANGE: Namespace of the new cluster
 roleRef:
   kind: Role
-  name: cpw-aws4jnp
+  name: cpw-NAME
   apiGroup: rbac.authorization.k8s.io
 ```
 3. Create the Pre/Post job configmap:

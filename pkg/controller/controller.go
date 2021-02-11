@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"flag"
-	"os"
 	"strconv"
 	"time"
 
@@ -14,20 +13,20 @@ import (
 	"github.com/open-cluster-management/cluster-curator-controller/pkg/controller/launcher"
 	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/rbac"
 	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/utils"
+	"github.com/open-cluster-management/library-go/pkg/config"
 	v1 "k8s.io/api/core/v1"
-	amv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
 )
 
-func filterConfigMaps() *amv1.ListOptions {
-	listOptions := amv1.ListOptions{
-		LabelSelector: labels.Set(amv1.LabelSelector{MatchLabels: map[string]string{
+func filterConfigMaps() *metav1.ListOptions {
+	listOptions := metav1.ListOptions{
+		LabelSelector: labels.Set(metav1.LabelSelector{MatchLabels: map[string]string{
 			"open-cluster-management": "curator",
 		}}.MatchLabels).String(),
 	}
@@ -110,20 +109,11 @@ func main() {
 
 	klog.InitFlags(nil)
 	flag.Set("v", "2")
-	// Build a connection to the ACM Hub OCP
-	homePath := os.Getenv("HOME")
-	kubeconfig := flag.String("kubeconfig", homePath+"/.kube/config", "")
 	flag.Parse()
 
-	var config *rest.Config
+	config, err := config.LoadConfig("", "", "")
+	utils.CheckError(err)
 
-	if _, err := os.Stat(homePath + "/.kube/config"); !os.IsNotExist(err) {
-		klog.V(2).Info("Connecting with local kubeconfig")
-		config, err = clientcmd.BuildConfigFromFlags("", *kubeconfig)
-	} else {
-		klog.V(2).Info("Connecting using In Cluster Config")
-		config, err = rest.InClusterConfig()
-	}
 	WatchManagedCluster(config)
 
 }

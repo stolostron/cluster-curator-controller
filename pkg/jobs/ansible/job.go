@@ -41,7 +41,7 @@ func Job(config *rest.Config, clusterConfigOverride *corev1.ConfigMap) {
 	}
 }
 
-func getAnsibleJob() *unstructured.Unstructured {
+func getAnsibleJob(jobtype string) *unstructured.Unstructured {
 	ansibleJob := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": "tower.ansible.com/v1alpha1",
@@ -49,7 +49,7 @@ func getAnsibleJob() *unstructured.Unstructured {
 			"metadata": map[string]interface{}{
 				"name": "",
 				"annotations": map[string]string{
-					"jobtype": "pre",
+					"jobtype": jobtype,
 				},
 			},
 			"spec": map[string]interface{}{
@@ -75,7 +75,7 @@ func RunAnsibleJob(config *rest.Config, namespace string, jobtype string, jobTem
 	utils.CheckError(err)
 	ansibleJobName := jobtype + "-job"
 	ansibleJobRes := schema.GroupVersionResource{Group: "tower.ansible.com", Version: "v1alpha1", Resource: "ansiblejobs"}
-	ansibleJob := getAnsibleJob()
+	ansibleJob := getAnsibleJob(jobtype)
 	ansibleJob.Object["metadata"].(map[string]interface{})["generateName"] = ansibleJobName + "-"
 	ansibleJob.Object["metadata"].(map[string]interface{})["annotations"].(map[string]string)["jobtype"] = jobtype
 	if extraVars != nil {
