@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"os"
 	"strconv"
 	"time"
 
@@ -36,7 +37,13 @@ func filterConfigMaps() *metav1.ListOptions {
 func WatchManagedCluster(config *rest.Config) {
 	managedclusterclient, err := managedclusterclient.NewForConfig(config)
 	utils.CheckError(err)
+	kubeset, err := kubernetes.NewForConfig(config)
+	utils.CheckError(err)
 
+	imageTag := os.Getenv("IMAGE_TAG")
+	if imageTag == "" {
+		klog.Warning("IMAGE_TAG=latest, becauese environment variable was not set")
+	}
 	watchlist := cache.NewListWatchFromClient(
 		managedclusterclient.ClusterV1().RESTClient(),
 		"managedclusters",
@@ -53,12 +60,12 @@ func WatchManagedCluster(config *rest.Config) {
 				klog.V(2).Info("> Investigate Cluster " + mc.Name)
 
 				for i := 5; i < 60; i = i * 2 { //40s wait
-					if cm, err := findJobConfigMap(config, mc); err == nil {
+					if cm, err := findJobConfigMap(kubeset, mc); err == nil {
 						if cm.Data["curator-job"] == "" {
-							err := rbac.ApplyRBAC(config, mc.Name)
+							err := rbac.ApplyRBAC(kubeset, mc.Name)
 							utils.LogError(err)
-							err = launcher.CreateJob(config, *cm)
-							utils.LogError(err)
+							jobLaunch := launcher.NewLauncher(*kubeset, imageTag, *cm)
+							utils.LogError(jobLaunch.CreateJob())
 						} else {
 							klog.Warning(" Curator job has already run")
 						}
@@ -69,7 +76,6 @@ func WatchManagedCluster(config *rest.Config) {
 							break
 						}
 						klog.V(2).Info("ConfigMap not found in namespace " + mc.Name + ", try again in " + strconv.Itoa(i) + "s")
-						utils.LogError(err)
 						time.Sleep(time.Duration(i) * time.Second) //10s
 					}
 				}
@@ -89,9 +95,7 @@ func WatchManagedCluster(config *rest.Config) {
 	}
 }
 
-func findJobConfigMap(config *rest.Config, mc *mcv1.ManagedCluster) (*v1.ConfigMap, error) {
-	kubeset, err := kubernetes.NewForConfig(config)
-	utils.CheckError(err)
+func findJobConfigMap(kubeset *kubernetes.Clientset, mc *mcv1.ManagedCluster) (*v1.ConfigMap, error) {
 	// Filtered search in the namespace
 	jobConfigMaps, err := kubeset.CoreV1().ConfigMaps(mc.Name).List(context.TODO(), *filterConfigMaps())
 	if err != nil {

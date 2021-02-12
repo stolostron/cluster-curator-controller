@@ -19,8 +19,8 @@ spec:
         - ./cluster-curator-controller
         env:
         - name: IMAGE_TAG
-          value: sha256:84968c2fa9d305be8ef3dbc8f0342e6e32629203ecc0a4ed7afb06159fe57fae
-        image: quay.io/jpacker/clustercurator-job@sha256:84968c2fa9d305be8ef3dbc8f0342e6e32629203ecc0a4ed7afb06159fe57fae
+          value: sha256:45736ba032e08e88ec91e3072f278297288cdf3f48953e069e4a41d500f5069a
+        image: quay.io/jpacker/clustercurator-job@sha256:45736ba032e08e88ec91e3072f278297288cdf3f48953e069e4a41d500f5069a
         imagePullPolicy: Always
         name: curator-controller
       serviceAccountName: cluster-curator

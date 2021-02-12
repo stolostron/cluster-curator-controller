@@ -10,7 +10,6 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 )
 
 func getRole() *rbacv1.Role {
@@ -68,9 +67,7 @@ func getServiceAccount() *corev1.ServiceAccount {
 	return serviceAccount
 }
 
-func ApplyRBAC(config *rest.Config, namespace string) error {
-	kubeset, err := kubernetes.NewForConfig(config)
-	utils.CheckError(err)
+func ApplyRBAC(kubeset *kubernetes.Clientset, namespace string) error {
 
 	klog.V(2).Info("Check if serviceAccount cluster-installer exists")
 	if _, err := kubeset.CoreV1().ServiceAccounts(namespace).Get(context.TODO(), "cluster-installer", v1.GetOptions{}); err != nil {
