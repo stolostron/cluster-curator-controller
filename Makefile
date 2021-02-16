@@ -144,3 +144,22 @@ helpz:
 ifndef build-harness
 	$(eval MAKEFILE_LIST := Makefile build-harness/modules/go/Makefile)
 endif
+
+.PHONY: push-curator
+push-curator: build-curator
+	docker push ${REPO_URL}/clustercurator-job:${VERSION}
+	docker tag ${REPO_URL}/clustercurator-job:${VERSION} ${REPO_URL}/clustercurator-job:latest
+	docker push ${REPO_URL}/clustercurator-job:latest
+	./deploy/controller/process.sh
+.PHONY: compile-curator
+compile-curator:
+	go mod tidy
+	go mod vendor
+	go build -o build/_output/curator ./pkg/jobs/curator.go
+	go build -o build/_output/cluster-curator-controller ./pkg/controller/controller.go
+
+.PHONY: build-curator
+build-curator: 
+	#cp build/Dockerfile_JOB Dockerfile
+	docker build -f build/Dockerfile_JOB . -t ${REPO_URL}/clustercurator-job:${VERSION}
+	#rm Dockerfile

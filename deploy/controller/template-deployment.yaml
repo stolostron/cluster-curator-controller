@@ -1,0 +1,40 @@
+---
+apiVersion: v1
+kind: Template
+metadata:
+  name: cluster-curator-controller
+objects:
+- apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    labels:
+      name: curator-controller
+    name: curator-controller
+    namespace: open-cluster-management
+  spec:
+    replicas: 1
+    selector:
+      matchLabels:
+        name: curator-controller
+    template:
+      metadata:
+        labels:
+          name: curator-controller
+      spec:
+        serviceAccountName: cluster-curator
+        containers:
+        - image: ${REPO_URL}/clustercurator-job@${IMAGE_SHA}
+          name: curator-controller
+          imagePullPolicy: Always
+          command: ["./cluster-curator-controller"]
+          imagePullPolicy: Always
+          env:
+          - name: IMAGE_TAG
+            value: "${IMAGE_SHA}"
+parameters:
+- description: SHA tag to use with the containers
+  name: IMAGE_SHA
+  required: true
+- description: Where to pull the image
+  name: REPO_URL
+  required: true

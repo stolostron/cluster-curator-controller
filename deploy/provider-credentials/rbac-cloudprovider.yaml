@@ -1,0 +1,42 @@
+---
+apiVersion: v1
+kind: Template
+metadata:
+  name: cloud-provider-rbac
+objects:
+- apiVersion: rbac.authorization.k8s.io/v1
+  kind: Role
+  metadata:
+    name: ${CP_NAME}-cpv
+    namespace: ${CP_NAMESPACE}                  ## CHANGE
+  rules:
+  - apiGroups: [""]                     # "" indicates the core API group
+    resources: ["secrets"]
+    resourceName: ["${CP_NAME}"]           ## CHANGE
+    verbs: ["get"]
+- apiVersion: rbac.authorization.k8s.io/v1
+  kind: RoleBinding
+  metadata:
+      name: ${CP_NAME}-cpv
+      namespace: ${CP_NAMESPACE}        ## CHANGE
+  subjects:
+  - kind: ServiceAccount
+    name: cluster-installer
+    namespace: ${CLUSTER_NAME}           ## CHANGE
+  #- kind: Group
+  #  name: system:serviceaccounts
+  #  apiGroup: rbac.authorization.k8s.io
+  roleRef:
+    kind: Role
+    name: ${CP_NAME}-cpv
+    apiGroup: rbac.authorization.k8s.io
+parameters:
+- description: The name of the cluster being deployed
+  name: CLUSTER_NAME
+  required: true
+- description: The name of the Cloud Provider secret to use
+  name: CP_NAME
+  required: true
+- description: The namespace of the Cloud Provider secret to use
+  name: CP_NAMESPACE
+  required: true

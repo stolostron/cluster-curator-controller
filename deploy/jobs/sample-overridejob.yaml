@@ -1,0 +1,52 @@
+## This example has all possible containers(tasks) you can run in the Job
+## Add or Remove (comment out) what you do not want to use, and paste this into the cluster ConfigMap under 
+##   data:
+##     overrideJob: |-
+####
+apiVersion: batch/v1
+kind: Job
+metadata:
+  GenerateName: curator-job-
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      serviceAccountName: cluster-installer
+      initContainers:
+      - name: applycloudprovider-aws
+        image: quay.io/jpacker/clustercurator-job:latest
+        command: ['./curator','applycloudprovider-aws']
+      - name: applycloudprovider-ansible
+        image: quay.io/jpacker/clustercurator-job:latest
+        command: ['./curator','applycloudprovider-aws']
+      - name: prehook-ansiblejob
+        image: quay.io/jpacker/clustercurator-job:latest
+        command: ['./curator','ansiblejob']
+        env:
+          - name:  "JOB_TYPE"
+            value: "prehook"
+      - name: create-aws
+        image: quay.io/jpacker/clustercurator-job:latest
+        imagePullPolicy: Always
+        command: ['./curator','create-aws']
+      - name: import
+        image: quay.io/jpacker/clustercurator-job:latest
+        command: ['./curator','import']
+      - name: activate-monitor
+        image: quay.io/jpacker/clustercurator-job:latest
+        command: ['./curator','activate-monitor']
+      - name: monitor
+        image: quay.io/jpacker/clustercurator-job:latest
+        command: ['./curator','monitor']
+      - name: posthook-ansiblejob
+        image: quay.io/jpacker/clustercurator-job:latest
+        command: ['./curator','ansiblejob']
+        env:
+          - name:  "JOB_TYPE"
+            value: "posthook"
+      containers:
+      - name: complete
+        image: quay.io/jpacker/clustercurator-job:latest
+        imagePullPolicy: Always
+        command: ['echo','Done! create']
+      restartPolicy: Never
