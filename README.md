@@ -6,6 +6,8 @@ This project contains jobs and controllers for curating work around Cluster Prov
 ## Architecture
 The controller found here, monitors for `ManageCluster` kinds.  When new instances of the resource are created, this controller creates a default Kubernetes Job that runs: `applycloudprovider`, `pre-hook Ansible`, `activate-monitor` and `posthook Ansible`.  The Job can be overridden with your own job flow.
 
+![Architecture diagram](docs/ansiblejob-flow.png "Architecture")
+
 ## Controller:
 - cluster-curator-controller (ccc), watches for `ManagedCluster` kind create resource action.
 

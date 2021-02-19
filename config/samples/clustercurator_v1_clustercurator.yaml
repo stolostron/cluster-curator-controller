@@ -1,7 +1,0 @@
-apiVersion: clustercurator.open-cluster-management.io/v1
-kind: ClusterCurator
-metadata:
-  name: clustercurator-sample
-spec:
-  # Add fields here
-  foo: bar

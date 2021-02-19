@@ -1,3 +1,5 @@
+-include /opt/build-harness/Makefile.prow
+
 SHELL := /bin/bash
 
 export BINDATA_TEMP_DIR := $(shell mktemp -d)
@@ -160,6 +162,4 @@ compile-curator:
 
 .PHONY: build-curator
 build-curator: 
-	#cp build/Dockerfile_JOB Dockerfile
-	docker build -f build/Dockerfile_JOB . -t ${REPO_URL}/clustercurator-job:${VERSION}
-	#rm Dockerfile
+	docker build -f Dockerfile . -t ${REPO_URL}/clustercurator-job:${VERSION}
