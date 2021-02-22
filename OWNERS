@@ -1,6 +1,5 @@
 approvers:
 - jnpacker
-- Randy424
 - itdove
 - chrisahl
 - leena-jawale
@@ -8,11 +7,8 @@ approvers:
 - showeimer
 - hanqiuzh
 - chrisahl
-- jeswanke
-- 
 reviewers:
 - jnpacker
-- Randy424
 - itdove
 - chrisahl
 - leena-jawale
@@ -20,4 +16,3 @@ reviewers:
 - showeimer
 - hanqiuzh
 - chrisahl
-- jeswanke
