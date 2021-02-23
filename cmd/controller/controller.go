@@ -71,7 +71,7 @@ func WatchManagedCluster(config *rest.Config) {
 							if err := utils.LogError(err); err != nil {
 								break
 							}
-							jobLaunch := launcher.NewLauncher(*kubeset, imageTag, imageUri, *cm)
+							jobLaunch := launcher.NewLauncher(kubeset, imageTag, imageUri, *cm)
 							if err := utils.LogError(jobLaunch.CreateJob()); err != nil {
 								break
 							}
