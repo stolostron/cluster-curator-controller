@@ -2,17 +2,17 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
-    name: curator-controller
-  name: curator-controller
+    name: cluster-curator-controller
+  name: cluster-curator-controller
 spec:
   replicas: 1
   selector:
     matchLabels:
-      name: curator-controller
+      name: cluster-curator-controller
   template:
     metadata:
       labels:
-        name: curator-controller
+        name: cluster-curator-controller
     spec:
       containers:
       - command:
