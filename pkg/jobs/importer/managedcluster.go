@@ -1,4 +1,5 @@
-// Copyright (c) 2020 Red Hat, Inc.
+// Copyright Contributors to the Open Cluster Management project.
+
 package importer
 
 import (
@@ -21,8 +22,14 @@ import (
 	"k8s.io/klog/v2"
 )
 
-func Task(config *rest.Config, clusterName string, clusterConfigTemplate *corev1.ConfigMap, clusterConfigOverride *corev1.ConfigMap) {
-	klog.V(0).Info("=> Importing Cluster in namespace \"" + clusterName + "\" using ConfigMap Template \"" + clusterConfigTemplate.Name + "/" + clusterConfigTemplate.Namespace + "\" and ConfigMap Override \"" + clusterName)
+func Task(config *rest.Config,
+	clusterName string,
+	clusterConfigTemplate *corev1.ConfigMap,
+	clusterConfigOverride *corev1.ConfigMap) {
+
+	klog.V(0).Info("=> Importing Cluster in namespace \"" + clusterName +
+		"\" using ConfigMap Template \"" + clusterConfigTemplate.Name + "/" +
+		clusterConfigTemplate.Namespace + "\" and ConfigMap Override \"" + clusterName)
 	managedclusterclient, err := managedclusterclient.NewForConfig(config)
 	utils.CheckError(err)
 
@@ -32,7 +39,11 @@ func Task(config *rest.Config, clusterName string, clusterConfigTemplate *corev1
 	CreateManagedCluster(managedclusterclient, clusterConfigTemplate, clusterConfigOverride)
 }
 
-func CreateManagedCluster(managedclusterset *managedclusterclient.Clientset, configMapTemplate *corev1.ConfigMap, configMapOverride *corev1.ConfigMap) {
+func CreateManagedCluster(
+	managedclusterset *managedclusterclient.Clientset,
+	configMapTemplate *corev1.ConfigMap,
+	configMapOverride *corev1.ConfigMap) {
+
 	newCluster := &managedclusterv1.ManagedCluster{}
 	//agentset.KlusterletAddonConfig is defined with json for unmarshaling
 	cdJSON, err := yaml.YAMLToJSON([]byte(configMapTemplate.Data["managedCluster"]))
@@ -53,7 +64,10 @@ func CreateManagedCluster(managedclusterset *managedclusterclient.Clientset, con
 	log.Println("Created ManagedCluster ✓")
 }
 
-func CreateKlusterletAddonConfig(dynclient dynamic.Interface, configMapTemplate *corev1.ConfigMap, configMapOverride *corev1.ConfigMap) {
+func CreateKlusterletAddonConfig(
+	dynclient dynamic.Interface,
+	configMapTemplate *corev1.ConfigMap,
+	configMapOverride *corev1.ConfigMap) {
 
 	kacobj := &unstructured.Unstructured{}
 	decoded := syaml.NewDecodingSerializer(unstructured.UnstructuredJSONScheme)

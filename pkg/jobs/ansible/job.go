@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Red Hat, Inc.
+// Copyright Contributors to the Open Cluster Management project.
 package ansible
 
 import (
@@ -23,21 +23,15 @@ func Job(config *rest.Config, clusterConfigOverride *corev1.ConfigMap) {
 	if jobType != "prehook" && jobType != "posthook" {
 		klog.Fatal("Missing JOB_TYPE environment parameter, use \"prehook\" or \"posthook\"")
 	}
-	//kubeset, err := kubernetes.NewForConfig(config)
-	//utils.CheckError(err)
 
 	towerTemplateNames, err := FindAnsibleTemplateNamefromConfigMap(
 		clusterConfigOverride,
 		jobType)
-	utils.LogError(err)
+	utils.CheckError(err)
 	for _, ttn := range towerTemplateNames {
 		klog.V(3).Info("Tower Job name: " + ttn.Name)
-		if err == nil {
-			_, err = RunAnsibleJob(config, clusterConfigOverride.Namespace, jobType, ttn, "toweraccess", nil)
-			utils.CheckError(err)
-		} else {
-			utils.LogError(err)
-		}
+		_, err = RunAnsibleJob(config, clusterConfigOverride.Namespace, jobType, ttn, "toweraccess", nil)
+		utils.CheckError(err)
 	}
 }
 
@@ -69,7 +63,14 @@ func getAnsibleJob(jobtype string) *unstructured.Unstructured {
  *  jobTemplateName  #Tower Template job to run
  *  secretRef		 # The secret to connect to Tower in the cluster namespace, ie. toweraccess
  */
-func RunAnsibleJob(config *rest.Config, namespace string, jobtype string, jobTemplate AnsibleJob, secretRef string, extraVars map[string]string) (*unstructured.Unstructured, error) {
+func RunAnsibleJob(
+	config *rest.Config,
+	namespace string,
+	jobtype string,
+	jobTemplate AnsibleJob,
+	secretRef string,
+	extraVars map[string]string) (*unstructured.Unstructured, error) {
+
 	klog.V(2).Info("* Run " + jobtype + " AnsibleJob")
 	dynclient, err := dynamic.NewForConfig(config)
 	utils.CheckError(err)
@@ -87,7 +88,9 @@ func RunAnsibleJob(config *rest.Config, namespace string, jobtype string, jobTem
 	ansibleJob.Object["spec"].(map[string]interface{})["extra_vars"] = jobTemplate.ExtraVars
 
 	klog.V(0).Info("Creating AnsibleJob " + ansibleJobName + " in namespace " + namespace)
-	jobResource, err := dynclient.Resource(ansibleJobRes).Namespace(namespace).Create(context.TODO(), ansibleJob, v1.CreateOptions{})
+	jobResource, err := dynclient.Resource(ansibleJobRes).Namespace(namespace).
+		Create(context.TODO(), ansibleJob, v1.CreateOptions{})
+
 	utils.CheckError(err)
 	ansibleJobName = jobResource.GetName()
 	klog.V(2).Info("Created AnsibleJob ✓")
@@ -96,19 +99,23 @@ func RunAnsibleJob(config *rest.Config, namespace string, jobtype string, jobTem
 
 	// Monitor the AnsibeJob resource
 	for {
-		jobResource, err = dynclient.Resource(ansibleJobRes).Namespace(namespace).Get(context.TODO(), ansibleJobName, v1.GetOptions{})
+		jobResource, err = dynclient.Resource(ansibleJobRes).Namespace(namespace).
+			Get(context.TODO(), ansibleJobName, v1.GetOptions{})
+
 		klog.V(4).Info(jobResource)
 		if jobResource.Object != nil && jobResource.Object["status"] != nil {
-			if jobResource.Object["status"].(map[string]interface{})["ansibleJobResult"] != nil {
-				if jobStatus := jobResource.Object["status"].(map[string]interface{})["ansibleJobResult"].(map[string]interface{})["status"]; jobStatus != "" {
-					klog.V(2).Infof("Found result status %v", jobStatus)
-					if jobStatus == "successful" {
-						klog.V(2).Info("AnsibleJob " + namespace + "/" + ansibleJobName + " finished successfully ✓")
-						break
-					} else if jobStatus == "error" {
-						klog.Warningf("Status: \n\n%v", jobResource.Object["status"])
-						return nil, errors.New("AnsibleJob " + namespace + "/" + ansibleJobName + " exited with an error")
-					}
+			jos := jobResource.Object["status"]
+			if jos.(map[string]interface{})["ansibleJobResult"] != nil &&
+				jos.(map[string]interface{})["ansibleJobResult"].(map[string]interface{})["status"] != nil {
+
+				jobStatus := jos.(map[string]interface{})["ansibleJobResult"].(map[string]interface{})["status"]
+				klog.V(2).Infof("Found result status %v", jobStatus)
+				if jobStatus == "successful" {
+					klog.V(2).Info("AnsibleJob " + namespace + "/" + ansibleJobName + " finished successfully ✓")
+					break
+				} else if jobStatus == "error" {
+					klog.Warningf("Status: \n\n%v", jobResource.Object["status"])
+					return nil, errors.New("AnsibleJob " + namespace + "/" + ansibleJobName + " exited with an error")
 				}
 			}
 			if jobResource.Object["status"].(map[string]interface{})["conditions"] != nil {

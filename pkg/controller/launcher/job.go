@@ -1,3 +1,4 @@
+// Copyright Contributors to the Open Cluster Management project.
 package launcher
 
 import (
@@ -14,27 +15,34 @@ import (
 )
 
 const OverrideJob = "overrideJob"
+const CurCmd = "./curator"
 
 type Launcher struct {
-	client       kubernetes.Clientset
+	client       kubernetes.Interface
 	imageTag     string
+	imageUri     string
 	jobConfigMap corev1.ConfigMap
 }
 
-func NewLauncher(client kubernetes.Clientset, imageTag string, jobConfigMap corev1.ConfigMap) *Launcher {
+func NewLauncher(client kubernetes.Interface, imageTag string, imageUri string, jobConfigMap corev1.ConfigMap) *Launcher {
 	return &Launcher{
 		client:       client,
 		imageTag:     imageTag,
+		imageUri:     imageUri,
 		jobConfigMap: jobConfigMap,
 	}
 }
 
-func getBatchJob(imageTag string, configMapName string) *batchv1.Job {
+func getBatchJob(imageTag string, configMapName string, imageUri string) *batchv1.Job {
+
+	var flags = []string{"--v", "2"}
+
 	if imageTag == "" {
 		imageTag = ":latest"
 	} else {
 		imageTag = "@" + imageTag
 	}
+
 	newJob := &batchv1.Job{
 		ObjectMeta: v1.ObjectMeta{
 			GenerateName: "curator-job-",
@@ -57,8 +65,8 @@ func getBatchJob(imageTag string, configMapName string) *batchv1.Job {
 					InitContainers: []corev1.Container{
 						corev1.Container{
 							Name:            "applycloudprovider-ansible",
-							Image:           "quay.io/jpacker/clustercurator-job:" + imageTag,
-							Command:         []string{"./curator", "applycloudprovider-ansible"},
+							Image:           imageUri + imageTag,
+							Command:         append([]string{CurCmd, "applycloudprovider-ansible"}, flags...),
 							ImagePullPolicy: corev1.PullAlways,
 							Env: []corev1.EnvVar{
 								corev1.EnvVar{
@@ -69,8 +77,8 @@ func getBatchJob(imageTag string, configMapName string) *batchv1.Job {
 						},
 						corev1.Container{
 							Name:            "prehook-ansiblejob",
-							Image:           "quay.io/jpacker/clustercurator-job" + imageTag,
-							Command:         []string{"./curator", "ansiblejob"},
+							Image:           imageUri + imageTag,
+							Command:         append([]string{CurCmd, "ansiblejob"}, flags...),
 							ImagePullPolicy: corev1.PullAlways,
 							Env: []corev1.EnvVar{
 								corev1.EnvVar{
@@ -81,14 +89,14 @@ func getBatchJob(imageTag string, configMapName string) *batchv1.Job {
 						},
 						corev1.Container{
 							Name:            "monitor-provisioning",
-							Image:           "quay.io/jpacker/clustercurator-job" + imageTag,
-							Command:         []string{"./curator", "activate-monitor"},
+							Image:           imageUri + imageTag,
+							Command:         append([]string{CurCmd, "activate-monitor"}, flags...),
 							ImagePullPolicy: corev1.PullAlways,
 						},
 						corev1.Container{
 							Name:            "posthook-ansiblejob",
-							Image:           "quay.io/jpacker/clustercurator-job" + imageTag,
-							Command:         []string{"./curator", "ansiblejob"},
+							Image:           imageUri + imageTag,
+							Command:         append([]string{CurCmd, "ansiblejob"}, flags...),
 							ImagePullPolicy: corev1.PullAlways,
 							Env: []corev1.EnvVar{
 								corev1.EnvVar{
@@ -101,7 +109,7 @@ func getBatchJob(imageTag string, configMapName string) *batchv1.Job {
 					Containers: []corev1.Container{
 						corev1.Container{
 							Name:    "complete",
-							Image:   "quay.io/jpacker/clustercurator-job" + imageTag,
+							Image:   imageUri + imageTag,
 							Command: []string{"echo", "Done!"},
 						},
 					},
@@ -118,7 +126,7 @@ func (I *Launcher) CreateJob() error {
 	if I.jobConfigMap.Data["providerCredentialPath"] == "" {
 		return errors.New("Missing providerCredentialPath in " + clusterName + "-job ConfigMap")
 	}
-	newJob := getBatchJob(I.imageTag, I.jobConfigMap.Name)
+	newJob := getBatchJob(I.imageTag, I.imageUri, I.jobConfigMap.Name)
 
 	// Allow us to override the job in the configMap
 	klog.V(0).Info("Creating Curator job curator-job in namespace " + clusterName)
@@ -130,6 +138,13 @@ func (I *Launcher) CreateJob() error {
 		jobJSON, err := yaml.YAMLToJSON([]byte(I.jobConfigMap.Data[OverrideJob]))
 		if err == nil {
 			err = json.Unmarshal(jobJSON, &newJob)
+		}
+		klog.V(2).Info(" Basic sanity check from the Unmarshal")
+		if len(newJob.Spec.Template.Spec.InitContainers) == 0 &&
+			len(newJob.Spec.Template.Spec.Containers) == 0 {
+
+			klog.Warning(newJob)
+			return errors.New("Did not find any InitContainers or Containers defined")
 		}
 	}
 	if err == nil {
