@@ -16,6 +16,6 @@ compile-curator:
 build-curator: 
 	docker build -f Dockerfile.prow . -t ${REPO_URL}/clustercurator-job:${VERSION}
 
-.PHONY: unit-test
-unit-test:
+.PHONY: unit-tests
+unit-tests:
 	GOFLAGS="" go test -v ./pkg/controller/launcher

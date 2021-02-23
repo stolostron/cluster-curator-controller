@@ -21,7 +21,6 @@ const clusterName = configMapName
 // Validate that we are correctly building the job.batchv1 object
 func TestGetBatchJobImageSHA(t *testing.T) {
 
-	t.Log("Starting TestGetBatchJobImageSHA\nCreate a batchJobObj with sha256")
 	batchJobObj := getBatchJob(imageTag, configMapName, imageURI)
 
 	t.Log("Test count initContainers in job")
@@ -47,14 +46,12 @@ func TestGetBatchJobImageSHA(t *testing.T) {
 	if initContianer.Env[0].Value != configMapName {
 		t.Fatalf("The configMapName was not corrctly populated %v", initContianer.Env[0].Value)
 	}
-
-	t.Log("Finished TestGetBatchJobImageSHA")
 }
 
 // Use the default imageTag, which appends :latest
 func TestGetBatchJobImageDefault(t *testing.T) {
 
-	t.Log("Starting TestGetBatchJobImageDefault\nCreate a batchJobObj with no sha256 or URI")
+	t.Log("Create a batchJobObj with no sha256 or URI")
 	batchJobObj := getBatchJob("", configMapName, imageURI)
 
 	t.Logf("Check image is applied correclty %v@%v", imageURI, imageTag)
@@ -66,14 +63,11 @@ func TestGetBatchJobImageDefault(t *testing.T) {
 	if initContianer.Image != uri {
 		t.Fatalf("The initContainer.image did not have the correct URI %v, expected %v", initContianer.Image, uri)
 	}
-
-	t.Log("Finished TestGetBatchJobImageDefault")
 }
 
 // Test the launcher to create a job.batchv1 object
 func TestCreateLauncher(t *testing.T) {
 
-	t.Log("Starting TestCreateLauncher")
 	jobConfigMap := &corev1.ConfigMap{
 		ObjectMeta: v1.ObjectMeta{Name: configMapName, Namespace: configMapName},
 		Data:       map[string]string{"providerCredentialPath": "default/provider-secret"},
@@ -89,13 +83,11 @@ func TestCreateLauncher(t *testing.T) {
 
 	assert.Nil(t, err, "error is nil")
 
-	t.Log("Finished TestCreateLauncher")
 }
 
 // Test launcher with a bad configMap path
 func TestCreateLauncherBadConfigMap(t *testing.T) {
 
-	t.Log("Starting TestCreateLauncherBadConfigMap")
 	jobConfigMap := &corev1.ConfigMap{
 		ObjectMeta: v1.ObjectMeta{Name: configMapName, Namespace: configMapName},
 		Data:       map[string]string{"providerCredentialPathInvalid": "default/provider-secret"},
@@ -110,14 +102,10 @@ func TestCreateLauncherBadConfigMap(t *testing.T) {
 	err := testLauncher.CreateJob()
 
 	assert.NotNil(t, err, "Invalid jobConfigMap detected")
-
-	t.Log("Finished TestCreateLauncherBadConfigMap")
 }
 
 // Test launcher with a valid overrideJob
 func TestCreateLauncherOverrideJob(t *testing.T) {
-
-	t.Log("Starting TestCreateLauncherOverrideJob")
 
 	batchJobObj := getBatchJob("", configMapName, imageURI)
 	stringData, err := yaml.Marshal(batchJobObj)
@@ -142,14 +130,10 @@ func TestCreateLauncherOverrideJob(t *testing.T) {
 	err = testLauncher.CreateJob()
 
 	assert.Nil(t, err, "Job create is nil")
-
-	t.Log("Finished TestCreateLauncherOverrideJob")
 }
 
 // Test launcher with an Invalid overrideJob
 func TestCreateLauncherInvalidOverrideJob(t *testing.T) {
-
-	t.Log("Starting TestCreateLauncherInvalidOverrideJob")
 
 	jobConfigMap := &corev1.ConfigMap{
 		ObjectMeta: v1.ObjectMeta{Name: configMapName, Namespace: configMapName},
@@ -168,6 +152,4 @@ func TestCreateLauncherInvalidOverrideJob(t *testing.T) {
 	err := testLauncher.CreateJob()
 
 	assert.NotNil(t, err, "CreateJob err is not nil")
-
-	t.Log("Finished TestCreateLauncherInvalidOverrideJob")
 }
