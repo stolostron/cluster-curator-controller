@@ -18,13 +18,13 @@ const OverrideJob = "overrideJob"
 const CurCmd = "./curator"
 
 type Launcher struct {
-	client       kubernetes.Clientset
+	client       kubernetes.Interface
 	imageTag     string
 	imageUri     string
 	jobConfigMap corev1.ConfigMap
 }
 
-func NewLauncher(client kubernetes.Clientset, imageTag string, imageUri string, jobConfigMap corev1.ConfigMap) *Launcher {
+func NewLauncher(client kubernetes.Interface, imageTag string, imageUri string, jobConfigMap corev1.ConfigMap) *Launcher {
 	return &Launcher{
 		client:       client,
 		imageTag:     imageTag,
