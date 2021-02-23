@@ -17,10 +17,12 @@ spec:
       containers:
       - command:
         - ./cluster-curator-controller
+        - "-v"
+        - "2"
         env:
-        - name: IMAGE_TAG
-          value: sha256:4e7ab8e1beefd3127bd3fe1313b16e105a8216e4cf76b19bdfde6f87a2a31b34
-        image: quay.io/jpacker/clustercurator-job@sha256:4e7ab8e1beefd3127bd3fe1313b16e105a8216e4cf76b19bdfde6f87a2a31b34
+        #- name: IMAGE_TAG
+        #  value: sha256:4e7ab8e1beefd3127bd3fe1313b16e105a8216e4cf76b19bdfde6f87a2a31b34
+        image: registry.ci.openshift.org/open-cluster-management/cluster-curator-controller:latest
         imagePullPolicy: Always
         name: curator-controller
       serviceAccountName: cluster-curator

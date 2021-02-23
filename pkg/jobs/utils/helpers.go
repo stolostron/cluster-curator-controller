@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"flag"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -23,11 +22,7 @@ import (
 func InitKlog() {
 
 	klog.InitFlags(nil)
-	flag.Set("v", "2")
-	logLevel := os.Getenv("LOG_LEVEL")
-	if logLevel != "" {
-		flag.Set("v", string(logLevel))
-	}
+	flag.Parse()
 
 }
 
@@ -44,6 +39,12 @@ func LogError(err error) error {
 		return err
 	}
 	return nil
+}
+
+func LogErrorNR(err error) {
+	if err != nil {
+		klog.Warning(err.Error())
+	}
 }
 
 //Path splitter NAMSPACE/RESOURCE_NAME
@@ -71,14 +72,12 @@ func OverrideStringField(field *string, override string, desc string) {
 }
 
 // Use to apply overrides for int64
-func OverrideInt64Field(field *int64, override string, desc string) error {
+func OverrideInt64Field(field *int64, override string, desc string) {
 	if override == "" {
 		klog.V(2).Info("Overriding " + desc + " \"" + strconv.FormatInt(*field, 10) + "\" X (NOT PROVIDED)")
 	} else {
 		overrideInt, err := strconv.ParseInt(override, 10, 64)
-		if err = LogError(err); err != nil {
-			return err
-		}
+		CheckError(err)
 		if *field != overrideInt {
 			*field = overrideInt
 			klog.V(2).Info("Overriding " + desc + " \"" + strconv.FormatInt(*field, 10) + "\" ✓")
@@ -86,17 +85,13 @@ func OverrideInt64Field(field *int64, override string, desc string) error {
 			klog.V(2).Info("Overriding " + desc + " \"" + strconv.FormatInt(*field, 10) + "\" X (ALREADY EQUAL)")
 		}
 	}
-	return nil
 }
 
 // Use to apply overrides for int / int32
-func OverrideIntField(field *int, override string, desc string) error {
+func OverrideIntField(field *int, override string, desc string) {
 	var wideField int64 = int64(*field)
-	if err := OverrideInt64Field(&wideField, override, desc); err != nil {
-		return err
-	}
+	OverrideInt64Field(&wideField, override, desc)
 	*field = int(wideField)
-	return nil
 }
 
 func MonitorDeployStatus(config *rest.Config, clusterName string) error {
@@ -158,9 +153,13 @@ func MonitorDeployStatus(config *rest.Config, clusterName string) error {
 			break
 			// Detect that we've failed
 		} else {
+
 			klog.V(0).Info("Attempt: " + strconv.Itoa(i) + "/30, pause 10sec")
 			time.Sleep(10 * time.Second) //10s
-			if len(cluster.Status.Conditions) > 0 && (cluster.Spec.InstallAttemptsLimit == nil || *cluster.Spec.InstallAttemptsLimit != 0) {
+
+			if len(cluster.Status.Conditions) > 0 &&
+				(cluster.Spec.InstallAttemptsLimit == nil || *cluster.Spec.InstallAttemptsLimit != 0) {
+
 				klog.Warning(cluster.Status.Conditions)
 				return errors.New("Failure detected")
 			} else if i == 19 {

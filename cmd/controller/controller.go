@@ -5,7 +5,6 @@ package main
 import (
 	"context"
 	"errors"
-	"flag"
 	"os"
 	"strconv"
 	"time"
@@ -45,6 +44,11 @@ func WatchManagedCluster(config *rest.Config) {
 	if imageTag == "" {
 		klog.Warning("IMAGE_TAG=latest, becauese environment variable was not set")
 	}
+	imageUri := os.Getenv("IMAGE_URI")
+	if imageUri == "" {
+		imageUri = "registry.ci.openshift.org/open-cluster-management/cluster-curator-controller"
+		klog.Warning("IMAGE_URI=" + imageUri + ", becauese environment variable was not set")
+	}
 	watchlist := cache.NewListWatchFromClient(
 		managedclusterclient.ClusterV1().RESTClient(),
 		"managedclusters",
@@ -64,9 +68,13 @@ func WatchManagedCluster(config *rest.Config) {
 					if cm, err := findJobConfigMap(kubeset, mc); err == nil {
 						if cm.Data["curator-job"] == "" {
 							err := rbac.ApplyRBAC(kubeset, mc.Name)
-							utils.LogError(err)
-							jobLaunch := launcher.NewLauncher(*kubeset, imageTag, *cm)
-							utils.LogError(jobLaunch.CreateJob())
+							if err := utils.LogError(err); err != nil {
+								break
+							}
+							jobLaunch := launcher.NewLauncher(*kubeset, imageTag, imageUri, *cm)
+							if err := utils.LogError(jobLaunch.CreateJob()); err != nil {
+								break
+							}
 						} else {
 							klog.Warning(" Curator job has already run")
 						}
@@ -82,8 +90,10 @@ func WatchManagedCluster(config *rest.Config) {
 				}
 			},
 			UpdateFunc: func(oldObj interface{}, newObj interface{}) {
+				// Not implemented
 			},
 			DeleteFunc: func(obj interface{}) {
+				// Not implemented
 			},
 		},
 	)
@@ -112,9 +122,7 @@ func findJobConfigMap(kubeset *kubernetes.Clientset, mc *mcv1.ManagedCluster) (*
 
 func main() {
 
-	klog.InitFlags(nil)
-	flag.Set("v", "2")
-	flag.Parse()
+	utils.InitKlog()
 
 	config, err := config.LoadConfig("", "", "")
 	utils.CheckError(err)
