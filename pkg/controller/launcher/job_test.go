@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
@@ -18,11 +19,10 @@ const configMapName = "my-cluster"
 const clusterName = configMapName
 
 // Validate that we are correctly building the job.batchv1 object
-func TestGetBatchJob(t *testing.T) {
+func TestGetBatchJobImageSHA(t *testing.T) {
 
-	t.Log("Starting TestGetBatchJob\nCreate a batchJobObj with sha256")
+	t.Log("Starting TestGetBatchJobImageSHA\nCreate a batchJobObj with sha256")
 	batchJobObj := getBatchJob(imageTag, configMapName, imageURI)
-	t.Logf("%v", batchJobObj)
 
 	t.Log("Test count initContainers in job")
 	foundInitContainers := len(batchJobObj.Spec.Template.Spec.InitContainers)
@@ -48,25 +48,32 @@ func TestGetBatchJob(t *testing.T) {
 		t.Fatalf("The configMapName was not corrctly populated %v", initContianer.Env[0].Value)
 	}
 
-	t.Log("Create a batchJobObj with no sha256 or URI")
-	batchJobObj = getBatchJob("", configMapName, imageURI)
-	t.Logf("%v", batchJobObj)
+	t.Log("Finished TestGetBatchJobImageSHA")
+}
+
+// Use the default imageTag, which appends :latest
+func TestGetBatchJobImageDefault(t *testing.T) {
+
+	t.Log("Starting TestGetBatchJobImageDefault\nCreate a batchJobObj with no sha256 or URI")
+	batchJobObj := getBatchJob("", configMapName, imageURI)
 
 	t.Logf("Check image is applied correclty %v@%v", imageURI, imageTag)
-	uri = imageURI + ":latest"
+	uri := imageURI + ":latest"
 
 	t.Log("Access the first initContainer")
-	initContianer = batchJobObj.Spec.Template.Spec.InitContainers[0]
+	initContianer := batchJobObj.Spec.Template.Spec.InitContainers[0]
 
 	if initContianer.Image != uri {
-		log.Fatalf("The initContainer.image did not have the correct URI %v, expected %v", initContianer.Image, uri)
+		t.Fatalf("The initContainer.image did not have the correct URI %v, expected %v", initContianer.Image, uri)
 	}
 
-	t.Log("Finished TestGetBatchJob")
+	t.Log("Finished TestGetBatchJobImageDefault")
 }
 
 // Test the launcher to create a job.batchv1 object
 func TestCreateLauncher(t *testing.T) {
+
+	t.Log("Starting TestCreateLauncher")
 	jobConfigMap := &corev1.ConfigMap{
 		ObjectMeta: v1.ObjectMeta{Name: configMapName, Namespace: configMapName},
 		Data:       map[string]string{"providerCredentialPath": "default/provider-secret"},
@@ -82,4 +89,85 @@ func TestCreateLauncher(t *testing.T) {
 
 	assert.Nil(t, err, "error is nil")
 
+	t.Log("Finished TestCreateLauncher")
+}
+
+// Test launcher with a bad configMap path
+func TestCreateLauncherBadConfigMap(t *testing.T) {
+
+	t.Log("Starting TestCreateLauncherBadConfigMap")
+	jobConfigMap := &corev1.ConfigMap{
+		ObjectMeta: v1.ObjectMeta{Name: configMapName, Namespace: configMapName},
+		Data:       map[string]string{"providerCredentialPathInvalid": "default/provider-secret"},
+	}
+
+	kubeset := fake.NewSimpleClientset(jobConfigMap)
+
+	testLauncher := NewLauncher(kubeset, imageTag, imageURI, *jobConfigMap)
+
+	assert.NotNil(t, testLauncher, "launcher is not nil")
+
+	err := testLauncher.CreateJob()
+
+	assert.NotNil(t, err, "Invalid jobConfigMap detected")
+
+	t.Log("Finished TestCreateLauncherBadConfigMap")
+}
+
+// Test launcher with a valid overrideJob
+func TestCreateLauncherOverrideJob(t *testing.T) {
+
+	t.Log("Starting TestCreateLauncherOverrideJob")
+
+	batchJobObj := getBatchJob("", configMapName, imageURI)
+	stringData, err := yaml.Marshal(batchJobObj)
+	if err != nil {
+		t.Fatal("Failed to marshal batchJobObj")
+	}
+
+	jobConfigMap := &corev1.ConfigMap{
+		ObjectMeta: v1.ObjectMeta{Name: configMapName, Namespace: configMapName},
+		Data: map[string]string{
+			"providerCredentialPath": "default/provider-secret",
+			OverrideJob:              string(stringData),
+		},
+	}
+
+	kubeset := fake.NewSimpleClientset(jobConfigMap)
+
+	testLauncher := NewLauncher(kubeset, imageTag, imageURI, *jobConfigMap)
+
+	assert.NotNil(t, testLauncher, "launcher is not nil")
+
+	err = testLauncher.CreateJob()
+
+	assert.Nil(t, err, "Job create is nil")
+
+	t.Log("Finished TestCreateLauncherOverrideJob")
+}
+
+// Test launcher with an Invalid overrideJob
+func TestCreateLauncherInvalidOverrideJob(t *testing.T) {
+
+	t.Log("Starting TestCreateLauncherInvalidOverrideJob")
+
+	jobConfigMap := &corev1.ConfigMap{
+		ObjectMeta: v1.ObjectMeta{Name: configMapName, Namespace: configMapName},
+		Data: map[string]string{
+			"providerCredentialPath": "default/provider-secret",
+			OverrideJob:              "Not a valid job.batchv1: specification!!",
+		},
+	}
+
+	kubeset := fake.NewSimpleClientset(jobConfigMap)
+
+	testLauncher := NewLauncher(kubeset, imageTag, imageURI, *jobConfigMap)
+
+	assert.NotNil(t, testLauncher, "launcher is not nil")
+
+	err := testLauncher.CreateJob()
+
+	assert.NotNil(t, err, "CreateJob err is not nil")
+
+	t.Log("Finished TestCreateLauncherInvalidOverrideJob")
 }

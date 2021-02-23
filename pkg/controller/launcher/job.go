@@ -139,6 +139,13 @@ func (I *Launcher) CreateJob() error {
 		if err == nil {
 			err = json.Unmarshal(jobJSON, &newJob)
 		}
+		klog.V(2).Info(" Basic sanity check from the Unmarshal")
+		if len(newJob.Spec.Template.Spec.InitContainers) == 0 &&
+			len(newJob.Spec.Template.Spec.Containers) == 0 {
+
+			klog.Warning(newJob)
+			return errors.New("Did not find any InitContainers or Containers defined")
+		}
 	}
 	if err == nil {
 		curatorJob, err := kubeset.BatchV1().Jobs(clusterName).Create(context.TODO(), newJob, v1.CreateOptions{})
