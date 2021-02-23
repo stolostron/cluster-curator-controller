@@ -23,6 +23,9 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
+const LogFlag = "v"
+const LogVerbosity = "2"
+
 /* Command: go run ./pkg/jobs/aws.go [create|import|applycloudprovider]
  *
  * Uses the following environment variables:
@@ -39,10 +42,10 @@ import (
  */
 func main() {
 	var err error
+	var clusterName = os.Getenv("CLUSTER_NAME")
 
 	utils.InitKlog()
 
-	var clusterName = os.Getenv("CLUSTER_NAME")
 	if clusterName == "" {
 		data, err := ioutil.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
 		if err != nil {
@@ -64,11 +67,13 @@ func main() {
 			utils.CheckError(err)
 			create.ActivateDeploy(hiveset, clusterName)
 		default:
-			utils.CheckError(errors.New("Invalid Parameter: \"" + os.Args[1] + "\"\nCommand: ./curator [create|import|applycloudprovider]"))
+			utils.CheckError(errors.New("Invalid Parameter: \"" + os.Args[1] +
+				"\"\nCommand: ./curator [create|import|applycloudprovider]"))
 		}
 		klog.V(2).Info("Mode: " + os.Args[1] + " Cluster")
 	} else {
-		utils.CheckError(errors.New("Invalid Parameter: \"" + os.Args[1] + "\"\nCommand: ./curator [create|import|applycloudprovider]"))
+		utils.CheckError(errors.New("Invalid Parameter: \"" + os.Args[1] +
+			"\"\nCommand: ./curator [create|import|applycloudprovider]"))
 	}
 	jobChoice := os.Args[1]
 
@@ -88,7 +93,9 @@ func main() {
 			clusterConfigOverride.Data["clusterName"] = clusterName
 		}
 		if clusterName != clusterConfigOverride.Data["clusterName"] {
-			utils.CheckError(errors.New("Cluster namespace \"" + clusterName + "\" does not match the cluster ConfigMap override \"" + clusterConfigOverride.Data["clusterName"] + "\""))
+			utils.CheckError(errors.New("Cluster namespace \"" + clusterName +
+				"\" does not match the cluster ConfigMap override \"" +
+				clusterConfigOverride.Data["clusterName"] + "\""))
 		}
 		utils.RecordJobContainer(config, clusterConfigOverride, jobChoice)
 		providerCredentialPath = clusterConfigOverride.Data["providerCredentialPath"]
@@ -105,13 +112,18 @@ func main() {
 		secretData = secrets.GetSecretData(kubeset, providerCredentialPath)
 		klog.V(2).Info("=> Applying Provider credential \"" + providerCredentialPath + "\" to cluster " + clusterName)
 		if jobChoice == "applycloudprovider-aws" {
-			secrets.CreateAWSSecrets(kubeset, *secretData, clusterName)
+			err := secrets.CreateAWSSecrets(kubeset, *secretData, clusterName)
+			utils.CheckError(err)
 		} else if jobChoice == "applycloudprovider-gcp" {
-			secrets.CreateGCPSecrets(kubeset, *secretData, clusterName)
+			err := secrets.CreateGCPSecrets(kubeset, *secretData, clusterName)
+			utils.CheckError(err)
 		} else if jobChoice == "applycloudprovider-azure" {
-			secrets.CreateAzureSecrets(kubeset, *secretData, clusterName)
+			err := secrets.CreateAzureSecrets(kubeset, *secretData, clusterName)
+			utils.CheckError(err)
 		}
-		secrets.CreateAnsibleSecret(kubeset, *secretData, clusterName)
+		err := secrets.CreateAnsibleSecret(kubeset, *secretData, clusterName)
+		utils.CheckError(err)
+
 	}
 
 	var cmNameSpace, ClusterCMTemplate string
@@ -123,7 +135,9 @@ func main() {
 		utils.CheckError(err)
 
 		// Gets the Cluster Configuration Template, defaults!
-		clusterConfigTemplate, err = kubeset.CoreV1().ConfigMaps(cmNameSpace).Get(context.TODO(), ClusterCMTemplate, v1.GetOptions{})
+		clusterConfigTemplate, err = kubeset.CoreV1().ConfigMaps(
+			cmNameSpace).Get(context.TODO(), ClusterCMTemplate, v1.GetOptions{})
+
 		utils.CheckError(err)
 		klog.V(0).Info("Found clusterConfigTemplate \"" + cmNameSpace + "/" + ClusterCMTemplate + "\" ✓")
 	}
@@ -132,7 +146,8 @@ func main() {
 		create.Aws(config, clusterName, clusterConfigTemplate, clusterConfigOverride, *secretData)
 	}
 	if strings.Contains(jobChoice, "monitor") {
-		utils.MonitorDeployStatus(config, clusterName)
+		err := utils.MonitorDeployStatus(config, clusterName)
+		utils.CheckError(err)
 	}
 	// Create a client for the manageclusterV1 CustomResourceDefinitions
 	if jobChoice == "import" {

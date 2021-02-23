@@ -17,7 +17,7 @@ oc apply -k deploy/controller
 ```
 This deployment defaults to the namespace `open-cluster-management`. Each time a new `ManagedCluster` resource is created, you will see operations take place in the control pod's log.
 
-## Job containers
+## Jobs
 
 | Job action | Description | Cloud Provider | Override ConfigMap | Template ConfigMap |
 | :---------:| :---------: | :------------: | :----------------: | :----------------: |

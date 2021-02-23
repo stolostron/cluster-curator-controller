@@ -5,12 +5,12 @@ push-curator: build-curator
 	docker push ${REPO_URL}/clustercurator-job:${VERSION}
 	docker tag ${REPO_URL}/clustercurator-job:${VERSION} ${REPO_URL}/clustercurator-job:latest
 	docker push ${REPO_URL}/clustercurator-job:latest
-	./deploy/controller/process.sh
-.PHONY: compile-curator
+	#./deploy/controller/process.sh
 
+.PHONY: compile-curator
 compile-curator:
-	GOFLAGS="" go build -o build/_output/curator ./pkg/jobs/curator.go
-	GOFLAGS="" go build -o build/_output/cluster-curator-controller ./pkg/controller/controller.go
+	GOFLAGS="" go build -o build/_output/curator ./cmd/curator/curator.go
+	GOFLAGS="" go build -o build/_output/cluster-curator-controller ./cmd/controller/controller.go
 
 .PHONY: build-curator
 build-curator: 

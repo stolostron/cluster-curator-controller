@@ -20,14 +20,19 @@ import (
 	"k8s.io/klog/v2"
 )
 
-func Aws(config *rest.Config, clusterName string, clusterConfigTemplate *corev1.ConfigMap, clusterConfigOverride *corev1.ConfigMap, secretData map[string]string) {
+func Aws(config *rest.Config, clusterName string, clusterConfigTemplate *corev1.ConfigMap,
+	clusterConfigOverride *corev1.ConfigMap, secretData map[string]string) {
+
 	// Transfer extra keys from Cloud Provider Secret if not overridden
 	if secretData["baseDomain"] != "" && clusterConfigOverride.Data["baseDomain"] == "" {
 		clusterConfigOverride.Data["baseDomain"] = secretData["baseDomain"]
 		klog.V(2).Info("Using baseDomain from Cloud Provider, \"" + clusterConfigOverride.Data["baseDomain"] + "\"")
 	}
 
-	klog.V(0).Info("=> Creating Cluster in namespace \"" + clusterName + "\" using ConfigMap Template \"" + clusterConfigTemplate.Name + "/" + clusterConfigTemplate.Namespace + "\" and ConfigMap Override \"" + clusterName)
+	klog.V(0).Info("=> Creating Cluster in namespace \"" + clusterName +
+		"\" using ConfigMap Template \"" + clusterConfigTemplate.Name + "/" +
+		clusterConfigTemplate.Namespace + "\" and ConfigMap Override \"" + clusterName)
+
 	kubeset, err := kubernetes.NewForConfig(config)
 	utils.CheckError(err)
 	hiveset, err := hiveclient.NewForConfig(config)
@@ -69,15 +74,19 @@ func ActivateDeploy(hiveset *hiveclient.Clientset, clusterName string) {
 	}}
 	patchInBytes, _ := json.Marshal(patch)
 	*cluster.Spec.InstallAttemptsLimit = 1
-	_, err = hiveset.HiveV1().ClusterDeployments(clusterName).Patch(context.TODO(), clusterName, types.JSONPatchType, patchInBytes, v1.PatchOptions{})
-	/*log.Println("Update ClusterDeployment" + clusterName + " to start provisioning")
-	_, err = hiveset.HiveV1().ClusterDeployments(clusterName).Update(context.TODO(), cluster, v1.UpdateOptions{})*/
+	_, err = hiveset.HiveV1().ClusterDeployments(clusterName).Patch(
+		context.TODO(), clusterName, types.JSONPatchType, patchInBytes, v1.PatchOptions{})
+
 	utils.CheckError(err)
 	log.Println("Updated ClusterDeployment ✓")
 }
 
 // Create the ClusterDeployment resource from the Template, but apply supported overrides
-func CreateClusterDeployment(hiveset *hiveclient.Clientset, configMapTemplate *corev1.ConfigMap, configMapOverride *corev1.ConfigMap) {
+func CreateClusterDeployment(
+	hiveset *hiveclient.Clientset,
+	configMapTemplate *corev1.ConfigMap,
+	configMapOverride *corev1.ConfigMap) {
+
 	log.Println("* Prepare ClusterDeployment")
 	newCluster := &hivev1.ClusterDeployment{}
 	//hivev1.ClusterDeployment is defined with json for unmarshaling
@@ -143,7 +152,8 @@ func CreateMachinePool(hiveset *hiveclient.Clientset, configMapTemplate *corev1.
 	}
 
 	log.Print("Creating MachinePool " + newMachinePool.GetName() + " in namespace " + newMachinePool.GetName())
-	_, err = hiveset.HiveV1().MachinePools(configMapOverride.Data["clusterName"]).Create(context.TODO(), newMachinePool, v1.CreateOptions{})
+	_, err = hiveset.HiveV1().MachinePools(configMapOverride.Data["clusterName"]).Create(
+		context.TODO(), newMachinePool, v1.CreateOptions{})
 	utils.CheckError(err)
 	log.Println("Created MachinePool ✓")
 }
@@ -178,7 +188,12 @@ func applyValue(dest map[string]interface{}, path string, source string, useInt 
 	}
 }
 
-func CreateInstallConfig(kubeset *kubernetes.Clientset, configMapTemplate *corev1.ConfigMap, configMapOverride *corev1.ConfigMap, sshPublickey string) {
+func CreateInstallConfig(
+	kubeset *kubernetes.Clientset,
+	configMapTemplate *corev1.ConfigMap,
+	configMapOverride *corev1.ConfigMap,
+	sshPublickey string) {
+
 	log.Println("* Prepare install-config secret")
 	newInstallConfig := &corev1.Secret{}
 	installConfig := make(map[string]interface{})
