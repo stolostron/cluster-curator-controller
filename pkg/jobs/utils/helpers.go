@@ -169,10 +169,17 @@ func MonitorDeployStatus(config *rest.Config, clusterName string) error {
 	}
 	return nil
 }
+func RecordAnsibleJob(config *rest.Config, configMap *corev1.ConfigMap, containerName string) {
+	recordJobContainer(config, configMap, containerName, "current-ansible-job")
+}
 
-func RecordJobContainer(config *rest.Config, configMap *corev1.ConfigMap, containerName string) {
+func RecordHiveJobContainer(config *rest.Config, configMap *corev1.ConfigMap, containerName string) {
+	recordJobContainer(config, configMap, containerName, "current-hive-job")
+}
+
+func recordJobContainer(config *rest.Config, configMap *corev1.ConfigMap, containerName string, cmKey string) {
 	kubeset, _ := kubernetes.NewForConfig(config)
-	configMap.Data["curator-job-container"] = containerName
+	configMap.Data[cmKey] = containerName
 	_, err := kubeset.CoreV1().ConfigMaps(configMap.Namespace).Update(context.TODO(), configMap, v1.UpdateOptions{})
 	if err != nil {
 		klog.Warning(err)

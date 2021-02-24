@@ -18,6 +18,8 @@ import (
 	"k8s.io/klog/v2"
 )
 
+const PauseFive = 5
+
 func Job(config *rest.Config, clusterConfigOverride *corev1.ConfigMap) {
 	jobType := os.Getenv("JOB_TYPE")
 	if jobType != "prehook" && jobType != "posthook" {
@@ -30,7 +32,7 @@ func Job(config *rest.Config, clusterConfigOverride *corev1.ConfigMap) {
 	utils.CheckError(err)
 	for _, ttn := range towerTemplateNames {
 		klog.V(3).Info("Tower Job name: " + ttn.Name)
-		_, err = RunAnsibleJob(config, clusterConfigOverride.Namespace, jobType, ttn, "toweraccess", nil)
+		_, err = RunAnsibleJob(config, clusterConfigOverride, jobType, ttn, "toweraccess", nil)
 		utils.CheckError(err)
 	}
 }
@@ -60,12 +62,12 @@ func getAnsibleJob(jobtype string) *unstructured.Unstructured {
  *  config           # kubeconfig
  *  namespace        # The cluster's namespace
  *  jobtype          # "pre" or "post"
- *  jobTemplateName  #Tower Template job to run
+ *  jobTemplateName  # Tower Template job to run
  *  secretRef		 # The secret to connect to Tower in the cluster namespace, ie. toweraccess
  */
 func RunAnsibleJob(
 	config *rest.Config,
-	namespace string,
+	clusterConfigOverride *corev1.ConfigMap,
 	jobtype string,
 	jobTemplate AnsibleJob,
 	secretRef string,
@@ -74,9 +76,12 @@ func RunAnsibleJob(
 	klog.V(2).Info("* Run " + jobtype + " AnsibleJob")
 	dynclient, err := dynamic.NewForConfig(config)
 	utils.CheckError(err)
+
+	namespace := clusterConfigOverride.Namespace
 	ansibleJobName := jobtype + "-job"
 	ansibleJobRes := schema.GroupVersionResource{Group: "tower.ansible.com", Version: "v1alpha1", Resource: "ansiblejobs"}
 	ansibleJob := getAnsibleJob(jobtype)
+
 	ansibleJob.Object["metadata"].(map[string]interface{})["generateName"] = ansibleJobName + "-"
 	ansibleJob.Object["metadata"].(map[string]interface{})["annotations"].(map[string]string)["jobtype"] = jobtype
 	if extraVars != nil {
@@ -103,31 +108,47 @@ func RunAnsibleJob(
 			Get(context.TODO(), ansibleJobName, v1.GetOptions{})
 
 		klog.V(4).Info(jobResource)
-		if jobResource.Object != nil && jobResource.Object["status"] != nil {
-			jos := jobResource.Object["status"]
-			if jos.(map[string]interface{})["ansibleJobResult"] != nil &&
-				jos.(map[string]interface{})["ansibleJobResult"].(map[string]interface{})["status"] != nil {
 
-				jobStatus := jos.(map[string]interface{})["ansibleJobResult"].(map[string]interface{})["status"]
-				klog.V(2).Infof("Found result status %v", jobStatus)
-				if jobStatus == "successful" {
-					klog.V(2).Info("AnsibleJob " + namespace + "/" + ansibleJobName + " finished successfully ✓")
-					break
-				} else if jobStatus == "error" {
-					klog.Warningf("Status: \n\n%v", jobResource.Object["status"])
-					return nil, errors.New("AnsibleJob " + namespace + "/" + ansibleJobName + " exited with an error")
-				}
+		// Track initialization of status
+		if jobResource.Object == nil || jobResource.Object["status"] == nil ||
+			jobResource.Object["status"].(map[string]interface{})["conditions"] == nil {
+
+			klog.V(2).Info("AnsibleJob " + namespace + "/" + ansibleJobName + " is initializing")
+			time.Sleep(PauseFive * time.Second)
+			continue
+		}
+
+		jos := jobResource.Object["status"]
+		if jos.(map[string]interface{})["ansibleJobResult"] != nil {
+
+			jobStatus := jos.(map[string]interface{})["ansibleJobResult"].(map[string]interface{})["status"]
+			klog.V(2).Infof("Found result status %v", jobStatus)
+
+			if jobStatus == "successful" {
+
+				klog.V(2).Info("AnsibleJob " + namespace + "/" + ansibleJobName + " finished successfully ✓")
+				break
+
+			} else if jobStatus == "error" {
+
+				klog.Warningf("Status: \n\n%v", jobResource.Object["status"])
+				return jobResource, errors.New("AnsibleJob " + namespace + "/" + ansibleJobName + " exited with an error")
 			}
-			if jobResource.Object["status"].(map[string]interface{})["conditions"] != nil {
-				for _, condition := range jobResource.Object["status"].(map[string]interface{})["conditions"].([]interface{}) {
-					if condition.(map[string]interface{})["reason"] == "Failed" {
-						return nil, errors.New(condition.(map[string]interface{})["message"].(string))
-					}
-				}
+		}
+
+		// Store the job name for the UI to use
+		if jos.(map[string]interface{})["k8sJob"] != nil {
+			utils.RecordAnsibleJob(config, clusterConfigOverride, jos.(map[string]interface{})["k8sJob"].(map[string]string)["namespacedName"])
+		}
+
+		for _, condition := range jobResource.Object["status"].(map[string]interface{})["conditions"].([]interface{}) {
+
+			if condition.(map[string]interface{})["reason"] == "Failed" {
+				return jobResource, errors.New(condition.(map[string]interface{})["message"].(string))
 			}
 		}
 		klog.V(2).Info("AnsibleJob " + namespace + "/" + ansibleJobName + " is still running")
-		time.Sleep(5 * time.Second)
+		time.Sleep(PauseFive * time.Second)
 	}
 	return jobResource, nil
 }

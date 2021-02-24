@@ -128,7 +128,11 @@ func CreateClusterDeployment(
 	log.Println("Created ClusterDeployment ✓")
 }
 
-func CreateMachinePool(hiveset *hiveclient.Clientset, configMapTemplate *corev1.ConfigMap, configMapOverride *corev1.ConfigMap) {
+func CreateMachinePool(
+	hiveset *hiveclient.Clientset,
+	configMapTemplate *corev1.ConfigMap,
+	configMapOverride *corev1.ConfigMap) {
+
 	log.Println("* Prepare MachinePool")
 	newMachinePool := &hivev1.MachinePool{}
 	//hivev1.newMachinePool is defined with json for unmarshaling
