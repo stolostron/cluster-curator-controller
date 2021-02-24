@@ -32,7 +32,9 @@ func GetSecretData(kubeset *kubernetes.Clientset, providerCredentialPath string)
 	secretNamespace, secretName, err := utils.PathSplitterFromEnv(providerCredentialPath)
 	utils.CheckError(err)
 
-	klog.V(2).Info("=> Retrieving  Provider credential namespace \"" + secretNamespace + "\" secret \"" + secretName + "\"")
+	klog.V(2).Info("=> Retrieving  Provider credential namespace \"" + secretNamespace +
+		"\" secret \"" + secretName + "\"")
+
 	secret, err := kubeset.CoreV1().Secrets(secretNamespace).Get(
 		context.TODO(), secretName, v1.GetOptions{})
 
@@ -77,7 +79,9 @@ func CreateAWSSecrets(kubeset *kubernetes.Clientset, cpSecretData map[string]str
 	stringData := map[string]string{
 		"osServicePrincipal.json": string(bytes),
 	}
-	if err := createPatchSecret(kubeset, stringData, clusterName+suffix, clusterName, corev1.SecretTypeOpaque); err != nil {
+	if err := createPatchSecret(kubeset, stringData, clusterName+suffix, clusterName,
+		corev1.SecretTypeOpaque); err != nil {
+
 		return err
 	}
 	return createCommonSecrets(kubeset, cpSecretData, clusterName)
@@ -89,7 +93,9 @@ func CreateGCPSecrets(kubeset *kubernetes.Clientset, cpSecretData map[string]str
 	stringData := map[string]string{
 		"osServiceAccount.json": cpSecretData["gcServiceAccountKey"],
 	}
-	if err := createPatchSecret(kubeset, stringData, clusterName+suffix, clusterName, corev1.SecretTypeOpaque); err != nil {
+	if err := createPatchSecret(kubeset, stringData, clusterName+suffix, clusterName,
+		corev1.SecretTypeOpaque); err != nil {
+
 		return err
 	}
 	return createCommonSecrets(kubeset, cpSecretData, clusterName)
@@ -102,7 +108,9 @@ func CreateAzureSecrets(kubeset *kubernetes.Clientset, cpSecretData map[string]s
 		"aws_access_key_id":     cpSecretData["awsAccessKeyID"],
 		"aws_secret_access_key": cpSecretData["awsSecretAccessKeyID"],
 	}
-	if err := createPatchSecret(kubeset, stringData, clusterName+suffix, clusterName, corev1.SecretTypeOpaque); err != nil {
+	if err := createPatchSecret(kubeset, stringData, clusterName+suffix, clusterName,
+		corev1.SecretTypeOpaque); err != nil {
+
 		return err
 	}
 	return createCommonSecrets(kubeset, cpSecretData, clusterName)

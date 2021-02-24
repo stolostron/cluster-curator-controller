@@ -97,7 +97,7 @@ func main() {
 				"\" does not match the cluster ConfigMap override \"" +
 				clusterConfigOverride.Data["clusterName"] + "\""))
 		}
-		utils.RecordJobContainer(config, clusterConfigOverride, jobChoice)
+		utils.RecordHiveJobContainer(config, clusterConfigOverride, jobChoice)
 		providerCredentialPath = clusterConfigOverride.Data["providerCredentialPath"]
 	} else {
 		if providerCredentialPath == "" || !strings.Contains(jobChoice, "applycloudprovider-") {
@@ -131,7 +131,9 @@ func main() {
 	if jobChoice == "import" || strings.Contains(jobChoice, "create-") {
 
 		// Determine kube path for Cluster Template
-		cmNameSpace, ClusterCMTemplate, err = utils.PathSplitterFromEnv(clusterConfigOverride.Data["clusterConfigTemplatePath"])
+		cmNameSpace, ClusterCMTemplate, err = utils.PathSplitterFromEnv(
+			clusterConfigOverride.Data["clusterConfigTemplatePath"])
+
 		utils.CheckError(err)
 
 		// Gets the Cluster Configuration Template, defaults!
