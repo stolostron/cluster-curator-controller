@@ -29,7 +29,8 @@ func InitKlog() {
 // Simple error function
 func CheckError(err error) {
 	if err != nil {
-		klog.Fatal(err.Error())
+		klog.Error(err.Error())
+		panic(err)
 	}
 }
 

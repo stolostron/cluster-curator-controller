@@ -23,9 +23,13 @@ type patchStringValue struct {
 	Value map[string]string `json:"value"`
 }
 
-const suffix = "-creds"
+//Suffix list
+const suffixCreds = "-creds"
+const suffixPull = "-pull-secret"
+const suffixSsh = "-ssh-private-key"
+const AnsibleSecretName = "toweraccess"
 
-func GetSecretData(kubeset *kubernetes.Clientset, providerCredentialPath string) *map[string]string {
+func GetSecretData(kubeset kubernetes.Interface, providerCredentialPath string) *map[string]string {
 	secretData := make(map[string]string)
 	// Read Cloud Provider Secret and create Hive cluster secrets, Cloud Provider Credential, pull-secret & ssh-private-key
 	// Determine kube path for Provider credential
@@ -46,7 +50,7 @@ func GetSecretData(kubeset *kubernetes.Clientset, providerCredentialPath string)
 	return &secretData
 }
 
-func CreateAnsibleSecret(kubeset *kubernetes.Clientset, cpSecretData map[string]string, clusterName string) error {
+func CreateAnsibleSecret(kubeset kubernetes.Interface, cpSecretData map[string]string, clusterName string) error {
 	// Generate the Ansible Tower credential secret
 	klog.V(2).Info("Check if Ansible Tower credentials are present")
 	if cpSecretData["ansibleHost"] != "" && cpSecretData["ansibleToken"] != "" {
@@ -54,8 +58,8 @@ func CreateAnsibleSecret(kubeset *kubernetes.Clientset, cpSecretData map[string]
 			"host":  cpSecretData["ansibleHost"],
 			"token": cpSecretData["ansibleToken"],
 		}
-		if err := createPatchSecret(kubeset, stringData, "toweraccess", clusterName, corev1.SecretTypeOpaque); err != nil {
-			return nil
+		if err := createPatchSecret(kubeset, stringData, AnsibleSecretName, clusterName, corev1.SecretTypeOpaque); err != nil {
+			return err
 		}
 	} else {
 		klog.Warning("No Ansible Tower credentials found.")
@@ -63,7 +67,7 @@ func CreateAnsibleSecret(kubeset *kubernetes.Clientset, cpSecretData map[string]
 	return nil
 }
 
-func CreateAWSSecrets(kubeset *kubernetes.Clientset, cpSecretData map[string]string, clusterName string) error {
+func CreateAzureSecrets(kubeset kubernetes.Interface, cpSecretData map[string]string, clusterName string) error {
 
 	// Generate the AWS Credential secret
 	osServicePrincipal := map[string]string{
@@ -79,7 +83,7 @@ func CreateAWSSecrets(kubeset *kubernetes.Clientset, cpSecretData map[string]str
 	stringData := map[string]string{
 		"osServicePrincipal.json": string(bytes),
 	}
-	if err := createPatchSecret(kubeset, stringData, clusterName+suffix, clusterName,
+	if err := createPatchSecret(kubeset, stringData, clusterName+suffixCreds, clusterName,
 		corev1.SecretTypeOpaque); err != nil {
 
 		return err
@@ -87,13 +91,13 @@ func CreateAWSSecrets(kubeset *kubernetes.Clientset, cpSecretData map[string]str
 	return createCommonSecrets(kubeset, cpSecretData, clusterName)
 }
 
-func CreateGCPSecrets(kubeset *kubernetes.Clientset, cpSecretData map[string]string, clusterName string) error {
+func CreateGCPSecrets(kubeset kubernetes.Interface, cpSecretData map[string]string, clusterName string) error {
 
 	// Generate the AWS Credential secret
 	stringData := map[string]string{
 		"osServiceAccount.json": cpSecretData["gcServiceAccountKey"],
 	}
-	if err := createPatchSecret(kubeset, stringData, clusterName+suffix, clusterName,
+	if err := createPatchSecret(kubeset, stringData, clusterName+suffixCreds, clusterName,
 		corev1.SecretTypeOpaque); err != nil {
 
 		return err
@@ -101,14 +105,15 @@ func CreateGCPSecrets(kubeset *kubernetes.Clientset, cpSecretData map[string]str
 	return createCommonSecrets(kubeset, cpSecretData, clusterName)
 }
 
-func CreateAzureSecrets(kubeset *kubernetes.Clientset, cpSecretData map[string]string, clusterName string) error {
+func CreateAWSSecrets(kubeset kubernetes.Interface, cpSecretData map[string]string, clusterName string) error {
 
 	// Generate the AWS Credential secret
 	stringData := map[string]string{
 		"aws_access_key_id":     cpSecretData["awsAccessKeyID"],
 		"aws_secret_access_key": cpSecretData["awsSecretAccessKeyID"],
 	}
-	if err := createPatchSecret(kubeset, stringData, clusterName+suffix, clusterName,
+
+	if err := createPatchSecret(kubeset, stringData, clusterName+suffixCreds, clusterName,
 		corev1.SecretTypeOpaque); err != nil {
 
 		return err
@@ -116,12 +121,12 @@ func CreateAzureSecrets(kubeset *kubernetes.Clientset, cpSecretData map[string]s
 	return createCommonSecrets(kubeset, cpSecretData, clusterName)
 }
 
-func createCommonSecrets(kubeset *kubernetes.Clientset, cpSecretData map[string]string, clusterName string) error {
+func createCommonSecrets(kubeset kubernetes.Interface, cpSecretData map[string]string, clusterName string) error {
 	// Generate Pull Secret
 	stringData := map[string]string{
 		".dockerconfigjson": cpSecretData["pullSecret"],
 	}
-	if err := createPatchSecret(kubeset, stringData, clusterName+"-pull-secret",
+	if err := createPatchSecret(kubeset, stringData, clusterName+suffixPull,
 		clusterName, corev1.SecretTypeDockerConfigJson); err != nil {
 
 		return err
@@ -131,7 +136,7 @@ func createCommonSecrets(kubeset *kubernetes.Clientset, cpSecretData map[string]
 	stringData = map[string]string{
 		"ssh-privatekey": cpSecretData["sshPrivatekey"],
 	}
-	if err := createPatchSecret(kubeset, stringData, clusterName+"-ssh-private-key",
+	if err := createPatchSecret(kubeset, stringData, clusterName+suffixSsh,
 		clusterName, corev1.SecretTypeOpaque); err != nil {
 
 		return err
@@ -140,7 +145,7 @@ func createCommonSecrets(kubeset *kubernetes.Clientset, cpSecretData map[string]
 }
 
 func createPatchSecret(
-	kubeset *kubernetes.Clientset,
+	kubeset kubernetes.Interface,
 	stringData map[string]string,
 	secretName string,
 	clusterName string,
