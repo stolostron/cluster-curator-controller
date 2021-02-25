@@ -19,3 +19,4 @@ build-curator:
 .PHONY: unit-tests
 unit-tests:
 	GOFLAGS="" go test -v ./pkg/controller/launcher
+	GOFLAGS="" go test -v ./pkg/jobs/secrets

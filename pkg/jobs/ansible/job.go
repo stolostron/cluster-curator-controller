@@ -113,7 +113,7 @@ func RunAnsibleJob(
 		if jobResource.Object == nil || jobResource.Object["status"] == nil ||
 			jobResource.Object["status"].(map[string]interface{})["conditions"] == nil {
 
-			klog.V(2).Info("AnsibleJob " + namespace + "/" + ansibleJobName + " is initializing")
+			klog.V(2).Infof("AnsibleJob %v/%v is initializing", namespace, ansibleJobName)
 			time.Sleep(PauseFive * time.Second)
 			continue
 		}
@@ -126,7 +126,7 @@ func RunAnsibleJob(
 
 			if jobStatus == "successful" {
 
-				klog.V(2).Info("AnsibleJob " + namespace + "/" + ansibleJobName + " finished successfully ✓")
+				klog.V(2).Infof("AnsibleJob %v/%v finished successfully ✓", namespace, ansibleJobName)
 				break
 
 			} else if jobStatus == "error" {
@@ -138,7 +138,10 @@ func RunAnsibleJob(
 
 		// Store the job name for the UI to use
 		if jos.(map[string]interface{})["k8sJob"] != nil {
-			utils.RecordAnsibleJob(config, clusterConfigOverride, jos.(map[string]interface{})["k8sJob"].(map[string]string)["namespacedName"])
+			utils.RecordAnsibleJob(
+				config,
+				clusterConfigOverride,
+				jos.(map[string]interface{})["k8sJob"].(map[string]string)["namespacedName"])
 		}
 
 		for _, condition := range jobResource.Object["status"].(map[string]interface{})["conditions"].([]interface{}) {
@@ -147,7 +150,7 @@ func RunAnsibleJob(
 				return jobResource, errors.New(condition.(map[string]interface{})["message"].(string))
 			}
 		}
-		klog.V(2).Info("AnsibleJob " + namespace + "/" + ansibleJobName + " is still running")
+		klog.V(2).Infof("AnsibleJob %v/%v is still running", namespace, ansibleJobName)
 		time.Sleep(PauseFive * time.Second)
 	}
 	return jobResource, nil
