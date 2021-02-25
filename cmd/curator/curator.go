@@ -29,16 +29,9 @@ const LogVerbosity = "2"
 /* Command: go run ./pkg/jobs/aws.go [create|import|applycloudprovider]
  *
  * Uses the following environment variables:
- * ./awsjob applycloudprovider
+ * ./curator applycloudprovider
  *    export CLUSTER_NAME=                  # The name of the cluster
  *    export PROVIDER_CREDENTIAL_PATH=      # The NAMESPACE/SECRET_NAME for the Cloud Provider
- * ./awsjob create
- *    export CLUSTER_NAME=                  # The name of the cluster
- *    export PROVIDER_CREDENTIAL_PATH=      # The NAMESPACE/SECRET_NAME for the Cloud Provider
- *    export CLUSTER_CONFIG_TEMPLATE_PATH=  # The NAMESPACE/CONFIGMAP_NAME for the cluster template
- * ./awsjob import
- *    export CLUSTER_NAME=                  # The name of the cluster
- *    export CLUSTER_CONFIG_TEMPLATE_PATH=  # The NAMESPACE/CONFIGMAP_NAME for the cluster template
  */
 func main() {
 	var err error
@@ -61,10 +54,12 @@ func main() {
 
 	if len(os.Args) == 2 {
 		switch os.Args[1] {
-		case "applycloudprovider-aws", "applycloudprovider-ansible", "import", "create-aws", "monitor", "ansiblejob":
+		case "applycloudprovider-aws", "applycloudprovider-ansible", "import", "monitor", "ansiblejob":
 		case "activate-monitor":
+
 			hiveset, err := hiveclient.NewForConfig(config)
 			utils.CheckError(err)
+
 			create.ActivateDeploy(hiveset, clusterName)
 		default:
 			utils.CheckError(errors.New("Invalid Parameter: \"" + os.Args[1] +
@@ -128,7 +123,7 @@ func main() {
 
 	var cmNameSpace, ClusterCMTemplate string
 	// Create cluster resources, ClusterDeployment, MachinePool & install-config secret
-	if jobChoice == "import" || strings.Contains(jobChoice, "create-") {
+	if jobChoice == "import" {
 
 		// Determine kube path for Cluster Template
 		cmNameSpace, ClusterCMTemplate, err = utils.PathSplitterFromEnv(
@@ -144,9 +139,6 @@ func main() {
 		klog.V(0).Info("Found clusterConfigTemplate \"" + cmNameSpace + "/" + ClusterCMTemplate + "\" ✓")
 	}
 
-	if jobChoice == "create-aws" {
-		create.Aws(config, clusterName, clusterConfigTemplate, clusterConfigOverride, *secretData)
-	}
 	if strings.Contains(jobChoice, "monitor") {
 		err := utils.MonitorDeployStatus(config, clusterName)
 		utils.CheckError(err)
