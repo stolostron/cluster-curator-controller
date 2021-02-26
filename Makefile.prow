@@ -9,6 +9,8 @@ push-curator: build-curator
 
 .PHONY: compile-curator
 compile-curator:
+	go mod vendor
+	go mod tidy
 	GOFLAGS="" go build -o build/_output/curator ./cmd/curator/curator.go
 	GOFLAGS="" go build -o build/_output/cluster-curator-controller ./cmd/controller/controller.go
 
