@@ -1,4 +1,3 @@
--include /opt/build-harness/Makefile.prow
 -include Makefile.prow
 
 SHELL := /bin/bash
