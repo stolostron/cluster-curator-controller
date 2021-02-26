@@ -60,7 +60,8 @@ func main() {
 			hiveset, err := hiveclient.NewForConfig(config)
 			utils.CheckError(err)
 
-			create.ActivateDeploy(hiveset, clusterName)
+			err = create.ActivateDeploy(hiveset, clusterName)
+			utils.CheckError(err)
 		default:
 			utils.CheckError(errors.New("Invalid Parameter: \"" + os.Args[1] +
 				"\"\nCommand: ./curator [create|import|applycloudprovider]"))
