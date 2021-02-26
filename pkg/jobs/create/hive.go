@@ -4,6 +4,7 @@ package create
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log"
 	"strconv"
 	"strings"
@@ -56,14 +57,17 @@ type patchStringValue struct {
 	Value int32  `json:"value"`
 }
 
-func ActivateDeploy(hiveset *hiveclient.Clientset, clusterName string) {
-	log.Println("* Initiate Provisioning")
-	log.Println("Looking up cluster " + clusterName)
+func ActivateDeploy(hiveset hiveclient.Interface, clusterName string) error {
+	klog.V(0).Info("* Initiate Provisioning")
+	klog.V(2).Info("Looking up cluster " + clusterName)
 	cluster, err := hiveset.HiveV1().ClusterDeployments(clusterName).Get(context.TODO(), clusterName, v1.GetOptions{})
-	utils.CheckError(err)
-	log.Println("Found cluster " + cluster.Name + " ✓")
-	if *cluster.Spec.InstallAttemptsLimit != 0 {
-		log.Panic("ClusterDeployment.spec.installAttemptsLimit is not 0")
+	if err != nil {
+		return err
+	}
+
+	klog.V(2).Info("Found cluster " + cluster.Name + " ✓")
+	if cluster.Spec.InstallAttemptsLimit == nil || *cluster.Spec.InstallAttemptsLimit != 0 {
+		return errors.New("ClusterDeployment.spec.installAttemptsLimit is not 0")
 	}
 	// Generate the AWS Credential secret
 	intValue := int32(1)
@@ -77,8 +81,11 @@ func ActivateDeploy(hiveset *hiveclient.Clientset, clusterName string) {
 	_, err = hiveset.HiveV1().ClusterDeployments(clusterName).Patch(
 		context.TODO(), clusterName, types.JSONPatchType, patchInBytes, v1.PatchOptions{})
 
-	utils.CheckError(err)
+	if err != nil {
+		return err
+	}
 	log.Println("Updated ClusterDeployment ✓")
+	return nil
 }
 
 // Create the ClusterDeployment resource from the Template, but apply supported overrides
