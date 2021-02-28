@@ -11,6 +11,7 @@ import (
 
 	"k8s.io/klog/v2"
 
+	managedclusterclient "github.com/open-cluster-management/api/client/cluster/clientset/versioned"
 	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/ansible"
 	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/create"
 	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/importer"
@@ -26,9 +27,7 @@ import (
 const LogFlag = "v"
 const LogVerbosity = "2"
 
-/* Command: go run ./pkg/jobs/aws.go [create|import|applycloudprovider]
- *
- * Uses the following environment variables:
+/* Uses the following environment variables:
  * ./curator applycloudprovider
  *    export CLUSTER_NAME=                  # The name of the cluster
  *    export PROVIDER_CREDENTIAL_PATH=      # The NAMESPACE/SECRET_NAME for the Cloud Provider
@@ -52,9 +51,15 @@ func main() {
 	config, err := config.LoadConfig("", "", "")
 	utils.CheckError(err)
 
+	var cmdErrorMsg = errors.New("Invalid Parameter: \"" + os.Args[1] +
+		"\"\nCommand: ./curator [monitor-import|monitor|activate-monitor|applycloudprovider-aws|" +
+		"applycloudprovider-gcp|applycloudprovider-azure]")
+
 	if len(os.Args) == 2 {
 		switch os.Args[1] {
-		case "applycloudprovider-aws", "applycloudprovider-ansible", "import", "monitor", "ansiblejob":
+		case "applycloudprovider-aws", "applycloudprovider-ansible", "monitor-import", "monitor", "ansiblejob",
+			"applycloudprovider-gcp", "applycloudprovider-azure":
+
 		case "activate-monitor":
 
 			hiveset, err := hiveclient.NewForConfig(config)
@@ -63,13 +68,11 @@ func main() {
 			err = create.ActivateDeploy(hiveset, clusterName)
 			utils.CheckError(err)
 		default:
-			utils.CheckError(errors.New("Invalid Parameter: \"" + os.Args[1] +
-				"\"\nCommand: ./curator [create|import|applycloudprovider]"))
+			utils.CheckError(cmdErrorMsg)
 		}
 		klog.V(2).Info("Mode: " + os.Args[1] + " Cluster")
 	} else {
-		utils.CheckError(errors.New("Invalid Parameter: \"" + os.Args[1] +
-			"\"\nCommand: ./curator [create|import|applycloudprovider]"))
+		utils.CheckError(cmdErrorMsg)
 	}
 	jobChoice := os.Args[1]
 
@@ -79,7 +82,7 @@ func main() {
 
 	providerCredentialPath := os.Getenv("PROVIDER_CREDENTIAL_PATH")
 
-	var clusterConfigTemplate, clusterConfigOverride *corev1.ConfigMap
+	var clusterConfigOverride *corev1.ConfigMap
 	// Gets the Cluster Configuration overrides
 	clusterConfigOverride, err = kubeset.CoreV1().ConfigMaps(clusterName).Get(context.TODO(), clusterName, v1.GetOptions{})
 	// Allow an override with the PROVIDER_CREDENTIAL_PATH
@@ -122,31 +125,16 @@ func main() {
 
 	}
 
-	var cmNameSpace, ClusterCMTemplate string
-	// Create cluster resources, ClusterDeployment, MachinePool & install-config secret
-	if jobChoice == "import" {
-
-		// Determine kube path for Cluster Template
-		cmNameSpace, ClusterCMTemplate, err = utils.PathSplitterFromEnv(
-			clusterConfigOverride.Data["clusterConfigTemplatePath"])
-
-		utils.CheckError(err)
-
-		// Gets the Cluster Configuration Template, defaults!
-		clusterConfigTemplate, err = kubeset.CoreV1().ConfigMaps(
-			cmNameSpace).Get(context.TODO(), ClusterCMTemplate, v1.GetOptions{})
-
-		utils.CheckError(err)
-		klog.V(0).Info("Found clusterConfigTemplate \"" + cmNameSpace + "/" + ClusterCMTemplate + "\" ✓")
-	}
-
 	if strings.Contains(jobChoice, "monitor") {
 		err := utils.MonitorDeployStatus(config, clusterName)
 		utils.CheckError(err)
 	}
 	// Create a client for the manageclusterV1 CustomResourceDefinitions
-	if jobChoice == "import" {
-		importer.Task(config, clusterName, clusterConfigTemplate, clusterConfigOverride)
+	if jobChoice == "monitor-import" {
+		mcset, err := managedclusterclient.NewForConfig(config)
+		utils.CheckError(err)
+
+		utils.CheckError(importer.MonitorImport(mcset, clusterName))
 	}
 
 	if jobChoice == "ansiblejob" {
