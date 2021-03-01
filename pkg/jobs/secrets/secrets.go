@@ -58,7 +58,13 @@ func CreateAnsibleSecret(kubeset kubernetes.Interface, cpSecretData map[string]s
 			"host":  cpSecretData["ansibleHost"],
 			"token": cpSecretData["ansibleToken"],
 		}
-		if err := createPatchSecret(kubeset, stringData, AnsibleSecretName, clusterName, corev1.SecretTypeOpaque); err != nil {
+		if err := createPatchSecret(
+			kubeset,
+			stringData,
+			AnsibleSecretName,
+			clusterName,
+			corev1.SecretTypeOpaque); err != nil {
+
 			return err
 		}
 	} else {

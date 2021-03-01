@@ -22,3 +22,4 @@ build-curator:
 unit-tests:
 	GOFLAGS="" go test -v ./pkg/controller/launcher
 	GOFLAGS="" go test -v ./pkg/jobs/secrets
+	GOFLAGS="" go test -v ./pkg/jobs/create

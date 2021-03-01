@@ -4,20 +4,14 @@ package create
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"log"
 
-	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/utils"
 	hiveclient "github.com/openshift/hive/pkg/client/clientset/versioned"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 )
-
-func ActivateDeploywithConfig(config *rest.Config, clusterName string) {
-	hiveset, err := hiveclient.NewForConfig(config)
-	utils.CheckError(err)
-	ActivateDeploy(hiveset, clusterName)
-}
 
 //  patchStringValue specifies a json patch operation for a string.
 type patchStringValue struct {
@@ -26,14 +20,17 @@ type patchStringValue struct {
 	Value int32  `json:"value"`
 }
 
-func ActivateDeploy(hiveset *hiveclient.Clientset, clusterName string) {
+func ActivateDeploy(hiveset hiveclient.Interface, clusterName string) error {
 	klog.V(0).Info("* Initiate Provisioning")
 	klog.V(2).Info("Looking up cluster " + clusterName)
 	cluster, err := hiveset.HiveV1().ClusterDeployments(clusterName).Get(context.TODO(), clusterName, v1.GetOptions{})
-	utils.CheckError(err)
+	if err != nil {
+		return err
+	}
+
 	klog.V(2).Info("Found cluster " + cluster.Name + " ✓")
-	if *cluster.Spec.InstallAttemptsLimit != 0 {
-		klog.Fatal("ClusterDeployment.spec.installAttemptsLimit is not 0")
+	if cluster.Spec.InstallAttemptsLimit == nil || *cluster.Spec.InstallAttemptsLimit != 0 {
+		return errors.New("ClusterDeployment.spec.installAttemptsLimit is not 0")
 	}
 
 	// Update the installAttemptsLimit
@@ -47,7 +44,9 @@ func ActivateDeploy(hiveset *hiveclient.Clientset, clusterName string) {
 	*cluster.Spec.InstallAttemptsLimit = 1
 	_, err = hiveset.HiveV1().ClusterDeployments(clusterName).Patch(
 		context.TODO(), clusterName, types.JSONPatchType, patchInBytes, v1.PatchOptions{})
-
-	utils.CheckError(err)
-	klog.V(0).Info("Updated ClusterDeployment ✓")
+	if err != nil {
+		return err
+	}
+	log.Println("Updated ClusterDeployment ✓")
+	return nil
 }
