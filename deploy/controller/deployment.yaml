@@ -25,4 +25,11 @@ spec:
         image: registry.ci.openshift.org/open-cluster-management/cluster-curator-controller:latest
         imagePullPolicy: Always
         name: curator-controller
+        resources:
+          limits:
+            cpu: "250m"
+            memory: "60Mi"
+          requests:
+            cpu: "25m"
+            memory: "28Mi"
       serviceAccountName: cluster-curator

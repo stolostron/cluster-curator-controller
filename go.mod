@@ -3,6 +3,7 @@ module github.com/open-cluster-management/cluster-curator-controller
 go 1.15
 
 require (
+	github.com/open-cluster-management/ansiblejob-go-lib v0.1.12
 	github.com/open-cluster-management/api v0.0.0-20201210143210-581cab55c797
 	github.com/open-cluster-management/library-go v0.0.0-20210208174614-f3ad264f145a
 	github.com/openshift/hive v1.0.14
