@@ -21,6 +21,7 @@ import (
 	hiveclient "github.com/openshift/hive/pkg/client/clientset/versioned"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -96,7 +97,7 @@ func main() {
 				"\" does not match the cluster ConfigMap override \"" +
 				clusterConfigOverride.Data["clusterName"] + "\""))
 		}
-		utils.RecordHiveJobContainer(config, clusterConfigOverride, jobChoice)
+		utils.RecordHiveJobContainer(kubeset, clusterConfigOverride, jobChoice)
 		providerCredentialPath = clusterConfigOverride.Data["providerCredentialPath"]
 	} else {
 		if providerCredentialPath == "" || !strings.Contains(jobChoice, "applycloudprovider-") {
@@ -138,7 +139,10 @@ func main() {
 	}
 
 	if jobChoice == "ansiblejob" {
-		ansible.Job(config, clusterConfigOverride)
+		dynclient, err := dynamic.NewForConfig(config)
+		utils.CheckError(err)
+
+		ansible.Job(dynclient, clusterConfigOverride)
 	}
 
 	klog.V(2).Info("Done!")
