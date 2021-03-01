@@ -19,6 +19,9 @@ import (
 	"k8s.io/client-go/rest"
 )
 
+const PauseTenSeconds = 10 * time.Second
+const PauseFiveSeconds = PauseTenSeconds / 2
+
 func InitKlog() {
 
 	klog.InitFlags(nil)
@@ -120,9 +123,9 @@ func MonitorDeployStatus(config *rest.Config, clusterName string) error {
 			jobPath := clusterName + "/" + jobName
 			klog.V(2).Info("Checking for provisioning job " + jobPath)
 			newJob, err := kubeset.BatchV1().Jobs(clusterName).Get(context.TODO(), jobName, v1.GetOptions{})
-			// If the job is missing follow the main loop 5min timeout
+			// If the job is missing follow the main loop 5min PauseTen
 			if err != nil && strings.Contains(err.Error(), " not found") {
-				time.Sleep(10 * time.Second) //10s
+				time.Sleep(PauseTenSeconds) //10s
 				continue
 			}
 			if err = LogError(err); err != nil {
@@ -136,7 +139,7 @@ func MonitorDeployStatus(config *rest.Config, clusterName string) error {
 				if elapsedTime%6 == 0 {
 					klog.V(0).Info("Job: " + jobPath + " - " + strconv.Itoa(elapsedTime/6) + "min")
 				}
-				time.Sleep(10 * time.Second) //10s
+				time.Sleep(PauseTenSeconds) //10s
 				elapsedTime++
 				newJob, err = kubeset.BatchV1().Jobs(clusterName).Get(context.TODO(), jobName, v1.GetOptions{})
 				CheckError(err)
@@ -156,7 +159,7 @@ func MonitorDeployStatus(config *rest.Config, clusterName string) error {
 		} else {
 
 			klog.V(0).Info("Attempt: " + strconv.Itoa(i) + "/30, pause 10sec")
-			time.Sleep(10 * time.Second) //10s
+			time.Sleep(PauseTenSeconds) //10s
 
 			if len(cluster.Status.Conditions) > 0 &&
 				(cluster.Spec.InstallAttemptsLimit == nil || *cluster.Spec.InstallAttemptsLimit != 0) {

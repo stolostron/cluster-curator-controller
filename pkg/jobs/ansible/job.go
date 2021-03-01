@@ -18,8 +18,6 @@ import (
 	"k8s.io/klog/v2"
 )
 
-const PauseFive = 5
-
 func Job(config *rest.Config, clusterConfigOverride *corev1.ConfigMap) {
 	jobType := os.Getenv("JOB_TYPE")
 	if jobType != "prehook" && jobType != "posthook" {
@@ -114,7 +112,7 @@ func RunAnsibleJob(
 			jobResource.Object["status"].(map[string]interface{})["conditions"] == nil {
 
 			klog.V(2).Infof("AnsibleJob %v/%v is initializing", namespace, ansibleJobName)
-			time.Sleep(PauseFive * time.Second)
+			time.Sleep(utils.PauseFiveSeconds)
 			continue
 		}
 
@@ -151,7 +149,7 @@ func RunAnsibleJob(
 			}
 		}
 		klog.V(2).Infof("AnsibleJob %v/%v is still running", namespace, ansibleJobName)
-		time.Sleep(PauseFive * time.Second)
+		time.Sleep(utils.PauseFiveSeconds)
 	}
 	return jobResource, nil
 }

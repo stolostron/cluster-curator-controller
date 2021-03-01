@@ -4,87 +4,53 @@ package importer
 
 import (
 	"context"
-	"encoding/json"
-	"log"
-	"strings"
+	"errors"
+	"time"
 
-	yaml "github.com/ghodss/yaml"
 	managedclusterclient "github.com/open-cluster-management/api/client/cluster/clientset/versioned"
 	managedclusterv1 "github.com/open-cluster-management/api/cluster/v1"
 	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/utils"
-	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	syaml "k8s.io/apimachinery/pkg/runtime/serializer/yaml"
-	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 )
 
-func Task(config *rest.Config,
-	clusterName string,
-	clusterConfigTemplate *corev1.ConfigMap,
-	clusterConfigOverride *corev1.ConfigMap) {
+func MonitorImport(mcset managedclusterclient.Interface, clusterName string) error {
 
-	klog.V(0).Info("=> Importing Cluster in namespace \"" + clusterName +
-		"\" using ConfigMap Template \"" + clusterConfigTemplate.Name + "/" +
-		clusterConfigTemplate.Namespace + "\" and ConfigMap Override \"" + clusterName)
-	managedclusterclient, err := managedclusterclient.NewForConfig(config)
-	utils.CheckError(err)
-
-	dynclient, err := dynamic.NewForConfig(config)
-	utils.CheckError(err)
-	CreateKlusterletAddonConfig(dynclient, clusterConfigTemplate, clusterConfigOverride)
-	CreateManagedCluster(managedclusterclient, clusterConfigTemplate, clusterConfigOverride)
-}
-
-func CreateManagedCluster(
-	managedclusterset *managedclusterclient.Clientset,
-	configMapTemplate *corev1.ConfigMap,
-	configMapOverride *corev1.ConfigMap) {
-
-	newCluster := &managedclusterv1.ManagedCluster{}
-	//agentset.KlusterletAddonConfig is defined with json for unmarshaling
-	cdJSON, err := yaml.YAMLToJSON([]byte(configMapTemplate.Data["managedCluster"]))
-	utils.CheckError(err)
-	err = json.Unmarshal(cdJSON, &newCluster)
-	utils.CheckError(err)
-
-	// Merge overrides
-	if configMapOverride != nil {
-		utils.OverrideStringField(&newCluster.Name, configMapOverride.Data["clusterName"], "name")
-	} else {
-		log.Println("No overrides provided")
+	klog.V(0).Info("=> Monitoring ManagedCluster import of \"" + clusterName +
+		"\" using Override Template \"" + clusterName + "\"")
+	managedCluster, err := mcset.ClusterV1().ManagedClusters().Get(context.TODO(), clusterName, v1.GetOptions{})
+	if err != nil {
+		return err
 	}
 
-	log.Print("Creating ManagedCluster " + newCluster.GetName() + " in namespace " + newCluster.GetName())
-	_, err = managedclusterset.ClusterV1().ManagedClusters().Create(context.TODO(), newCluster, v1.CreateOptions{})
-	utils.CheckError(err)
-	log.Println("Created ManagedCluster ✓")
-}
+	/* Two levels of status.conditions:
+	 * managedClusterAvailable
+	 * ManagedClusterJoined
+	 *
+	 * Order is important. We expect the default for a few tries, then ManagedCluster joined
+	 * and finally exit when available
+	 */
+	// TODO: Add a timeout after 60min, make configurable
+	for {
+		if managedCluster.Status.Conditions != nil {
+			for _, condition := range managedCluster.Status.Conditions {
+				switch condition.Type {
 
-func CreateKlusterletAddonConfig(
-	dynclient dynamic.Interface,
-	configMapTemplate *corev1.ConfigMap,
-	configMapOverride *corev1.ConfigMap) {
+				case managedclusterv1.ManagedClusterConditionHubDenied:
+					return errors.New("ManagedCluster join denied")
 
-	kacobj := &unstructured.Unstructured{}
-	decoded := syaml.NewDecodingSerializer(unstructured.UnstructuredJSONScheme)
-	_, gvk, err := decoded.Decode([]byte(configMapTemplate.Data["klusterletAddonConfig"]), nil, kacobj)
+				case managedclusterv1.ManagedClusterConditionAvailable:
+					klog.V(0).Info("ManagedCluster available")
+					return nil
 
-	kacRes := schema.GroupVersionResource{Group: gvk.Group, Version: gvk.Version, Resource: strings.ToLower(gvk.Kind) + "s"}
+				case managedclusterv1.ManagedClusterConditionJoined:
+					klog.V(2).Info("ManagedCluster joined but not avaialble")
 
-	clusterName := configMapOverride.Data["clusterName"]
-	// Merge overrides
-	if configMapOverride != nil {
-		kacobj.Object["metadata"].(map[string]interface{})["name"] = clusterName
-	} else {
-		log.Println("No overrides provided")
+				default:
+					klog.V(2).Infof("Waiting for ManagedCluster to join %v", condition.Message)
+				}
+			}
+		}
+		time.Sleep(utils.PauseTenSeconds)
 	}
-
-	log.Print("Creating KlusterletAddonConfig " + clusterName + " in namespace " + clusterName)
-	_, err = dynclient.Resource(kacRes).Namespace(clusterName).Create(context.TODO(), kacobj, v1.CreateOptions{})
-	utils.CheckError(err)
-	log.Println("Created KlusterletAddonConfig ✓")
 }
