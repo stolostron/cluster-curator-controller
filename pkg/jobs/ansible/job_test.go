@@ -47,7 +47,7 @@ func buildAnsibleJob(ajs string, k8sJob string) *ajv1.AnsibleJob {
 	return &ajv1.AnsibleJob{
 		TypeMeta: v1.TypeMeta{
 			Kind:       "AnsibleJob",
-			APIVersion: "v1alpha1",
+			APIVersion: "tower.ansible.com/v1alpha1",
 		},
 		ObjectMeta: v1.ObjectMeta{
 			Name:      AnsibleJobName,
@@ -79,8 +79,8 @@ func buildAnsibleJob(ajs string, k8sJob string) *ajv1.AnsibleJob {
 
 const jobYaml = "    - name: Service now App Update\n" +
 	"      extra_vars:\n" +
-	"        variable1: 1\n" +
-	"        variable2: 2\n"
+	"        variable1: \"1\"\n" +
+	"        variable2: \"2\"\n"
 
 func TestJobNoEnvVar(t *testing.T) {
 
