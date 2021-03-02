@@ -142,7 +142,8 @@ func main() {
 		dynclient, err := dynamic.NewForConfig(config)
 		utils.CheckError(err)
 
-		ansible.Job(dynclient, clusterConfigOverride)
+		err = ansible.Job(dynclient, clusterConfigOverride)
+		utils.CheckError(err)
 	}
 
 	klog.V(2).Info("Done!")

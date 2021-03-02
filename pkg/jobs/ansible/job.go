@@ -20,7 +20,8 @@ import (
 const PREHOOK = "prehook"
 const POSTHOOK = "posthook"
 
-var ansibleJobGVR = schema.GroupVersionResource{Group: "tower.ansible.com", Version: "v1alpha1", Resource: "ansiblejobs"}
+var ansibleJobGVR = schema.GroupVersionResource{
+	Group: "tower.ansible.com", Version: "v1alpha1", Resource: "ansiblejobs"}
 
 func Job(dynclient dynamic.Interface, clusterConfigOverride *corev1.ConfigMap) error {
 	jobType := os.Getenv("JOB_TYPE")
@@ -119,7 +120,10 @@ func RunAnsibleJob(
 	return jobResource, nil
 }
 
-func MonitorAnsibleJob(dynclient dynamic.Interface, jobResource *unstructured.Unstructured, clusterConfigOverride *corev1.ConfigMap) error {
+func MonitorAnsibleJob(
+	dynclient dynamic.Interface,
+	jobResource *unstructured.Unstructured,
+	clusterConfigOverride *corev1.ConfigMap) error {
 
 	namespace := jobResource.GetNamespace()
 	ansibleJobName := jobResource.GetName()

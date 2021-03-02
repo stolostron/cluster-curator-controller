@@ -1,3 +1,4 @@
+// Copyright Contributors to the Open Cluster Management project.
 package ansible
 
 import (
@@ -34,6 +35,9 @@ func getConfigMap() *corev1.ConfigMap {
 		ObjectMeta: v1.ObjectMeta{
 			Name:      ConfigMapName,
 			Namespace: ClusterName,
+			Labels: map[string]string{
+				"open-cluster-management": "curator",
+			},
 		},
 		Data: map[string]string{},
 	}
