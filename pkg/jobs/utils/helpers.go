@@ -185,7 +185,10 @@ func RecordAnsibleJobDyn(dynset dynamic.Interface, configMap *corev1.ConfigMap, 
 	configMap.Data[CurrentAnsibleJob] = containerName
 	unstructConfigMap := &unstructured.Unstructured{}
 	unstructConfigMap.Object, _ = runtime.DefaultUnstructuredConverter.ToUnstructured(configMap)
-	dynset.Resource(ansibleJobGVR).Update(context.TODO(), unstructConfigMap, v1.UpdateOptions{})
+	_, err := dynset.Resource(ansibleJobGVR).Update(context.TODO(), unstructConfigMap, v1.UpdateOptions{})
+	if err != nil {
+		klog.Warning(err)
+	}
 }
 
 func RecordAnsibleJob(kubeset kubernetes.Interface, configMap *corev1.ConfigMap, containerName string) {

@@ -18,9 +18,18 @@ compile-curator:
 build-curator: 
 	docker build -f Dockerfile.prow . -t ${REPO_URL}/clustercurator-job:${VERSION}
 
+.PHONY: scale-up-test
+scale-up-test:
+	go test -v -timeout 500s ./cmd/controller/controller_test.go -run TestCreateControllerScale
+
+.PHONY: scale-down-test
+scale-down-test:
+	go test -v -timeout 500s ./cmd/controller/controller_test.go -run TestDeleteManagedClusters
+
 .PHONY: unit-tests
 unit-tests:
 	GOFLAGS="" go test -v ./pkg/controller/launcher
 	GOFLAGS="" go test -v ./pkg/jobs/secrets
 	GOFLAGS="" go test -v ./pkg/jobs/create
 	GOFLAGS="" go test -v ./pkg/jobs/importer
+	GOFLAGS="" go test -v ./pkg/jobs/rbac
