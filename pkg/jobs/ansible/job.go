@@ -39,7 +39,7 @@ func Job(dynclient dynamic.Interface, clusterConfigOverride *corev1.ConfigMap) e
 
 	for _, ttn := range towerTemplateNames {
 		klog.V(3).Info("Tower Job name: " + ttn.Name)
-		jobResource, err := RunAnsibleJob(dynclient, clusterConfigOverride, jobType, ttn, "toweraccess", nil)
+		jobResource, err := RunAnsibleJob(dynclient, clusterConfigOverride, jobType, ttn, "toweraccess")
 		if err != nil {
 			return err
 		}
@@ -59,7 +59,7 @@ func Job(dynclient dynamic.Interface, clusterConfigOverride *corev1.ConfigMap) e
 func getAnsibleJob(jobtype string,
 	ansibleJobTemplate string,
 	secretRef string,
-	extraVars map[string]string,
+	extraVars map[string]interface{},
 	ansibleJobName string,
 	clusterName string) *unstructured.Unstructured {
 
@@ -97,15 +97,14 @@ func RunAnsibleJob(
 	clusterConfigOverride *corev1.ConfigMap,
 	jobtype string,
 	jobTemplate AnsibleJob,
-	secretRef string,
-	extraVars map[string]string) (*unstructured.Unstructured, error) {
+	secretRef string) (*unstructured.Unstructured, error) {
 
 	klog.V(2).Info("* Run " + jobtype + " AnsibleJob")
 
 	namespace := clusterConfigOverride.Namespace
 	klog.V(4).Info((jobTemplate))
 
-	ansibleJob := getAnsibleJob(jobtype, jobTemplate.Name, secretRef, extraVars, "", clusterConfigOverride.Namespace)
+	ansibleJob := getAnsibleJob(jobtype, jobTemplate.Name, secretRef, jobTemplate.ExtraVars, "", clusterConfigOverride.Namespace)
 
 	klog.V(0).Info("Creating AnsibleJob " + ansibleJob.GetName() + " in namespace " + namespace)
 	jobResource, err := dynclient.Resource(ansibleJobGVR).Namespace(namespace).

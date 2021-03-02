@@ -32,4 +32,5 @@ unit-tests:
 	GOFLAGS="" go test -v ./pkg/jobs/secrets
 	GOFLAGS="" go test -v ./pkg/jobs/create
 	GOFLAGS="" go test -v ./pkg/jobs/importer
+	GOFLAGS="" go test -v ./pkg/jobs/ansible
 	GOFLAGS="" go test -v ./pkg/jobs/rbac
