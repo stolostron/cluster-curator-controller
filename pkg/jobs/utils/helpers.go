@@ -51,7 +51,7 @@ func LogError(err error) error {
 	return nil
 }
 
-func LogErrorNR(err error) {
+func LogWarning(err error) {
 	if err != nil {
 		klog.Warning(err.Error())
 	}
@@ -60,11 +60,11 @@ func LogErrorNR(err error) {
 //Path splitter NAMSPACE/RESOURCE_NAME
 func PathSplitterFromEnv(path string) (namespace string, resource string, err error) {
 	values := strings.Split(path, "/")
-	if values[0] == "/" {
-		return "", "", errors.New("NameSpace was not provided NAMESPACE/RESORUCE_NAME, found: " + path)
-	}
 	if len(values) != 2 {
 		return "", "", errors.New("Resource name was not provided NAMESPACE/RESOURCE_NAME, found: " + path)
+	}
+	if values[0] == "" || values[1] == "" {
+		return "", "", errors.New("NameSpace was not provided NAMESPACE/RESORUCE_NAME, found: " + path)
 	}
 	return values[0], values[1], nil
 }
