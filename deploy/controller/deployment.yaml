@@ -5,7 +5,7 @@ metadata:
     name: cluster-curator-controller
   name: cluster-curator-controller
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       name: cluster-curator-controller
@@ -19,12 +19,14 @@ spec:
         - ./cluster-curator-controller
         - "-v"
         - "2"
-        env:
-        #- name: IMAGE_TAG
-        #  value: sha256:4e7ab8e1beefd3127bd3fe1313b16e105a8216e4cf76b19bdfde6f87a2a31b34
         image: registry.ci.openshift.org/open-cluster-management/cluster-curator-controller:latest
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
         imagePullPolicy: Always
-        name: curator-controller
+        name: cluster-curator-controller
         resources:
           limits:
             cpu: "10m"

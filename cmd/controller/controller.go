@@ -15,6 +15,7 @@ import (
 	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/rbac"
 	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/utils"
 	"github.com/open-cluster-management/library-go/pkg/config"
+	"github.com/operator-framework/operator-sdk/pkg/leader"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -123,6 +124,14 @@ func findJobConfigMap(kubeset *kubernetes.Clientset, mc *mcv1.ManagedCluster) (*
 func main() {
 
 	utils.InitKlog()
+
+	ctx := context.TODO()
+	// Become the leader before proceeding
+	err := leader.Become(ctx, "cluster-curator-controller-lock")
+	if err != nil {
+		klog.Error(err, "Did not obtain leader cluster-curator-controller-lock")
+		os.Exit(1)
+	}
 
 	config, err := config.LoadConfig("", "", "")
 	utils.CheckError(err)

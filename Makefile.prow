@@ -2,9 +2,9 @@
 
 .PHONY: push-curator
 push-curator: build-curator
-	docker push ${REPO_URL}/clustercurator-job:${VERSION}
-	docker tag ${REPO_URL}/clustercurator-job:${VERSION} ${REPO_URL}/clustercurator-job:latest
-	docker push ${REPO_URL}/clustercurator-job:latest
+	docker push ${REPO_URL}/cluster-curator-controller:${VERSION}
+	docker tag ${REPO_URL}/cluster-curator-controller:${VERSION} ${REPO_URL}/cluster-curator-controller:latest
+	docker push ${REPO_URL}/cluster-curator-controller:latest
 	#./deploy/controller/process.sh
 
 .PHONY: compile-curator
@@ -16,7 +16,7 @@ compile-curator:
 
 .PHONY: build-curator
 build-curator: 
-	docker build -f Dockerfile.prow . -t ${REPO_URL}/clustercurator-job:${VERSION}
+	docker build -f Dockerfile.prow . -t ${REPO_URL}/cluster-curator-controller:${VERSION}
 
 .PHONY: scale-up-test
 scale-up-test:
