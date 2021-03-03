@@ -8,29 +8,40 @@ objects:
   kind: Deployment
   metadata:
     labels:
-      name: curator-controller
-    name: curator-controller
+      name: ccluster-curator-controller
+    name: cluster-curator-controller
     namespace: open-cluster-management
   spec:
-    replicas: 1
+    replicas: 2
     selector:
       matchLabels:
-        name: curator-controller
+        name: cluster-curator-controller
     template:
       metadata:
         labels:
-          name: curator-controller
+          name: cluster-curator-controller
       spec:
         serviceAccountName: cluster-curator
         containers:
-        - image: ${REPO_URL}/clustercurator-job@${IMAGE_SHA}
-          name: curator-controller
+        - image: ${REPO_URL}/cluster-curator-controller@${IMAGE_SHA}
+          name: cluster-curator-controller
           imagePullPolicy: Always
           command: ["./cluster-curator-controller"]
           imagePullPolicy: Always
           env:
           - name: IMAGE_TAG
             value: "${IMAGE_SHA}"
+          - name: POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          resources:
+            limits:
+              cpu: "10m"
+              memory: "45Mi"
+            requests:
+              cpu: "3m"                     # Runs < 2m most of the time
+              memory: "25Mi"                # Runs between 25-28Mi
 parameters:
 - description: SHA tag to use with the containers
   name: IMAGE_SHA

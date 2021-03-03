@@ -18,11 +18,11 @@ rules:
   verbs: ["update"]
 # To grant the role, you must have the role
 - apiGroups: ["tower.ansible.com", "", "hive.openshift.io"]
-  resources: ["ansiblejobs", "secrets", "clusterdeployments", "machinepools"]
+  resources: ["ansiblejobs", "secrets", "clusterdeployments", "machinepools","configmaps"]
   verbs: ["create"]
 - apiGroups: ["", "hive.openshift.io"]
   resources: ["clusterdeployments", "secrets"]
   verbs: ["patch"]
 - apiGroups: ["", "batch", "hive.openshift.io", "tower.ansible.com"]
-  resources: ["configmaps", "jobs", "clusterdeployments", "ansiblejobs"]
+  resources: ["jobs", "clusterdeployments", "ansiblejobs","pods"]
   verbs: ["get"]
