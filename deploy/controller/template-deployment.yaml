@@ -8,7 +8,7 @@ objects:
   kind: Deployment
   metadata:
     labels:
-      name: ccluster-curator-controller
+      name: cluster-curator-controller
     name: cluster-curator-controller
     namespace: open-cluster-management
   spec:
