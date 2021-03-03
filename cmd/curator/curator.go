@@ -13,7 +13,7 @@ import (
 
 	managedclusterclient "github.com/open-cluster-management/api/client/cluster/clientset/versioned"
 	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/ansible"
-	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/create"
+	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/hive"
 	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/importer"
 	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/secrets"
 	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/utils"
@@ -66,7 +66,7 @@ func main() {
 			hiveset, err := hiveclient.NewForConfig(config)
 			utils.CheckError(err)
 
-			err = create.ActivateDeploy(hiveset, clusterName)
+			err = hive.ActivateDeploy(hiveset, clusterName)
 			utils.CheckError(err)
 		default:
 			utils.CheckError(cmdErrorMsg)
@@ -127,7 +127,7 @@ func main() {
 	}
 
 	if strings.Contains(jobChoice, "monitor") {
-		err := utils.MonitorDeployStatus(config, clusterName)
+		err := hive.MonitorDeployStatus(config, clusterName)
 		utils.CheckError(err)
 	}
 	// Create a client for the manageclusterV1 CustomResourceDefinitions
