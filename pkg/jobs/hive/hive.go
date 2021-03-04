@@ -76,12 +76,17 @@ func monitorDeployStatus(kubeset kubernetes.Interface, hiveset hiveclient.Interf
 	for i := 0; i < 30; i++ { // 5min wait
 
 		// Refresh the clusterDeployment resource
-		cluster, err := hiveset.HiveV1().ClusterDeployments(clusterName).Get(context.TODO(), clusterName, v1.GetOptions{})
+		cluster, err := hiveset.HiveV1().ClusterDeployments(clusterName).Get(
+			context.TODO(), clusterName, v1.GetOptions{})
+
 		if err = utils.LogError(err); err != nil {
 			return err
 		}
 
-		if len(cluster.Status.Conditions) == 0 && cluster.Status.ProvisionRef != nil && cluster.Status.ProvisionRef.Name != "" {
+		if len(cluster.Status.Conditions) == 0 &&
+			cluster.Status.ProvisionRef != nil &&
+			cluster.Status.ProvisionRef.Name != "" {
+
 			klog.V(2).Info("Found ClusterDeployment status details ✓")
 			jobName := cluster.Status.ProvisionRef.Name + "-provision"
 			jobPath := clusterName + "/" + jobName
