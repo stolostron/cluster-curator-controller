@@ -2,19 +2,25 @@
 package hive
 
 import (
+	"context"
 	"testing"
+	"time"
 
+	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/utils"
 	hivev1 "github.com/openshift/hive/pkg/apis/hive/v1"
-	"github.com/openshift/hive/pkg/client/clientset/versioned/fake"
+	hivefake "github.com/openshift/hive/pkg/client/clientset/versioned/fake"
 	"github.com/stretchr/testify/assert"
+	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes/fake"
 )
 
 const ClusterName = "my-cluster"
 
 func TestActivateDeployNoCD(t *testing.T) {
 
-	hiveset := fake.NewSimpleClientset()
+	hiveset := hivefake.NewSimpleClientset()
 
 	t.Log("No ClusterDeployment")
 	assert.NotNil(t, ActivateDeploy(hiveset, ClusterName),
@@ -23,7 +29,7 @@ func TestActivateDeployNoCD(t *testing.T) {
 
 func TestActivateDeployNoInstallAttemptsLimit(t *testing.T) {
 
-	hiveset := fake.NewSimpleClientset(&hivev1.ClusterDeployment{
+	hiveset := hivefake.NewSimpleClientset(&hivev1.ClusterDeployment{
 		TypeMeta: v1.TypeMeta{
 			APIVersion: "v1",
 		},
@@ -41,7 +47,7 @@ func TestActivateDeployNoInstallAttemptsLimit(t *testing.T) {
 func TestActivateDeployNonZeroInstallAttemptsLimit(t *testing.T) {
 
 	intValue := int32(1)
-	hiveset := fake.NewSimpleClientset(&hivev1.ClusterDeployment{
+	hiveset := hivefake.NewSimpleClientset(&hivev1.ClusterDeployment{
 		TypeMeta: v1.TypeMeta{
 			APIVersion: "v1",
 		},
@@ -62,7 +68,7 @@ func TestActivateDeployNonZeroInstallAttemptsLimit(t *testing.T) {
 func TestActivateDeploy(t *testing.T) {
 
 	intValue := int32(0)
-	hiveset := fake.NewSimpleClientset(&hivev1.ClusterDeployment{
+	hiveset := hivefake.NewSimpleClientset(&hivev1.ClusterDeployment{
 		TypeMeta: v1.TypeMeta{
 			APIVersion: "v1",
 		},
@@ -78,4 +84,153 @@ func TestActivateDeploy(t *testing.T) {
 	t.Log("ClusterDeployment with installAttemptsLimit zero")
 	assert.Nil(t, ActivateDeploy(hiveset, ClusterName),
 		"err NotNil when ClusterDeployment with installAttemptsLimit not zero")
+}
+
+func getClusterDeployment() *hivev1.ClusterDeployment {
+	return &hivev1.ClusterDeployment{
+		TypeMeta: v1.TypeMeta{
+			Kind:       "clusterdeployment",
+			APIVersion: "v1",
+		},
+		ObjectMeta: v1.ObjectMeta{
+			Name:      ClusterName,
+			Namespace: ClusterName,
+		},
+	}
+}
+
+func getProvisionJob() *batchv1.Job {
+	return &batchv1.Job{
+		TypeMeta: v1.TypeMeta{
+			Kind:       "job",
+			APIVersion: "v1",
+		},
+		ObjectMeta: v1.ObjectMeta{
+			Name:      ClusterName + "-12345-provision",
+			Namespace: ClusterName,
+		},
+		Status: batchv1.JobStatus{
+			Active:    0,
+			Succeeded: 1,
+		},
+	}
+}
+
+func TestMonitorDeployStatusNoClusterDeployment(t *testing.T) {
+
+	hiveset := hivefake.NewSimpleClientset()
+
+	assert.NotNil(t, monitorDeployStatus(nil, hiveset, ClusterName), "err is not nil, when cluster provisioning has a condition")
+}
+
+func TestMonitorDeployStatusCondition(t *testing.T) {
+
+	cd := getClusterDeployment()
+	cd.Status.Conditions = []hivev1.ClusterDeploymentCondition{
+		hivev1.ClusterDeploymentCondition{
+			Message: "ClusterImageSet img4.6.17-x86-64-appsub is not available",
+			Reason:  "ClusterImageSetNotFound",
+		},
+	}
+
+	hiveset := hivefake.NewSimpleClientset(cd)
+
+	assert.NotNil(t, monitorDeployStatus(nil, hiveset, ClusterName), "err is not nil, when cluster provisioning has a condition")
+}
+
+func TestMonitorDeployStatusJobFailed(t *testing.T) {
+
+	cd := getClusterDeployment()
+	cd.Status.ProvisionRef = &corev1.LocalObjectReference{
+		Name: ClusterName + "-12345", // The monitor adds the -provision suffix
+	}
+
+	job := getProvisionJob()
+	job.Status.Succeeded = 0
+
+	hiveset := hivefake.NewSimpleClientset(cd)
+
+	kubeset := fake.NewSimpleClientset(job)
+
+	assert.NotNil(t, monitorDeployStatus(kubeset, hiveset, ClusterName), "err is not nil, when cluster provisioning has a condition")
+}
+
+func TestMonitorDeployStatusJobCompletedWithSuccess(t *testing.T) {
+
+	cd := getClusterDeployment()
+	cd.Status.Conditions = []hivev1.ClusterDeploymentCondition{
+		hivev1.ClusterDeploymentCondition{
+			Message: "Provisioned",
+			Reason:  "SuccessfulProvision",
+		},
+	}
+	cd.Status.ProvisionRef = &corev1.LocalObjectReference{
+		Name: ClusterName + "-12345", // The monitor adds the -provision suffix
+	}
+	cd.Status.WebConsoleURL = "https://my-cluster"
+
+	hiveset := hivefake.NewSimpleClientset(cd)
+	kubeset := fake.NewSimpleClientset(getProvisionJob())
+
+	assert.Nil(t, monitorDeployStatus(kubeset, hiveset, ClusterName), "err is nil, when cluster provisioning is successful")
+}
+
+func TestMonitorDeployStatusJobComplete(t *testing.T) {
+
+	cd := getClusterDeployment()
+	cd.Status.ProvisionRef = &corev1.LocalObjectReference{
+		Name: ClusterName + "-12345", // The monitor adds the -provision suffix
+	}
+
+	job := getProvisionJob()
+	job.Status.Active = 1
+	job.Status.Succeeded = 0
+
+	hiveset := hivefake.NewSimpleClientset(cd)
+	kubeset := fake.NewSimpleClientset(job)
+
+	// Put a delay to complete the job to test the wait loop
+	go func() {
+		time.Sleep(utils.PauseFiveSeconds)
+		job.Status.Active = 0
+		job.Status.Succeeded = 1
+		kubeset.BatchV1().Jobs(ClusterName).Update(context.TODO(), job, v1.UpdateOptions{})
+		cd.Status.WebConsoleURL = "https://my-cluster"
+		cd.Status.Conditions = []hivev1.ClusterDeploymentCondition{
+			hivev1.ClusterDeploymentCondition{
+				Message: "Provisioned",
+				Reason:  "SuccessfulProvision",
+			},
+		}
+		hiveset.HiveV1().ClusterDeployments(ClusterName).Update(context.TODO(), cd, v1.UpdateOptions{})
+	}()
+
+	assert.Nil(t, monitorDeployStatus(kubeset, hiveset, ClusterName), "err is not nil, when cluster provisioning is successful")
+}
+
+func TestMonitorDeployStatusJobDelayedComplete(t *testing.T) {
+
+	cd := getClusterDeployment()
+	cd.Status.ProvisionRef = &corev1.LocalObjectReference{
+		Name: ClusterName + "-12345", // The monitor adds the -provision suffix
+	}
+
+	hiveset := hivefake.NewSimpleClientset(cd)
+	kubeset := fake.NewSimpleClientset()
+
+	// Put a delay to complete the job to test the wait loop
+	go func() {
+		time.Sleep(utils.PauseFiveSeconds)
+		cd.Status.WebConsoleURL = "https://my-cluster"
+		cd.Status.Conditions = []hivev1.ClusterDeploymentCondition{
+			hivev1.ClusterDeploymentCondition{
+				Message: "Provisioned",
+				Reason:  "SuccessfulProvision",
+			},
+		}
+		hiveset.HiveV1().ClusterDeployments(ClusterName).Update(context.TODO(), cd, v1.UpdateOptions{})
+		kubeset.BatchV1().Jobs(ClusterName).Create(context.TODO(), getProvisionJob(), v1.CreateOptions{})
+	}()
+
+	assert.Nil(t, monitorDeployStatus(kubeset, hiveset, ClusterName), "err is not nil, when cluster provisioning is successful")
 }
