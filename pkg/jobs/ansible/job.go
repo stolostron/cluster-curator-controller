@@ -104,7 +104,13 @@ func RunAnsibleJob(
 	namespace := clusterConfigOverride.Namespace
 	klog.V(4).Info((jobTemplate))
 
-	ansibleJob := getAnsibleJob(jobtype, jobTemplate.Name, secretRef, jobTemplate.ExtraVars, "", clusterConfigOverride.Namespace)
+	ansibleJob := getAnsibleJob(
+		jobtype,
+		jobTemplate.Name,
+		secretRef,
+		jobTemplate.ExtraVars,
+		"",
+		clusterConfigOverride.Namespace)
 
 	klog.V(0).Info("Creating AnsibleJob " + ansibleJob.GetName() + " in namespace " + namespace)
 	jobResource, err := dynclient.Resource(ansibleJobGVR).Namespace(namespace).
