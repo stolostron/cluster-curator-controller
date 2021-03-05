@@ -29,14 +29,14 @@ func getRole() *rbacv1.Role {
 				Verbs:     []string{"patch"},
 			},
 			rbacv1.PolicyRule{
-				APIGroups: []string{"", "batch", "hive.openshift.io", "tower.ansible.com"},
-				Resources: []string{"configmaps", "jobs", "clusterdeployments", "ansiblejobs"},
+				APIGroups: []string{"batch", "hive.openshift.io", "tower.ansible.com"},
+				Resources: []string{"jobs", "clusterdeployments", "ansiblejobs"},
 				Verbs:     []string{"get"},
 			},
 			rbacv1.PolicyRule{
 				APIGroups: []string{""},
 				Resources: []string{"configmaps"},
-				Verbs:     []string{"update"},
+				Verbs:     []string{"update", "get"},
 			},
 		},
 	}

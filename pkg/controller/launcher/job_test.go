@@ -13,15 +13,14 @@ import (
 )
 
 const numInitContainers = 4
-const imageTag = "sha256:123456789"
-const imageURI = "quay.io/my-repo/cluster-curator-controller"
+const imageURI = "quay.io/my-repo/cluster-curator-controller@sha123456789"
 const configMapName = "my-cluster"
 const clusterName = configMapName
 
 // Validate that we are correctly building the job.batchv1 object
 func TestGetBatchJobImageSHA(t *testing.T) {
 
-	batchJobObj := getBatchJob(imageTag, configMapName, imageURI)
+	batchJobObj := getBatchJob(configMapName, imageURI)
 
 	t.Log("Test count initContainers in job")
 	foundInitContainers := len(batchJobObj.Spec.Template.Spec.InitContainers)
@@ -32,8 +31,8 @@ func TestGetBatchJobImageSHA(t *testing.T) {
 	}
 
 	t.Log("Validate configmap URI")
-	t.Logf("Check image is applied correclty %v@%v", imageURI, imageTag)
-	uri := imageURI + "@" + imageTag
+	t.Logf("Check image is applied correclty %v", imageURI)
+	uri := imageURI
 
 	t.Log("Access the first initContainer")
 	initContianer := batchJobObj.Spec.Template.Spec.InitContainers[0]
@@ -48,14 +47,14 @@ func TestGetBatchJobImageSHA(t *testing.T) {
 	}
 }
 
-// Use the default imageTag, which appends :latest
+// Use the default URI
 func TestGetBatchJobImageDefault(t *testing.T) {
 
 	t.Log("Create a batchJobObj with no sha256 or URI")
-	batchJobObj := getBatchJob("", configMapName, imageURI)
+	batchJobObj := getBatchJob(configMapName, imageURI)
 
-	t.Logf("Check image is applied correclty %v@%v", imageURI, imageTag)
-	uri := imageURI + ":latest"
+	t.Logf("Check image is applied correclty %v", imageURI)
+	uri := imageURI
 
 	t.Log("Access the first initContainer")
 	initContianer := batchJobObj.Spec.Template.Spec.InitContainers[0]
@@ -75,7 +74,7 @@ func TestCreateLauncher(t *testing.T) {
 
 	kubeset := fake.NewSimpleClientset(jobConfigMap)
 
-	testLauncher := NewLauncher(kubeset, imageTag, imageURI, *jobConfigMap)
+	testLauncher := NewLauncher(kubeset, imageURI, *jobConfigMap)
 
 	assert.NotNil(t, testLauncher, "launcher is not nil")
 
@@ -95,7 +94,7 @@ func TestCreateLauncherBadConfigMap(t *testing.T) {
 
 	kubeset := fake.NewSimpleClientset(jobConfigMap)
 
-	testLauncher := NewLauncher(kubeset, imageTag, imageURI, *jobConfigMap)
+	testLauncher := NewLauncher(kubeset, imageURI, *jobConfigMap)
 
 	assert.NotNil(t, testLauncher, "launcher is not nil")
 
@@ -107,7 +106,7 @@ func TestCreateLauncherBadConfigMap(t *testing.T) {
 // Test launcher with a valid overrideJob
 func TestCreateLauncherOverrideJob(t *testing.T) {
 
-	batchJobObj := getBatchJob("", configMapName, imageURI)
+	batchJobObj := getBatchJob(configMapName, imageURI)
 	stringData, err := yaml.Marshal(batchJobObj)
 	if err != nil {
 		t.Fatal("Failed to marshal batchJobObj")
@@ -123,7 +122,7 @@ func TestCreateLauncherOverrideJob(t *testing.T) {
 
 	kubeset := fake.NewSimpleClientset(jobConfigMap)
 
-	testLauncher := NewLauncher(kubeset, imageTag, imageURI, *jobConfigMap)
+	testLauncher := NewLauncher(kubeset, imageURI, *jobConfigMap)
 
 	assert.NotNil(t, testLauncher, "launcher is not nil")
 
@@ -145,7 +144,7 @@ func TestCreateLauncherInvalidOverrideJob(t *testing.T) {
 
 	kubeset := fake.NewSimpleClientset(jobConfigMap)
 
-	testLauncher := NewLauncher(kubeset, imageTag, imageURI, *jobConfigMap)
+	testLauncher := NewLauncher(kubeset, imageURI, *jobConfigMap)
 
 	assert.NotNil(t, testLauncher, "launcher is not nil")
 

@@ -14,12 +14,14 @@ spec:
       labels:
         name: cluster-curator-controller
     spec:
+      imagePullSecrets:
+        - name: multiclusterhub-operator-pull-secret
       containers:
       - command:
         - ./cluster-curator-controller
         - "-v"
         - "2"
-        image: registry.ci.openshift.org/open-cluster-management/cluster-curator-controller:latest
+        image: quay.io/open-cluster-management/cluster-curator-controller@sha256:f7210661a8aa97d0bd94af08a3b5b0ff3cf97c9f6775a2495e9a9c0a2d2084cf
         env:
         - name: POD_NAME
           valueFrom:

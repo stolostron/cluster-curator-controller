@@ -41,13 +41,9 @@ func WatchManagedCluster(config *rest.Config) {
 	kubeset, err := kubernetes.NewForConfig(config)
 	utils.CheckError(err)
 
-	imageTag := os.Getenv("IMAGE_TAG")
-	if imageTag == "" {
-		klog.Warning("IMAGE_TAG=latest, becauese environment variable was not set")
-	}
 	imageUri := os.Getenv("IMAGE_URI")
 	if imageUri == "" {
-		imageUri = "registry.ci.openshift.org/open-cluster-management/cluster-curator-controller"
+		imageUri = "registry.ci.openshift.org/open-cluster-management/cluster-curator-controller:latest"
 		klog.Warning("IMAGE_URI=" + imageUri + ", becauese environment variable was not set")
 	}
 	watchlist := cache.NewListWatchFromClient(
@@ -72,7 +68,7 @@ func WatchManagedCluster(config *rest.Config) {
 							if err := utils.LogError(err); err != nil {
 								break
 							}
-							jobLaunch := launcher.NewLauncher(kubeset, imageTag, imageUri, *cm)
+							jobLaunch := launcher.NewLauncher(kubeset, imageUri, *cm)
 							if err := utils.LogError(jobLaunch.CreateJob()); err != nil {
 								break
 							}
