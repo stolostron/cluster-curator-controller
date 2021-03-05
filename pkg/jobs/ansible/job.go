@@ -33,8 +33,9 @@ func Job(dynclient dynamic.Interface, clusterConfigOverride *corev1.ConfigMap) e
 		clusterConfigOverride,
 		jobType)
 
+	// Continue when configmap is missing or job hook is missing
 	if err != nil {
-		return err
+		return nil
 	}
 
 	for _, ttn := range towerTemplateNames {
@@ -199,7 +200,7 @@ type AnsibleJob struct {
 
 func FindAnsibleTemplateNamefromConfigMap(cm *corev1.ConfigMap, jobType string) ([]AnsibleJob, error) {
 	if cm == nil {
-		return nil, errors.New("No ConfigMap provided")
+		utils.CheckError(errors.New("No ConfigMap provided"))
 	}
 	if cm.Data[jobType] == "" {
 		return nil, errors.New("Missing " + jobType + " in job ConfigMap " + cm.Name)

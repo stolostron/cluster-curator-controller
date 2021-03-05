@@ -56,7 +56,7 @@ func main() {
 		"\"\nCommand: ./curator [monitor-import|monitor|activate-monitor|applycloudprovider-aws|" +
 		"applycloudprovider-gcp|applycloudprovider-azure]")
 
-	if len(os.Args) == 2 {
+	if len(os.Args) > 1 {
 		switch os.Args[1] {
 		case "applycloudprovider-aws", "applycloudprovider-ansible", "monitor-import", "monitor", "ansiblejob",
 			"applycloudprovider-gcp", "applycloudprovider-azure":

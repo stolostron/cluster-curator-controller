@@ -90,23 +90,25 @@ func TestJobNoEnvVar(t *testing.T) {
 
 func TestJobNoConfigMap(t *testing.T) {
 
+	// We should never get in this situation, but if it happens then send a panic
 	t.Log(PREHOOK)
 	os.Setenv(EnvJobType, PREHOOK)
-	assert.NotNil(t, Job(nil, nil), "err not nil, when no configMap")
+	assert.Panics(t, func() { Job(nil, nil) }, "Panics when no ConfigMap is present")
 
 	t.Log(POSTHOOK)
-	os.Setenv(EnvJobType, PREHOOK)
-	assert.NotNil(t, Job(nil, nil), "err not nil, when no configMap")
+	os.Setenv(EnvJobType, POSTHOOK)
+	assert.Panics(t, func() { Job(nil, nil) }, "Panics when no ConfigMap is present")
 }
 
 func TestJobNoConfigMapData(t *testing.T) {
 
+	// If prehook or posthook is not defined in the ConfigMap skip
 	t.Logf("Test %v", PREHOOK)
 	os.Setenv(EnvJobType, PREHOOK)
-	assert.NotNil(t, Job(nil, getConfigMap()), "err not nil, when no configMap")
+	assert.Nil(t, Job(nil, getConfigMap()), "err not nil, when no configMap")
 
 	t.Logf("Test %v", POSTHOOK)
-	assert.NotNil(t, Job(nil, getConfigMap()), "err not nil, when no configMap")
+	assert.Nil(t, Job(nil, getConfigMap()), "err not nil, when no configMap")
 }
 
 func TestFindAnsibleTemplateNamefromConfigMap(t *testing.T) {
