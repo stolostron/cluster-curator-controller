@@ -24,6 +24,7 @@ const PauseTenSeconds = 10 * time.Second
 const PauseFiveSeconds = PauseTenSeconds / 2
 const CurrentAnsibleJob = "current-ansible-job"
 const CurrentHiveJob = "current-hive-job"
+const DefaultImageURI = "registry.ci.openshift.org/open-cluster-management/cluster-curator-controller:latest"
 
 func InitKlog() {
 

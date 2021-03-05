@@ -43,7 +43,7 @@ func WatchManagedCluster(config *rest.Config) {
 
 	imageUri := os.Getenv("IMAGE_URI")
 	if imageUri == "" {
-		imageUri = "registry.ci.openshift.org/open-cluster-management/cluster-curator-controller:latest"
+		imageUri = utils.DefaultImageURI
 		klog.Warning("IMAGE_URI=" + imageUri + ", becauese environment variable was not set")
 	}
 	watchlist := cache.NewListWatchFromClient(

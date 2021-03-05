@@ -122,7 +122,7 @@ func (I *Launcher) CreateJob() error {
 	if I.jobConfigMap.Data["providerCredentialPath"] == "" {
 		return errors.New("Missing providerCredentialPath in " + clusterName + "-job ConfigMap")
 	}
-	newJob := getBatchJob(I.imageUri, I.jobConfigMap.Name)
+	newJob := getBatchJob(I.jobConfigMap.Name, I.imageUri)
 
 	// Allow us to override the job in the configMap
 	klog.V(0).Info("Creating Curator job curator-job in namespace " + clusterName)

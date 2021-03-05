@@ -2,6 +2,7 @@
 package launcher
 
 import (
+	"context"
 	"log"
 	"testing"
 
@@ -81,6 +82,25 @@ func TestCreateLauncher(t *testing.T) {
 	err := testLauncher.CreateJob()
 
 	assert.Nil(t, err, "error is nil")
+
+	job, err := kubeset.BatchV1().Jobs(configMapName).Get(context.TODO(), "", v1.GetOptions{})
+
+	assert.Nil(t, err, "err is nil, if ConfigMap found")
+
+	// Test the dynamic job vavlues
+	if job.GenerateName != "curator-job-" {
+		t.Fatal("Job obbject not found")
+	}
+
+	if job.Spec.Template.Spec.InitContainers[0].Image != imageURI {
+		t.Fatalf("Default imageURI does not match: %v", job.Spec.Template.Spec.InitContainers[0].Image)
+	}
+
+	if job.Spec.Template.Spec.InitContainers[0].Env[0].Value != configMapName {
+
+		t.Fatalf("Container init configMap name does not correct: %v",
+			job.Spec.Template.Spec.InitContainers[0].Env[0].Value)
+	}
 
 }
 
