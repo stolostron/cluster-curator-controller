@@ -2,6 +2,7 @@
 package utils
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -9,6 +10,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	dynfake "k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -90,6 +92,8 @@ func getConfigMap() *corev1.ConfigMap {
 	}
 }
 
+var cmGVR = schema.GroupVersionResource{Version: "v1", Resource: "configmaps"}
+
 func TestRecordAnsibleJobDyn(t *testing.T) {
 
 	cm := getConfigMap()
@@ -98,37 +102,35 @@ func TestRecordAnsibleJobDyn(t *testing.T) {
 
 	dynclient := dynfake.NewSimpleDynamicClient(s, cm)
 
-	assert.NotPanics(t, func() { RecordAnsibleJobDyn(dynclient, cm, jobName) }, "no panics, when update successful")
-	assert.Equal(t, jobName, cm.Data[CurrentAnsibleJob])
+	assert.NotPanics(t, func() { RecordAnsibleJobDyn(dynclient, ClusterName, jobName) }, "no panics, when update successful")
+	cMap, _ := dynclient.Resource(cmGVR).Namespace(ClusterName).Get(context.TODO(), ClusterName, v1.GetOptions{})
+	assert.Equal(t, jobName, cMap.Object["data"].(map[string]interface{})[CurrentAnsibleJob])
 }
 
 func TestRecordAnsibleJobDynWarning(t *testing.T) {
 
-	cm := getConfigMap()
-
 	dynclient := dynfake.NewSimpleDynamicClient(runtime.NewScheme())
 
-	assert.NotPanics(t, func() { RecordAnsibleJobDyn(dynclient, cm, jobName) }, "no panics, when update successful")
+	assert.NotPanics(t, func() { RecordAnsibleJobDyn(dynclient, ClusterName, jobName) }, "no panics, when update successful")
 }
 
-func TestRecordAnsibleJob(t *testing.T) {
+func TestRecordCurrentCuratorContainer(t *testing.T) {
 
 	cm := getConfigMap()
 
 	kubeset := fake.NewSimpleClientset(cm)
 
-	assert.NotEqual(t, jobName, cm.Data[CurrentAnsibleJob])
-	assert.NotPanics(t, func() { RecordAnsibleJob(kubeset, cm, jobName) }, "no panics, when update successful")
-	assert.Equal(t, jobName, cm.Data[CurrentAnsibleJob])
+	assert.NotEqual(t, jobName, cm.Data[CurrentCuratorContainer])
+	assert.NotPanics(t, func() { RecordCurrentCuratorContainer(kubeset, ClusterName, jobName) }, "no panics, when update successful")
+	cm, _ = kubeset.CoreV1().ConfigMaps(ClusterName).Get(context.TODO(), ClusterName, v1.GetOptions{})
+	assert.Equal(t, jobName, cm.Data[CurrentCuratorContainer])
 }
 
-func TestRecordAnsibleJobWarning(t *testing.T) {
-
-	cm := getConfigMap()
+func TestRecordCurrentCuratorContainerWarning(t *testing.T) {
 
 	kubeset := fake.NewSimpleClientset()
 
-	assert.NotPanics(t, func() { RecordAnsibleJob(kubeset, cm, jobName) }, "no panics, when update successful")
+	assert.NotPanics(t, func() { RecordCurrentCuratorContainer(kubeset, ClusterName, jobName) }, "no panics, when update successful")
 }
 
 func TestRecordHiveJobContainer(t *testing.T) {
@@ -138,15 +140,14 @@ func TestRecordHiveJobContainer(t *testing.T) {
 	kubeset := fake.NewSimpleClientset(cm)
 
 	assert.NotEqual(t, jobName, cm.Data[CurrentHiveJob])
-	assert.NotPanics(t, func() { RecordHiveJobContainer(kubeset, cm, jobName) }, "no panics, when update successful")
+	assert.NotPanics(t, func() { RecordHiveJobContainer(kubeset, ClusterName, jobName) }, "no panics, when update successful")
+	cm, _ = kubeset.CoreV1().ConfigMaps(ClusterName).Get(context.TODO(), ClusterName, v1.GetOptions{})
 	assert.Equal(t, jobName, cm.Data[CurrentHiveJob])
 }
 
-func TestRecordHiveJobContainerwarning(t *testing.T) {
-
-	cm := getConfigMap()
+func TestRecordHiveJobContainerWarning(t *testing.T) {
 
 	kubeset := fake.NewSimpleClientset()
 
-	assert.NotPanics(t, func() { RecordHiveJobContainer(kubeset, cm, jobName) }, "no panics, when update successful")
+	assert.NotPanics(t, func() { RecordHiveJobContainer(kubeset, ClusterName, jobName) }, "no panics, when update successful")
 }

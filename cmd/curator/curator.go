@@ -53,21 +53,13 @@ func main() {
 	utils.CheckError(err)
 
 	var cmdErrorMsg = errors.New("Invalid Parameter: \"" + os.Args[1] +
-		"\"\nCommand: ./curator [monitor-import|monitor|activate-monitor|applycloudprovider-aws|" +
+		"\"\nCommand: ./curator [monitor-import|monitor|activate-and-monitor|applycloudprovider-aws|" +
 		"applycloudprovider-gcp|applycloudprovider-azure]")
 
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
 		case "applycloudprovider-aws", "applycloudprovider-ansible", "monitor-import", "monitor", "ansiblejob",
-			"applycloudprovider-gcp", "applycloudprovider-azure":
-
-		case "activate-monitor":
-
-			hiveset, err := hiveclient.NewForConfig(config)
-			utils.CheckError(err)
-
-			err = hive.ActivateDeploy(hiveset, clusterName)
-			utils.CheckError(err)
+			"applycloudprovider-gcp", "applycloudprovider-azure", "activate-and-monitor":
 		default:
 			utils.CheckError(cmdErrorMsg)
 		}
@@ -97,7 +89,7 @@ func main() {
 				"\" does not match the cluster ConfigMap override \"" +
 				clusterConfigOverride.Data["clusterName"] + "\""))
 		}
-		utils.RecordHiveJobContainer(kubeset, clusterConfigOverride, jobChoice)
+		utils.RecordCurrentCuratorContainer(kubeset, clusterName, jobChoice)
 		providerCredentialPath = clusterConfigOverride.Data["providerCredentialPath"]
 	} else {
 		if providerCredentialPath == "" || !strings.Contains(jobChoice, "applycloudprovider-") {
@@ -106,7 +98,6 @@ func main() {
 		klog.V(0).Info("Using PROVIDER_CREDNETIAL_PATH to find the Cloud Provider secret")
 	}
 
-	// Always create the Ansible secret, plus Cloud provider secrets if requested
 	var secretData *map[string]string
 	if strings.Contains(jobChoice, "applycloudprovider-") {
 		secretData = secrets.GetSecretData(kubeset, providerCredentialPath)
@@ -124,6 +115,14 @@ func main() {
 		err := secrets.CreateAnsibleSecret(kubeset, *secretData, clusterName)
 		utils.CheckError(err)
 
+	}
+
+	if strings.Contains(jobChoice, "activate-and-monitor") {
+		hiveset, err := hiveclient.NewForConfig(config)
+		utils.CheckError(err)
+
+		err = hive.ActivateDeploy(hiveset, clusterName)
+		utils.CheckError(err)
 	}
 
 	if strings.Contains(jobChoice, "monitor") {

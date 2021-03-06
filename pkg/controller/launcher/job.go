@@ -48,7 +48,8 @@ func getBatchJob(configMapName string, imageUri string) *batchv1.Job {
 			Annotations: map[string]string{
 				"apply-cloud-provider": "Creating secrets",
 				"prehook-ansiblejob":   "Running pre-provisioning Ansible Job",
-				"activate-monitor":     "Start Provisioning Cluster and monitor to completion",
+				"activate-and-monitor": "Start Provisioning the Cluster and monitor to completion",
+				"monitor-import":       "Monitor the managed cluster until it is imported",
 				"posthook-ansiblejob":  "Running post-provisioning Ansible Job",
 			},
 		},
@@ -84,11 +85,17 @@ func getBatchJob(configMapName string, imageUri string) *batchv1.Job {
 							},
 						},
 						corev1.Container{
-							Name:            "monitor-provisioning",
+							Name:            "activate-and-monitor",
 							Image:           imageUri,
-							Command:         append([]string{CurCmd, "activate-monitor"}, flags...),
+							Command:         append([]string{CurCmd, "activate-and-monitor"}, flags...),
 							ImagePullPolicy: corev1.PullAlways,
 						},
+						/*corev1.Container{
+							Name:            "monitor-import",
+							Image:           imageUri,
+							Command:         append([]string{CurCmd, "monitor-import"}, flags...),
+							ImagePullPolicy: corev1.PullAlways,
+						},*/
 						corev1.Container{
 							Name:            "posthook-ansiblejob",
 							Image:           imageUri,

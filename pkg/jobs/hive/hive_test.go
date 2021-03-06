@@ -18,6 +18,27 @@ import (
 
 const ClusterName = "my-cluster"
 
+func getConfigMap() *corev1.ConfigMap {
+	return &corev1.ConfigMap{
+		TypeMeta: v1.TypeMeta{
+			Kind:       "ConfigMap",
+			APIVersion: "v1",
+		},
+		ObjectMeta: v1.ObjectMeta{
+			Name:      ClusterName,
+			Namespace: ClusterName,
+			Labels: map[string]string{
+				"open-cluster-management": "curator",
+			},
+		},
+		Data: map[string]string{
+			"prehook": "    - name: Service now App Update\n" +
+				"      extra_vars:\n" +
+				"        variable1: \"1\"\n" +
+				"        variable2: \"2\"\n",
+		},
+	}
+}
 func TestActivateDeployNoCD(t *testing.T) {
 
 	hiveset := hivefake.NewSimpleClientset()
@@ -169,10 +190,17 @@ func TestMonitorDeployStatusJobCompletedWithSuccess(t *testing.T) {
 	}
 	cd.Status.WebConsoleURL = "https://my-cluster"
 
-	hiveset := hivefake.NewSimpleClientset(cd)
-	kubeset := fake.NewSimpleClientset(getProvisionJob())
+	cm := getConfigMap()
 
+	hiveset := hivefake.NewSimpleClientset(cd)
+	kubeset := fake.NewSimpleClientset(getProvisionJob(), cm)
+
+	assert.Equal(t, cm.Data[utils.CurrentHiveJob], "", "Should be emtpy")
 	assert.Nil(t, monitorDeployStatus(kubeset, hiveset, ClusterName), "err is nil, when cluster provisioning is successful")
+
+	cm, err := kubeset.CoreV1().ConfigMaps(ClusterName).Get(context.TODO(), ClusterName, v1.GetOptions{})
+	t.Log(err)
+	assert.NotEqual(t, cm.Data[utils.CurrentHiveJob], "", "Should be populated")
 }
 
 func TestMonitorDeployStatusJobComplete(t *testing.T) {

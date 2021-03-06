@@ -35,6 +35,7 @@ func Job(dynclient dynamic.Interface, clusterConfigOverride *corev1.ConfigMap) e
 
 	// Continue when configmap is missing or job hook is missing
 	if err != nil {
+		klog.V(0).Infof("No ansibleJob detected for %v", jobType)
 		return nil
 	}
 
@@ -54,6 +55,12 @@ func Job(dynclient dynamic.Interface, clusterConfigOverride *corev1.ConfigMap) e
 			return err
 		}
 	}
+	if err == nil {
+		utils.RecordAnsibleJobDyn(
+			dynclient,
+			clusterConfigOverride.Name,
+			jobType+" ansibleJobs Complete")
+	}
 	return err
 }
 
@@ -64,6 +71,9 @@ func getAnsibleJob(jobtype string,
 	ansibleJobName string,
 	clusterName string) *unstructured.Unstructured {
 
+	if extraVars == nil {
+		extraVars = map[string]interface{}{}
+	}
 	ansibleJob := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": "tower.ansible.com/v1alpha1",
@@ -177,7 +187,7 @@ func MonitorAnsibleJob(
 		if jos.(map[string]interface{})["k8sJob"] != nil {
 			utils.RecordAnsibleJobDyn(
 				dynclient,
-				clusterConfigOverride,
+				clusterConfigOverride.Namespace,
 				jos.(map[string]interface{})["k8sJob"].(map[string]interface{})["namespacedName"].(string))
 		}
 

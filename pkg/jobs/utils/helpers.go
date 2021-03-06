@@ -3,18 +3,17 @@ package utils
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"strings"
 	"time"
 
-	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 
 	"k8s.io/klog/v2"
 
-	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
@@ -22,9 +21,16 @@ import (
 
 const PauseTenSeconds = 10 * time.Second
 const PauseFiveSeconds = PauseTenSeconds / 2
-const CurrentAnsibleJob = "current-ansible-job"
-const CurrentHiveJob = "current-hive-job"
+const CurrentAnsibleJob = "active-ansible-job"
+const CurrentHiveJob = "hive-provisioning-job"
+const CurrentCuratorContainer = "curating-with-container"
 const DefaultImageURI = "registry.ci.openshift.org/open-cluster-management/cluster-curator-controller:latest"
+
+type PatchStringValue struct {
+	Op    string `json:"op"`
+	Path  string `json:"path"`
+	Value string `json:"value"`
+}
 
 func InitKlog() {
 
@@ -67,28 +73,42 @@ func PathSplitterFromEnv(path string) (namespace string, resource string, err er
 	return values[0], values[1], nil
 }
 
-func RecordAnsibleJobDyn(dynset dynamic.Interface, configMap *corev1.ConfigMap, containerName string) {
-	ansibleJobGVR := schema.GroupVersionResource{Version: "v1", Resource: "configmaps"}
-	configMap.Data[CurrentAnsibleJob] = containerName
-	unstructConfigMap := &unstructured.Unstructured{}
-	unstructConfigMap.Object, _ = runtime.DefaultUnstructuredConverter.ToUnstructured(configMap)
-	_, err := dynset.Resource(ansibleJobGVR).Update(context.TODO(), unstructConfigMap, v1.UpdateOptions{})
+func RecordAnsibleJobDyn(dynset dynamic.Interface, clusterName string, containerName string) {
+	cmGVR := schema.GroupVersionResource{Version: "v1", Resource: "configmaps"}
+
+	patch := []PatchStringValue{{
+		Op:    "replace",
+		Path:  "/data/" + CurrentAnsibleJob,
+		Value: containerName,
+	}}
+
+	patchInBytes, _ := json.Marshal(patch)
+
+	_, err := dynset.Resource(cmGVR).Namespace(clusterName).Patch(
+		context.TODO(), clusterName, types.JSONPatchType, patchInBytes, v1.PatchOptions{})
 	if err != nil {
 		klog.Warning(err)
 	}
 }
 
-func RecordAnsibleJob(kubeset kubernetes.Interface, configMap *corev1.ConfigMap, containerName string) {
-	recordJobContainer(kubeset, configMap, containerName, CurrentAnsibleJob)
+func RecordCurrentCuratorContainer(kubeset kubernetes.Interface, clusterName string, containerName string) {
+	recordJobContainer(kubeset, clusterName, containerName, CurrentCuratorContainer)
 }
 
-func RecordHiveJobContainer(kubeset kubernetes.Interface, configMap *corev1.ConfigMap, containerName string) {
-	recordJobContainer(kubeset, configMap, containerName, CurrentHiveJob)
+func RecordHiveJobContainer(kubeset kubernetes.Interface, clusterName, containerName string) {
+	recordJobContainer(kubeset, clusterName, containerName, CurrentHiveJob)
 }
 
-func recordJobContainer(kubeset kubernetes.Interface, configMap *corev1.ConfigMap, containerName string, cmKey string) {
-	configMap.Data[cmKey] = containerName
-	_, err := kubeset.CoreV1().ConfigMaps(configMap.Namespace).Update(context.TODO(), configMap, v1.UpdateOptions{})
+func recordJobContainer(kubeset kubernetes.Interface, clusterName string, containerName string, cmKey string) {
+	patch := []PatchStringValue{{
+		Op:    "replace",
+		Path:  "/data/" + cmKey,
+		Value: containerName,
+	}}
+
+	patchInBytes, _ := json.Marshal(patch)
+	_, err := kubeset.CoreV1().ConfigMaps(clusterName).Patch(
+		context.TODO(), clusterName, types.JSONPatchType, patchInBytes, v1.PatchOptions{})
 	if err != nil {
 		klog.Warning(err)
 	}

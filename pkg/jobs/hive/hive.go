@@ -11,8 +11,10 @@ import (
 	"time"
 
 	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/utils"
+	hivev1 "github.com/openshift/hive/pkg/apis/hive/v1"
 	hiveclient "github.com/openshift/hive/pkg/client/clientset/versioned"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -71,9 +73,9 @@ func MonitorDeployStatus(config *rest.Config, clusterName string) error {
 
 func monitorDeployStatus(kubeset kubernetes.Interface, hiveset hiveclient.Interface, clusterName string) error {
 
-	klog.V(2).Info("Checking ClusterDeployment status details")
+	klog.V(0).Info("Waiting up to 30s for Hive Provisioning job")
 
-	for i := 0; i < 30; i++ { // 5min wait
+	for i := 0; i < 6; i++ { // 30s wait
 
 		// Refresh the clusterDeployment resource
 		cluster, err := hiveset.HiveV1().ClusterDeployments(clusterName).Get(
@@ -83,8 +85,10 @@ func monitorDeployStatus(kubeset kubernetes.Interface, hiveset hiveclient.Interf
 			return err
 		}
 
-		if len(cluster.Status.Conditions) == 0 &&
-			cluster.Status.ProvisionRef != nil &&
+		if cluster.Status.WebConsoleURL != "" {
+			klog.V(2).Info("Provisioning succeeded ✓")
+			break
+		} else if cluster.Status.ProvisionRef != nil &&
 			cluster.Status.ProvisionRef.Name != "" {
 
 			klog.V(2).Info("Found ClusterDeployment status details ✓")
@@ -110,6 +114,8 @@ func monitorDeployStatus(kubeset kubernetes.Interface, hiveset hiveclient.Interf
 			// Wait while the job is running
 			klog.V(0).Info("Wait for the provisioning job in Hive to complete")
 
+			utils.RecordHiveJobContainer(kubeset, clusterName, jobName)
+
 			for newJob.Status.Active == 1 {
 				if elapsedTime%6 == 0 {
 					klog.V(0).Info("Job: " + jobPath + " - " + strconv.Itoa(elapsedTime/6) + "min")
@@ -128,22 +134,21 @@ func monitorDeployStatus(kubeset kubernetes.Interface, hiveset hiveclient.Interf
 			}
 
 			klog.V(0).Info("The provisioning job in Hive completed ✓")
-			// Check if we're done
-		} else if cluster.Status.WebConsoleURL != "" {
-			klog.V(2).Info("Provisioning succeeded ✓")
-			break
 			// Detect that we've failed
 		} else {
 
-			klog.V(0).Info("Attempt: " + strconv.Itoa(i) + "/30, pause 10sec")
-			time.Sleep(utils.PauseTenSeconds) //10s
+			klog.V(0).Infof("Attempt: "+strconv.Itoa(i)+"/6, pause %vsec", utils.PauseFiveSeconds)
+			time.Sleep(utils.PauseFiveSeconds) //10s
 
-			if len(cluster.Status.Conditions) > 0 &&
-				(cluster.Spec.InstallAttemptsLimit == nil || *cluster.Spec.InstallAttemptsLimit != 0) {
-
+			for _, condition := range cluster.Status.Conditions {
+				if condition.Status == "True" && (condition.Type == hivev1.ProvisionFailedCondition ||
+					condition.Type == hivev1.ClusterImageSetNotFoundCondition) {
+					klog.Warning(cluster.Status.Conditions)
+					return errors.New("Failure detected")
+				}
+			}
+			if i == 5 {
 				klog.Warning(cluster.Status.Conditions)
-				return errors.New("Failure detected")
-			} else if i == 29 {
 				return errors.New("Timed out waiting for job")
 			}
 		}

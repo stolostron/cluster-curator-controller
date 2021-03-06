@@ -36,7 +36,7 @@ func getRole() *rbacv1.Role {
 			rbacv1.PolicyRule{
 				APIGroups: []string{""},
 				Resources: []string{"configmaps"},
-				Verbs:     []string{"update", "get"},
+				Verbs:     []string{"update", "get", "patch"},
 			},
 		},
 	}
