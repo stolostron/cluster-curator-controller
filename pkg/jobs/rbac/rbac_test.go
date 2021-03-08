@@ -34,7 +34,7 @@ func TestApplyRbac(t *testing.T) {
 		rbacv1.PolicyRule{
 			APIGroups: []string{""},
 			Resources: []string{"configmaps"},
-			Verbs:     []string{"update", "get"},
+			Verbs:     []string{"update", "get", "patch"},
 		},
 	}
 

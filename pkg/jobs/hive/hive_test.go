@@ -150,7 +150,8 @@ func TestMonitorDeployStatusCondition(t *testing.T) {
 	cd.Status.Conditions = []hivev1.ClusterDeploymentCondition{
 		hivev1.ClusterDeploymentCondition{
 			Message: "ClusterImageSet img4.6.17-x86-64-appsub is not available",
-			Reason:  "ClusterImageSetNotFound",
+			Type:    "ClusterImageSetNotFound",
+			Status:  "True",
 		},
 	}
 
@@ -159,6 +160,14 @@ func TestMonitorDeployStatusCondition(t *testing.T) {
 	assert.NotNil(t, monitorDeployStatus(nil, hiveset, ClusterName), "err is not nil, when cluster provisioning has a condition")
 }
 
+func TestMonitorDeployNoJobTimeout(t *testing.T) {
+
+	cd := getClusterDeployment()
+
+	hiveset := hivefake.NewSimpleClientset(cd)
+
+	assert.NotNil(t, monitorDeployStatus(nil, hiveset, ClusterName), "err is not nil, when cluster provisioning has no job created")
+}
 func TestMonitorDeployStatusJobFailed(t *testing.T) {
 
 	cd := getClusterDeployment()
@@ -188,7 +197,6 @@ func TestMonitorDeployStatusJobCompletedWithSuccess(t *testing.T) {
 	cd.Status.ProvisionRef = &corev1.LocalObjectReference{
 		Name: ClusterName + "-12345", // The monitor adds the -provision suffix
 	}
-	cd.Status.WebConsoleURL = "https://my-cluster"
 
 	cm := getConfigMap()
 
@@ -197,6 +205,15 @@ func TestMonitorDeployStatusJobCompletedWithSuccess(t *testing.T) {
 
 	assert.Equal(t, cm.Data[utils.CurrentHiveJob], "", "Should be emtpy")
 	assert.Nil(t, monitorDeployStatus(kubeset, hiveset, ClusterName), "err is nil, when cluster provisioning is successful")
+
+	// Put a delay to complete the ClusterDeployment to test the wait loop
+	go func() {
+		time.Sleep(utils.PauseFiveSeconds)
+		cd.Status.WebConsoleURL = "https://my-cluster"
+
+		hiveset.HiveV1().ClusterDeployments(ClusterName).Update(context.TODO(), cd, v1.UpdateOptions{})
+		t.Log("ClusterDeployment webConsoleURL applied")
+	}()
 
 	cm, err := kubeset.CoreV1().ConfigMaps(ClusterName).Get(context.TODO(), ClusterName, v1.GetOptions{})
 	t.Log(err)

@@ -28,6 +28,8 @@ type patchStringValue struct {
 	Value int32  `json:"value"`
 }
 
+const MonitorAttempts = 6
+
 func ActivateDeploy(hiveset hiveclient.Interface, clusterName string) error {
 	klog.V(0).Info("* Initiate Provisioning")
 	klog.V(2).Info("Looking up cluster " + clusterName)
@@ -75,7 +77,7 @@ func monitorDeployStatus(kubeset kubernetes.Interface, hiveset hiveclient.Interf
 
 	klog.V(0).Info("Waiting up to 30s for Hive Provisioning job")
 
-	for i := 0; i < 6; i++ { // 30s wait
+	for i := 1; i <= MonitorAttempts; i++ { // 30s wait
 
 		// Refresh the clusterDeployment resource
 		cluster, err := hiveset.HiveV1().ClusterDeployments(clusterName).Get(
@@ -137,8 +139,8 @@ func monitorDeployStatus(kubeset kubernetes.Interface, hiveset hiveclient.Interf
 			// Detect that we've failed
 		} else {
 
-			klog.V(0).Infof("Attempt: "+strconv.Itoa(i)+"/6, pause %vsec", utils.PauseFiveSeconds)
-			time.Sleep(utils.PauseFiveSeconds) //10s
+			klog.V(0).Infof("Attempt: "+strconv.Itoa(i)+"/%v, pause %v", MonitorAttempts, utils.PauseFiveSeconds)
+			time.Sleep(utils.PauseFiveSeconds)
 
 			for _, condition := range cluster.Status.Conditions {
 				if condition.Status == "True" && (condition.Type == hivev1.ProvisionFailedCondition ||
@@ -147,7 +149,7 @@ func monitorDeployStatus(kubeset kubernetes.Interface, hiveset hiveclient.Interf
 					return errors.New("Failure detected")
 				}
 			}
-			if i == 5 {
+			if i == MonitorAttempts {
 				klog.Warning(cluster.Status.Conditions)
 				return errors.New("Timed out waiting for job")
 			}
