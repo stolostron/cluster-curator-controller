@@ -21,7 +21,7 @@ rules:
   resources: ["ansiblejobs", "secrets", "clusterdeployments", "machinepools","configmaps"]
   verbs: ["create"]
 - apiGroups: ["", "hive.openshift.io"]
-  resources: ["clusterdeployments", "secrets"]
+  resources: ["clusterdeployments", "secrets", "configmaps"]
   verbs: ["patch"]
 - apiGroups: ["", "batch", "hive.openshift.io", "tower.ansible.com"]
   resources: ["jobs", "clusterdeployments", "ansiblejobs","pods"]

@@ -19,34 +19,25 @@ const CurCmd = "./curator"
 
 type Launcher struct {
 	client       kubernetes.Interface
-	imageTag     string
 	imageUri     string
 	jobConfigMap corev1.ConfigMap
 }
 
 func NewLauncher(
 	client kubernetes.Interface,
-	imageTag string,
 	imageUri string,
 	jobConfigMap corev1.ConfigMap) *Launcher {
 
 	return &Launcher{
 		client:       client,
-		imageTag:     imageTag,
 		imageUri:     imageUri,
 		jobConfigMap: jobConfigMap,
 	}
 }
 
-func getBatchJob(imageTag string, configMapName string, imageUri string) *batchv1.Job {
+func getBatchJob(configMapName string, imageUri string) *batchv1.Job {
 
 	var flags = []string{"--v", "2"}
-
-	if imageTag == "" {
-		imageTag = ":latest"
-	} else {
-		imageTag = "@" + imageTag
-	}
 
 	newJob := &batchv1.Job{
 		ObjectMeta: v1.ObjectMeta{
@@ -57,7 +48,8 @@ func getBatchJob(imageTag string, configMapName string, imageUri string) *batchv
 			Annotations: map[string]string{
 				"apply-cloud-provider": "Creating secrets",
 				"prehook-ansiblejob":   "Running pre-provisioning Ansible Job",
-				"activate-monitor":     "Start Provisioning Cluster and monitor to completion",
+				"activate-and-monitor": "Start Provisioning the Cluster and monitor to completion",
+				"monitor-import":       "Monitor the managed cluster until it is imported",
 				"posthook-ansiblejob":  "Running post-provisioning Ansible Job",
 			},
 		},
@@ -70,7 +62,7 @@ func getBatchJob(imageTag string, configMapName string, imageUri string) *batchv
 					InitContainers: []corev1.Container{
 						corev1.Container{
 							Name:            "applycloudprovider-ansible",
-							Image:           imageUri + imageTag,
+							Image:           imageUri,
 							Command:         append([]string{CurCmd, "applycloudprovider-ansible"}, flags...),
 							ImagePullPolicy: corev1.PullAlways,
 							Env: []corev1.EnvVar{
@@ -82,7 +74,7 @@ func getBatchJob(imageTag string, configMapName string, imageUri string) *batchv
 						},
 						corev1.Container{
 							Name:            "prehook-ansiblejob",
-							Image:           imageUri + imageTag,
+							Image:           imageUri,
 							Command:         append([]string{CurCmd, "ansiblejob"}, flags...),
 							ImagePullPolicy: corev1.PullAlways,
 							Env: []corev1.EnvVar{
@@ -93,14 +85,20 @@ func getBatchJob(imageTag string, configMapName string, imageUri string) *batchv
 							},
 						},
 						corev1.Container{
-							Name:            "monitor-provisioning",
-							Image:           imageUri + imageTag,
-							Command:         append([]string{CurCmd, "activate-monitor"}, flags...),
+							Name:            "activate-and-monitor",
+							Image:           imageUri,
+							Command:         append([]string{CurCmd, "activate-and-monitor"}, flags...),
 							ImagePullPolicy: corev1.PullAlways,
 						},
+						/*corev1.Container{
+							Name:            "monitor-import",
+							Image:           imageUri,
+							Command:         append([]string{CurCmd, "monitor-import"}, flags...),
+							ImagePullPolicy: corev1.PullAlways,
+						},*/
 						corev1.Container{
 							Name:            "posthook-ansiblejob",
-							Image:           imageUri + imageTag,
+							Image:           imageUri,
 							Command:         append([]string{CurCmd, "ansiblejob"}, flags...),
 							ImagePullPolicy: corev1.PullAlways,
 							Env: []corev1.EnvVar{
@@ -114,7 +112,7 @@ func getBatchJob(imageTag string, configMapName string, imageUri string) *batchv
 					Containers: []corev1.Container{
 						corev1.Container{
 							Name:    "complete",
-							Image:   imageUri + imageTag,
+							Image:   imageUri,
 							Command: []string{"echo", "Done!"},
 						},
 					},
@@ -131,7 +129,7 @@ func (I *Launcher) CreateJob() error {
 	if I.jobConfigMap.Data["providerCredentialPath"] == "" {
 		return errors.New("Missing providerCredentialPath in " + clusterName + "-job ConfigMap")
 	}
-	newJob := getBatchJob(I.imageTag, I.imageUri, I.jobConfigMap.Name)
+	newJob := getBatchJob(I.jobConfigMap.Name, I.imageUri)
 
 	// Allow us to override the job in the configMap
 	klog.V(0).Info("Creating Curator job curator-job in namespace " + clusterName)
