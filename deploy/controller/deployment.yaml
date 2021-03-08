@@ -19,12 +19,14 @@ spec:
         - ./cluster-curator-controller
         - "-v"
         - "2"
-        image: registry.ci.openshift.org/open-cluster-management/cluster-curator-controller:latest
+        image: registry.ci.openshift.org/open-cluster-management/2.3:cluster-curator-controller
         env:
         - name: POD_NAME
           valueFrom:
             fieldRef:
               fieldPath: metadata.name
+        - name: IMAGE_URI
+          value: registry.ci.openshift.org/open-cluster-management/2.3:cluster-curator-controller
         imagePullPolicy: Always
         name: cluster-curator-controller
         resources:
