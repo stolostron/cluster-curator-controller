@@ -37,7 +37,7 @@ func NewLauncher(
 
 func getBatchJob(configMapName string, imageUri string) *batchv1.Job {
 
-	var flags = []string{"--v", "2"}
+	var ttlf int32 = 3600
 
 	newJob := &batchv1.Job{
 		ObjectMeta: v1.ObjectMeta{
@@ -54,7 +54,8 @@ func getBatchJob(configMapName string, imageUri string) *batchv1.Job {
 			},
 		},
 		Spec: batchv1.JobSpec{
-			BackoffLimit: new(int32),
+			BackoffLimit:            new(int32),
+			TTLSecondsAfterFinished: &ttlf,
 			Template: corev1.PodTemplateSpec{
 				Spec: corev1.PodSpec{
 					ServiceAccountName: "cluster-installer",
@@ -63,7 +64,7 @@ func getBatchJob(configMapName string, imageUri string) *batchv1.Job {
 						corev1.Container{
 							Name:            "applycloudprovider-ansible",
 							Image:           imageUri,
-							Command:         append([]string{CurCmd, "applycloudprovider-ansible"}, flags...),
+							Command:         append([]string{CurCmd, "applycloudprovider-ansible"}),
 							ImagePullPolicy: corev1.PullAlways,
 							Env: []corev1.EnvVar{
 								corev1.EnvVar{
@@ -75,7 +76,7 @@ func getBatchJob(configMapName string, imageUri string) *batchv1.Job {
 						corev1.Container{
 							Name:            "prehook-ansiblejob",
 							Image:           imageUri,
-							Command:         append([]string{CurCmd, "ansiblejob"}, flags...),
+							Command:         append([]string{CurCmd, "ansiblejob"}),
 							ImagePullPolicy: corev1.PullAlways,
 							Env: []corev1.EnvVar{
 								corev1.EnvVar{
@@ -87,19 +88,19 @@ func getBatchJob(configMapName string, imageUri string) *batchv1.Job {
 						corev1.Container{
 							Name:            "activate-and-monitor",
 							Image:           imageUri,
-							Command:         append([]string{CurCmd, "activate-and-monitor"}, flags...),
+							Command:         append([]string{CurCmd, "activate-and-monitor"}),
 							ImagePullPolicy: corev1.PullAlways,
 						},
-						/*corev1.Container{
+						corev1.Container{
 							Name:            "monitor-import",
 							Image:           imageUri,
-							Command:         append([]string{CurCmd, "monitor-import"}, flags...),
+							Command:         append([]string{CurCmd, "monitor-import"}),
 							ImagePullPolicy: corev1.PullAlways,
-						},*/
+						},
 						corev1.Container{
 							Name:            "posthook-ansiblejob",
 							Image:           imageUri,
-							Command:         append([]string{CurCmd, "ansiblejob"}, flags...),
+							Command:         append([]string{CurCmd, "ansiblejob"}),
 							ImagePullPolicy: corev1.PullAlways,
 							Env: []corev1.EnvVar{
 								corev1.EnvVar{

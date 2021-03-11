@@ -18,7 +18,7 @@ import (
 
 func TestCheckErrorNil(t *testing.T) {
 
-	InitKlog()
+	InitKlog(4)
 	assert.NotPanics(t, func() { CheckError(nil) }, "No panic, when err is not present")
 }
 

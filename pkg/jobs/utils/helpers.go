@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
+	"strconv"
 	"strings"
 	"time"
 
@@ -19,7 +20,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-const PauseTenSeconds = 10 * time.Second
+const PauseTwoSeconds = 2 * time.Second
+const PauseTenSeconds = PauseTwoSeconds * 5
 const PauseFiveSeconds = PauseTenSeconds / 2
 const CurrentAnsibleJob = "active-ansible-job"
 const CurrentHiveJob = "hive-provisioning-job"
@@ -32,9 +34,12 @@ type PatchStringValue struct {
 	Value string `json:"value"`
 }
 
-func InitKlog() {
+const LogVerbosity = 2
+
+func InitKlog(logLevel int) {
 
 	klog.InitFlags(nil)
+	flag.Set("v", strconv.Itoa(logLevel))
 	flag.Parse()
 
 }

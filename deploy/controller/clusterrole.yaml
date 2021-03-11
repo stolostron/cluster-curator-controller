@@ -4,25 +4,39 @@ kind: ClusterRole
 metadata:
   name: cluster-curator
 rules:
+
+# New Rules added to ClusterInstaller
+- apiGroups: ["tower.ansible.com","batch",""]
+  resources: ["ansiblejobs","jobs","serviceaccounts",]
+  verbs: ["create","get"]
+
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["roles","rolebindings"]
+  verbs: ["create","get"]
+
+- apiGroups: ["", "hive.openshift.io"]
+  resources: ["configmaps", "clusterdeployments"]
+  verbs: ["patch"]
+
+- apiGroups: ["internal.open-cluster-management.io"]
+  resources: ["managedclusterinfos"]
+  verbs: ["get"]
+
+# Specific to the controller only
 - apiGroups: ["cluster.open-cluster-management.io"] 
   resources: ["managedclusters"]
   verbs: ["watch","list"]
-- apiGroups: ["batch","","rbac.authorization.k8s.io"] 
-  resources: ["jobs","serviceaccounts","roles","rolebindings"]
-  verbs: ["create","get"]
-- apiGroups: [""] 
-  resources: ["configmaps","serviceaccounts"]
-  verbs: ["list","get"]
-- apiGroups: [""]
-  resources: ["configmaps"]
-  verbs: ["update"]
-# To grant the role, you must have the role
-- apiGroups: ["tower.ansible.com", "", "hive.openshift.io"]
-  resources: ["ansiblejobs", "secrets", "clusterdeployments", "machinepools","configmaps"]
-  verbs: ["create"]
-- apiGroups: ["", "hive.openshift.io"]
-  resources: ["clusterdeployments", "secrets", "configmaps"]
-  verbs: ["patch"]
-- apiGroups: ["", "batch", "hive.openshift.io", "tower.ansible.com"]
-  resources: ["jobs", "clusterdeployments", "ansiblejobs","pods"]
-  verbs: ["get"]
+
+# Existing rules in Role cluster-installer
+#- apiGroups: ["",] 
+#  resources: ["secrets", "configmaps"]
+#  verbs: ["create","delete","get","list","update"]
+#- apiGroups: ["hive.openshift.io"] 
+#  resources: ["dnszones"]
+#  verbs: ["get"]
+#- apiGroups: ["hive.openshift.io"] 
+#  resources: ["clusterdeployments","clusterdeployments/finalizers","clusterdeployments/status"]
+#  verbs: ["get","update"]
+#- apiGroups: ["hive.openshift.io"] 
+#  resources: ["clusterprovisions","clusterprovisions/finalizers","clusterprovisions/status"]
+#  verbs: ["get","list","update","watch"]
