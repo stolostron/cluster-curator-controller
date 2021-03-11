@@ -6,8 +6,8 @@ This project contains jobs and controllers for curating work around Cluster Prov
 ## Architecture
 The controller found here, monitors for `ManageCluster` kinds.  When new instances of the resource are created, this controller creates a default Kubernetes Job that runs: `applycloudprovider`, `pre-hook Ansible`, `activate-and-monitor` and `posthook Ansible`.  The Job can be overridden with your own job flow.
 
-![Architecture diagram](docs/ansiblejob-flow.png "Architecture")
-
+![Architecture diagram](docs/ansiblejob-flow.png "Architecture")\
+For more details on job flow within our architecture see our [**swimlane chart**](https://swimlanes.io/u/kGNg12_Vw).
 ## Controller:
 - cluster-curator-controller (ccc), watches for `ManagedCluster` kind create resource action.
 
@@ -21,10 +21,10 @@ This deployment defaults to the namespace `open-cluster-management`. Each time a
 
 | Job action | Description | Cloud Provider | Override ConfigMap | Template ConfigMap |
 | :---------:| :---------: | :------------: | :----------------: | :----------------: |
-|applycloudprovider-aws | Creates AWS related crednetials for a cluster deployment | X | X | |
+|applycloudprovider-(aws/gcp/azure/vmware)| Creates AWS/GCP/Azure/VMware related credentials for a cluster deployment | X | X | |
 |applycloudprovider-ansible | Creates the Ansible tower secret for a cluster deployment (included in applycloudprovider-aws) | X | X | |
 | activate-and-monitor | Sets `ClusterDeployment.spec.installAttempsLimit: 1`, then monitors the deployment of the cluster | | X |  |
-| import | Creates the ManagedCluster and KlusterletAddonConfig for a cluster | | X | X |
+| monitor-import | Creates the ManagedCluster and KlusterletAddonConfig for a cluster | | X | X |
 | prehook-ansiblejob posthook-ansiblejob | Creates an AnsibleJob resource and monitors it to completion |  | X |  |
 | monitor | Watches a `ClusterDeployment` Provisioning Job | | | |
 
