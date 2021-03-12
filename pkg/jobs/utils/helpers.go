@@ -39,7 +39,10 @@ const LogVerbosity = 2
 func InitKlog(logLevel int) {
 
 	klog.InitFlags(nil)
-	flag.Set("v", strconv.Itoa(logLevel))
+
+	err := flag.Set("v", strconv.Itoa(logLevel))
+	CheckError(err)
+
 	flag.Parse()
 
 }
