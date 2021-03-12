@@ -73,7 +73,6 @@ func MonitorMCInfoImport(mcset dynamic.Interface, clusterName string) error {
 	 * Order is important. We expect the default for a few tries, then ManagedCluster joined
 	 * and finally exit when available
 	 */
-	// TODO: Add a timeout after 60min, make configurable
 	for i := 1; i <= retryCount; i++ {
 		managedCluster, err := mcset.Resource(mciGVR).Namespace(clusterName).Get(context.TODO(), clusterName, v1.GetOptions{})
 		if err != nil {
@@ -94,7 +93,8 @@ func MonitorMCInfoImport(mcset dynamic.Interface, clusterName string) error {
 					klog.V(2).Infof("ManagedCluster joined but not avaialble (%v/%v)", i, retryCount)
 
 				default:
-					klog.V(2).Infof("Waiting for ManagedCluster to join %v (%v/%v)", condition.(map[string]interface{})["message"], i, retryCount)
+					klog.V(2).Infof("Waiting for ManagedCluster to join %v (%v/%v)",
+						condition.(map[string]interface{})["message"], i, retryCount)
 				}
 			}
 		} else {
