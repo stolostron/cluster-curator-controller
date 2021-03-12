@@ -35,6 +35,8 @@ func NewLauncher(
 	}
 }
 
+const ActivateAndMonitor = "activate-and-monitor"
+
 func getBatchJob(configMapName string, imageUri string) *batchv1.Job {
 
 	var ttlf int32 = 3600
@@ -48,7 +50,7 @@ func getBatchJob(configMapName string, imageUri string) *batchv1.Job {
 			Annotations: map[string]string{
 				"apply-cloud-provider": "Creating secrets",
 				"prehook-ansiblejob":   "Running pre-provisioning Ansible Job",
-				"activate-and-monitor": "Start Provisioning the Cluster and monitor to completion",
+				ActivateAndMonitor:     "Start Provisioning the Cluster and monitor to completion",
 				"monitor-import":       "Monitor the managed cluster until it is imported",
 				"posthook-ansiblejob":  "Running post-provisioning Ansible Job",
 			},
@@ -86,9 +88,9 @@ func getBatchJob(configMapName string, imageUri string) *batchv1.Job {
 							},
 						},
 						corev1.Container{
-							Name:            "activate-and-monitor",
+							Name:            ActivateAndMonitor,
 							Image:           imageUri,
-							Command:         append([]string{CurCmd, "activate-and-monitor"}),
+							Command:         append([]string{CurCmd, ActivateAndMonitor}),
 							ImagePullPolicy: corev1.PullAlways,
 						},
 						corev1.Container{
