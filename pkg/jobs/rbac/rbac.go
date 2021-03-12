@@ -3,7 +3,10 @@ package rbac
 
 import (
 	"context"
+	"errors"
+	"time"
 
+	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/utils"
 	"k8s.io/klog/v2"
 
 	corev1 "k8s.io/api/core/v1"
@@ -12,20 +15,20 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-const clusterInstall = "cluster-installer"
+const clusterInstaller = "cluster-installer"
 
 func getRole() *rbacv1.Role {
 	curatorRole := &rbacv1.Role{
 		ObjectMeta: v1.ObjectMeta{Name: "curator"},
 		Rules: []rbacv1.PolicyRule{
 			rbacv1.PolicyRule{
-				APIGroups: []string{"tower.ansible.com", "", "hive.openshift.io"},
-				Resources: []string{"ansiblejobs", "secrets", "clusterdeployments", "machinepools"},
+				APIGroups: []string{"tower.ansible.com", ""},
+				Resources: []string{"ansiblejobs", "secrets", "serviceaccounts"},
 				Verbs:     []string{"create"},
 			},
 			rbacv1.PolicyRule{
-				APIGroups: []string{"", "hive.openshift.io"},
-				Resources: []string{"clusterdeployments", "secrets"},
+				APIGroups: []string{"hive.openshift.io"},
+				Resources: []string{"clusterdeployments"},
 				Verbs:     []string{"patch"},
 			},
 			rbacv1.PolicyRule{
@@ -38,9 +41,40 @@ func getRole() *rbacv1.Role {
 				Resources: []string{"configmaps"},
 				Verbs:     []string{"update", "get", "patch"},
 			},
+			rbacv1.PolicyRule{
+				APIGroups: []string{"internal.open-cluster-management.io"},
+				Resources: []string{"managedclusterinfos"},
+				Verbs:     []string{"get"},
+			},
 		},
 	}
 	return curatorRole
+}
+
+func getClusterInstallerRules() []rbacv1.PolicyRule {
+	curatorRule := []rbacv1.PolicyRule{
+		rbacv1.PolicyRule{
+			APIGroups: []string{"tower.ansible.com"},
+			Resources: []string{"ansiblejobs"},
+			Verbs:     []string{"create", "get"},
+		},
+		rbacv1.PolicyRule{
+			APIGroups: []string{"batch"},
+			Resources: []string{"jobs"},
+			Verbs:     []string{"get"},
+		},
+		rbacv1.PolicyRule{
+			APIGroups: []string{"", "hive.openshift.io"},
+			Resources: []string{"configmaps", "clusterdeployments"},
+			Verbs:     []string{"patch"},
+		},
+		rbacv1.PolicyRule{
+			APIGroups: []string{"internal.open-cluster-management.io"},
+			Resources: []string{"managedclusterinfos"},
+			Verbs:     []string{"get"},
+		},
+	}
+	return curatorRule
 }
 
 func getRoleBinding(namespace string) *rbacv1.RoleBinding {
@@ -49,7 +83,7 @@ func getRoleBinding(namespace string) *rbacv1.RoleBinding {
 		Subjects: []rbacv1.Subject{
 			rbacv1.Subject{
 				Kind:      "ServiceAccount",
-				Name:      clusterInstall,
+				Name:      clusterInstaller,
 				Namespace: namespace,
 			},
 		},
@@ -64,7 +98,7 @@ func getRoleBinding(namespace string) *rbacv1.RoleBinding {
 
 func getServiceAccount() *corev1.ServiceAccount {
 	serviceAccount := &corev1.ServiceAccount{
-		ObjectMeta: v1.ObjectMeta{Name: clusterInstall},
+		ObjectMeta: v1.ObjectMeta{Name: clusterInstaller},
 	}
 	return serviceAccount
 }
@@ -103,6 +137,34 @@ func ApplyRBAC(kubeset kubernetes.Interface, namespace string) error {
 			return err
 		}
 		klog.V(0).Info(" Created RoleBinding ✓")
+	}
+	return nil
+}
+
+func ExtendClusterInstallerRole(kubeset kubernetes.Interface, namespace string) error {
+
+	klog.V(0).Infof("Extending the %v role to support curator", clusterInstaller)
+
+	checkCount := 15 //Loop every 2s
+	for i := 1; i <= checkCount; i++ {
+		ciRole, err := kubeset.RbacV1().Roles(namespace).Get(context.TODO(), clusterInstaller, v1.GetOptions{})
+		if err != nil {
+			klog.Warningf("Did not find %v Role in namespace: %v (%v/%v)", clusterInstaller, namespace, i, checkCount)
+			time.Sleep(utils.PauseTwoSeconds)
+		} else {
+			klog.V(2).Infof(" Found %v role ✓", clusterInstaller)
+			ciRole.Rules = append(ciRole.Rules, getClusterInstallerRules()...)
+			_, err = kubeset.RbacV1().Roles(namespace).Update(context.TODO(), ciRole, v1.UpdateOptions{})
+			if err != nil {
+				return err
+			}
+			klog.V(0).Infof(" %v role extended with new rules ✓", clusterInstaller)
+			break
+		}
+
+		if i == checkCount {
+			return errors.New("Timeout waiting for role " + clusterInstaller + "to be created")
+		}
 	}
 	return nil
 }

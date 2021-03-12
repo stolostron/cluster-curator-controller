@@ -64,6 +64,7 @@ func WatchManagedCluster(config *rest.Config) {
 				for i := 5; i < 60; i = i * 2 { //40s wait
 					if cm, err := findJobConfigMap(kubeset, mc); err == nil {
 						if cm.Data["curator-job"] == "" {
+							//err := rbac.ApplyRBAC(kubeset, mc.Name)
 							err := rbac.ApplyRBAC(kubeset, mc.Name)
 							if err := utils.LogError(err); err != nil {
 								break
@@ -119,7 +120,7 @@ func findJobConfigMap(kubeset *kubernetes.Clientset, mc *mcv1.ManagedCluster) (*
 
 func main() {
 
-	utils.InitKlog()
+	utils.InitKlog(utils.LogVerbosity)
 
 	ctx := context.TODO()
 	// Become the leader before proceeding

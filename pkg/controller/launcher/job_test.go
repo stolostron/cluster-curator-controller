@@ -26,7 +26,7 @@ func TestGetBatchJobImageSHA(t *testing.T) {
 	t.Log("Test count initContainers in job")
 	foundInitContainers := len(batchJobObj.Spec.Template.Spec.InitContainers)
 
-	if foundInitContainers != 4 {
+	if foundInitContainers != 5 {
 		t.Fatalf("Invalid InitContainers count, expected %v found %v\n",
 			numInitContainers, foundInitContainers)
 	}
