@@ -26,6 +26,7 @@ const PauseFiveSeconds = PauseTenSeconds / 2
 const CurrentAnsibleJob = "active-ansible-job"
 const CurrentHiveJob = "hive-provisioning-job"
 const CurrentCuratorContainer = "curating-with-container"
+const CurrentCuratorJob = "curator-job"
 const DefaultImageURI = "registry.ci.openshift.org/open-cluster-management/cluster-curator-controller:latest"
 
 type PatchStringValue struct {
@@ -100,14 +101,18 @@ func RecordAnsibleJobDyn(dynset dynamic.Interface, clusterName string, container
 }
 
 func RecordCurrentCuratorContainer(kubeset kubernetes.Interface, clusterName string, containerName string) {
-	recordJobContainer(kubeset, clusterName, containerName, CurrentCuratorContainer)
+	_ = recordJobContainer(kubeset, clusterName, containerName, CurrentCuratorContainer)
 }
 
 func RecordHiveJobContainer(kubeset kubernetes.Interface, clusterName, containerName string) {
-	recordJobContainer(kubeset, clusterName, containerName, CurrentHiveJob)
+	_ = recordJobContainer(kubeset, clusterName, containerName, CurrentHiveJob)
 }
 
-func recordJobContainer(kubeset kubernetes.Interface, clusterName string, containerName string, cmKey string) {
+func RecordCuratorJob(kubeset kubernetes.Interface, clusterName, containerName string) error {
+	return recordJobContainer(kubeset, clusterName, containerName, CurrentCuratorJob)
+}
+
+func recordJobContainer(kubeset kubernetes.Interface, clusterName string, containerName string, cmKey string) error {
 	patch := []PatchStringValue{{
 		Op:    "replace",
 		Path:  "/data/" + cmKey,
@@ -120,5 +125,6 @@ func recordJobContainer(kubeset kubernetes.Interface, clusterName string, contai
 	if err != nil {
 		klog.Warning(err)
 	}
+	return err
 
 }

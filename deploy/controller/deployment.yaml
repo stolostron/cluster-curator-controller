@@ -17,8 +17,6 @@ spec:
       containers:
       - command:
         - ./cluster-curator-controller
-        - "-v"
-        - "2"
         image: registry.ci.openshift.org/open-cluster-management/2.3:cluster-curator-controller
         env:
         - name: POD_NAME
