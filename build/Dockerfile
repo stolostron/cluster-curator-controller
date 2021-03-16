@@ -6,8 +6,7 @@ ARG REMOTE_SOURCE_DIR
 COPY $REMOTE_SOURCE $REMOTE_SOURCE_DIR/app/
 WORKDIR $REMOTE_SOURCE_DIR/app
 
-RUN GOFLAGS="" go build -o build/_output/curator ./pkg/jobs/curator.go
-RUN GOFLAGS="" go build -o build/_output/cluster-curator-controller ./pkg/controller/controller.go
+RUN make -f Makefile.prow compile-curator
 
 FROM registry.access.redhat.com/ubi8/ubi-minimal:latest
 RUN microdnf update
@@ -52,40 +51,3 @@ USER ${USER_UID}
 
 ENTRYPOINT ["/usr/local/bin/entrypoint"]
 
-# ARG REMOTE_SOURCE
-# ARG REMOTE_SOURCE_DIR
-# ARG GITHUB_TOKEN
-# ARG COMPONENT_VERSION
-
-# ENV USE_VENDORIZED_BUILD_HARNESS=true
-# ENV COMPONENT_NAME=rcm-controller
-# ENV COMPONENT_VERSION="${COMPONENT_VERSION}"
-# ENV COMPONENT_TAG_EXTENSION=" "
-
-# COPY $REMOTE_SOURCE $REMOTE_SOURCE_DIR/app/
-# WORKDIR $REMOTE_SOURCE_DIR/app
-# RUN git config --global url."https://${GITHUB_TOKEN}:x-oauth-basic@github.com/".insteadOf "https://github.com/"
-# RUN GOFLAGS="" go build ./cmd/manager
-# # Copy the Go Modules manifests
-# COPY go.mod go.mod
-# COPY go.sum go.sum
-# # cache deps before building and copying source so that we don't need to re-download as much
-# # and so that source changes don't invalidate our downloaded layer
-# RUN go mod download
-
-# # Copy the go source
-# COPY main.go main.go
-# COPY api/ api/
-# COPY controllers/ controllers/
-
-# # Build
-# RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o manager main.go
-
-# # Use distroless as minimal base image to package the manager binary
-# # Refer to https://github.com/GoogleContainerTools/distroless for more details
-# FROM gcr.io/distroless/static:nonroot
-# WORKDIR /
-# COPY --from=builder /workspace/manager .
-# USER nonroot:nonroot
-
-# ENTRYPOINT ["/manager"]
