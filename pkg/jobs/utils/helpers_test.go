@@ -151,3 +151,29 @@ func TestRecordHiveJobContainerWarning(t *testing.T) {
 
 	assert.NotPanics(t, func() { RecordHiveJobContainer(kubeset, ClusterName, jobName) }, "no panics, when update successful")
 }
+
+func TestRecordCuratorJob(t *testing.T) {
+
+	cm := getConfigMap()
+
+	kubeset := fake.NewSimpleClientset(cm)
+
+	assert.NotEqual(t, jobName, cm.Data[CurrentHiveJob])
+	assert.Nil(t, RecordCuratorJob(kubeset, ClusterName, jobName), "err is Nil, when update is successful")
+	cm, _ = kubeset.CoreV1().ConfigMaps(ClusterName).Get(context.TODO(), ClusterName, v1.GetOptions{})
+	assert.Equal(t, jobName, cm.Data[CurrentCuratorJob])
+}
+
+func TestRecordCuratorJobWarning(t *testing.T) {
+
+	kubeset := fake.NewSimpleClientset()
+
+	assert.NotPanics(t, func() { RecordCuratorJob(kubeset, ClusterName, jobName) }, "no panics, when update successful")
+}
+
+func TestRecordCuratorJobError(t *testing.T) {
+
+	kubeset := fake.NewSimpleClientset()
+
+	assert.NotNil(t, RecordCuratorJob(kubeset, ClusterName, jobName), "Not nil, when error encountered")
+}

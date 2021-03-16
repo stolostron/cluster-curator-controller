@@ -32,7 +32,6 @@ func MonitorImport(mcset managedclusterclient.Interface, clusterName string) err
 	 * Order is important. We expect the default for a few tries, then ManagedCluster joined
 	 * and finally exit when available
 	 */
-	// TODO: Add a timeout after 60min, make configurable
 	for {
 		if managedCluster.Status.Conditions != nil {
 			for _, condition := range managedCluster.Status.Conditions {

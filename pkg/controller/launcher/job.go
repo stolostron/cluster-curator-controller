@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 
+	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/utils"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
@@ -40,6 +42,16 @@ const ActivateAndMonitor = "activate-and-monitor"
 func getBatchJob(configMapName string, imageUri string) *batchv1.Job {
 
 	var ttlf int32 = 3600
+	var resourceSettings = corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("0.2m"),
+			corev1.ResourceMemory: resource.MustParse("46Mi"),
+		},
+		Limits: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("2m"),
+			corev1.ResourceMemory: resource.MustParse("60Mi"),
+		},
+	}
 
 	newJob := &batchv1.Job{
 		ObjectMeta: v1.ObjectMeta{
@@ -74,6 +86,7 @@ func getBatchJob(configMapName string, imageUri string) *batchv1.Job {
 									Value: configMapName,
 								},
 							},
+							Resources: resourceSettings,
 						},
 						corev1.Container{
 							Name:            "prehook-ansiblejob",
@@ -86,18 +99,21 @@ func getBatchJob(configMapName string, imageUri string) *batchv1.Job {
 									Value: "prehook",
 								},
 							},
+							Resources: resourceSettings,
 						},
 						corev1.Container{
 							Name:            ActivateAndMonitor,
 							Image:           imageUri,
 							Command:         append([]string{CurCmd, ActivateAndMonitor}),
 							ImagePullPolicy: corev1.PullAlways,
+							Resources:       resourceSettings,
 						},
 						corev1.Container{
 							Name:            "monitor-import",
 							Image:           imageUri,
 							Command:         append([]string{CurCmd, "monitor-import"}),
 							ImagePullPolicy: corev1.PullAlways,
+							Resources:       resourceSettings,
 						},
 						corev1.Container{
 							Name:            "posthook-ansiblejob",
@@ -110,6 +126,7 @@ func getBatchJob(configMapName string, imageUri string) *batchv1.Job {
 									Value: "posthook",
 								},
 							},
+							Resources: resourceSettings,
 						},
 					},
 					Containers: []corev1.Container{
@@ -156,9 +173,8 @@ func (I *Launcher) CreateJob() error {
 	if err == nil {
 		curatorJob, err := kubeset.BatchV1().Jobs(clusterName).Create(context.TODO(), newJob, v1.CreateOptions{})
 		if err == nil {
-			klog.V(0).Info(" Created Curator job  ✓")
-			I.jobConfigMap.Data["curator-job"] = curatorJob.Name
-			_, err = kubeset.CoreV1().ConfigMaps(clusterName).Update(context.TODO(), &I.jobConfigMap, v1.UpdateOptions{})
+			klog.V(0).Infof(" Created Curator job  ✓ (%v)", curatorJob.Name)
+			err = utils.RecordCuratorJob(kubeset, clusterName, curatorJob.Name)
 			if err != nil {
 				return err
 			}
