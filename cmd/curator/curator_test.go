@@ -32,22 +32,6 @@ func getConfigMap() *corev1.ConfigMap {
 	}
 }
 
-func TestMainMissingKubeconfig(t *testing.T) {
-	os.Setenv("CLUSTER_NAME", "my-cluster")
-
-	defer func() {
-		r := recover()
-		t.Log(r.(error).Error())
-
-		if !strings.Contains(r.(error).Error(), ".kube/config: no such file or directory") {
-			t.Fatal(r)
-		}
-		t.Log("Detected missing kube/config")
-	}()
-
-	main()
-}
-
 func TestCuratorRunNoParam(t *testing.T) {
 
 	defer func() {
