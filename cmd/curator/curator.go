@@ -22,6 +22,7 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 )
 
 /* Uses the following environment variables:
@@ -30,7 +31,6 @@ import (
  *    export PROVIDER_CREDENTIAL_PATH=      # The NAMESPACE/SECRET_NAME for the Cloud Provider
  */
 func main() {
-	var err error
 	var clusterName = os.Getenv("CLUSTER_NAME")
 
 	utils.InitKlog(utils.LogVerbosity)
@@ -44,10 +44,20 @@ func main() {
 		clusterName = string(data)
 	}
 
-	// Build a connection to the ACM Hub OCP
+	// Build a connection to the Hub OCP
 	config, err := config.LoadConfig("", "", "")
 	utils.CheckError(err)
 
+	// Create a typed client for kubernetes
+	kubeset, err := kubernetes.NewForConfig(config)
+	utils.CheckError(err)
+
+	curatorRun(kubeset, config, clusterName)
+}
+
+func curatorRun(kubeset kubernetes.Interface, config *rest.Config, clusterName string) {
+
+	var err error
 	var cmdErrorMsg = errors.New("Invalid Parameter: \"" + os.Args[1] +
 		"\"\nCommand: ./curator [monitor-import|monitor|activate-and-monitor|applycloudprovider-aws|" +
 		"applycloudprovider-gcp|applycloudprovider-azure]")
@@ -55,7 +65,7 @@ func main() {
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
 		case "applycloudprovider-aws", "applycloudprovider-ansible", "monitor-import", "monitor", "ansiblejob",
-			"applycloudprovider-gcp", "applycloudprovider-azure", "activate-and-monitor":
+			"applycloudprovider-gcp", "applycloudprovider-azure", "activate-and-monitor", "SKIP_ALL_TESTING":
 		default:
 			utils.CheckError(cmdErrorMsg)
 		}
@@ -65,10 +75,6 @@ func main() {
 	}
 	jobChoice := os.Args[1]
 
-	// Create a typed client for kubernetes
-	kubeset, err := kubernetes.NewForConfig(config)
-	utils.CheckError(err)
-
 	providerCredentialPath := os.Getenv("PROVIDER_CREDENTIAL_PATH")
 
 	var clusterConfigOverride *corev1.ConfigMap
@@ -77,21 +83,29 @@ func main() {
 	// Allow an override with the PROVIDER_CREDENTIAL_PATH
 	if err == nil {
 		klog.V(2).Info("Found clusterConfigOverride \"" + clusterConfigOverride.Data["clusterName"] + "\" ✓")
+
 		if clusterConfigOverride.Data["clusterName"] == "" {
 			clusterConfigOverride.Data["clusterName"] = clusterName
 		}
+
 		if clusterName != clusterConfigOverride.Data["clusterName"] {
 			utils.CheckError(errors.New("Cluster namespace \"" + clusterName +
 				"\" does not match the cluster ConfigMap override \"" +
 				clusterConfigOverride.Data["clusterName"] + "\""))
 		}
+
 		utils.RecordCurrentCuratorContainer(kubeset, clusterName, jobChoice)
 		providerCredentialPath = clusterConfigOverride.Data["providerCredentialPath"]
+
+	} else if !strings.Contains(jobChoice, "applycloudprovider-") && err != nil {
+		utils.CheckError(err)
+
 	} else {
-		if providerCredentialPath == "" || !strings.Contains(jobChoice, "applycloudprovider-") {
-			utils.CheckError(err)
-		}
 		klog.V(0).Info("Using PROVIDER_CREDNETIAL_PATH to find the Cloud Provider secret")
+	}
+
+	if providerCredentialPath == "" && strings.Contains(jobChoice, "applycloudprovider-") {
+		utils.CheckError(errors.New("Missing spec.data.providerCredentialPath in Configmap: " + clusterName))
 	}
 
 	var secretData *map[string]string

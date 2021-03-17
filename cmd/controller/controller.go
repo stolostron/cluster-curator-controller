@@ -27,12 +27,11 @@ import (
 )
 
 func filterConfigMaps() *metav1.ListOptions {
-	listOptions := metav1.ListOptions{
+	return &metav1.ListOptions{
 		LabelSelector: labels.Set(metav1.LabelSelector{MatchLabels: map[string]string{
 			"open-cluster-management": "curator",
 		}}.MatchLabels).String(),
 	}
-	return &listOptions
 }
 
 func WatchManagedCluster(config *rest.Config) {
@@ -104,7 +103,7 @@ func WatchManagedCluster(config *rest.Config) {
 	}
 }
 
-func findJobConfigMap(kubeset *kubernetes.Clientset, mc *mcv1.ManagedCluster) (*v1.ConfigMap, error) {
+func findJobConfigMap(kubeset kubernetes.Interface, mc *mcv1.ManagedCluster) (*v1.ConfigMap, error) {
 	// Filtered search in the namespace
 	jobConfigMaps, err := kubeset.CoreV1().ConfigMaps(mc.Name).List(context.TODO(), *filterConfigMaps())
 	if err != nil {
