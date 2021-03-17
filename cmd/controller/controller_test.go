@@ -1,157 +1,44 @@
+// Copyright Contributors to the Open Cluster Management project.
+
 package main
 
 import (
-	"context"
-	"strconv"
 	"testing"
 
-	managedclusterclient "github.com/open-cluster-management/api/client/cluster/clientset/versioned"
-	managedclusterv1 "github.com/open-cluster-management/api/cluster/v1"
-	"github.com/open-cluster-management/library-go/pkg/config"
 	"github.com/stretchr/testify/assert"
-	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/fake"
 )
 
-func getManagedClusterTemplate(clusterName string) *managedclusterv1.ManagedCluster {
-	return &managedclusterv1.ManagedCluster{
-		TypeMeta: v1.TypeMeta{
-			Kind:       "managedcluster",
-			APIVersion: "v1",
-		},
-		ObjectMeta: v1.ObjectMeta{
-			Name:      clusterName,
-			Namespace: clusterName,
-		},
-		Spec: managedclusterv1.ManagedClusterSpec{
-			HubAcceptsClient: true,
-		},
-	}
+const ClusterName = "my-cluster"
+
+func TestFindJobConfigMap(t *testing.T) {
+	kubeset := fake.NewSimpleClientset(getConfigMap(ClusterName))
+
+	managedCluster := getManagedClusterTemplate(ClusterName)
+
+	configMap, err := findJobConfigMap(kubeset, managedCluster)
+
+	assert.Nil(t, err, "err is nil when ConfigMap is found")
+	assert.NotNil(t, configMap, "configMap was found")
+	t.Log("ConfigMap found: " + configMap.Name)
+
 }
 
-const clusterNamePrefix = "cluster-"
-const ClusterTestCount = 2
+func TestFindJobConfigMapMissing(t *testing.T) {
+	kubeset := fake.NewSimpleClientset()
 
-func getConfigMap(clusterName string) *corev1.ConfigMap {
-	return &corev1.ConfigMap{
-		TypeMeta: v1.TypeMeta{
-			Kind:       "ConfigMap",
-			APIVersion: "v1",
-		},
-		ObjectMeta: v1.ObjectMeta{
-			Name:      clusterName,
-			Namespace: clusterName,
-			Labels: map[string]string{
-				"open-cluster-management": "curator",
-			},
-		},
-		Data: map[string]string{
-			"prehook":                jobYaml,
-			"posthook":               jobYaml,
-			"providerCredentialPath": "default/my-cloudprovider",
-		},
-	}
+	managedCluster := getManagedClusterTemplate(ClusterName)
+
+	configMap, err := findJobConfigMap(kubeset, managedCluster)
+
+	assert.NotNil(t, err, "err not nil when ConfigMap is missing")
+	assert.Nil(t, configMap, "configMap was not found")
+
 }
 
-const jobYaml = "    - name: Service now App Update\n" +
-	"      extra_vars:\n" +
-	"        variable1: 1\n" +
-	"        variable2: 2\n"
-
-func getNamespace(clusterName string) *corev1.Namespace {
-	return &corev1.Namespace{
-		TypeMeta: v1.TypeMeta{
-			Kind:       "namespace",
-			APIVersion: "v1",
-		},
-		ObjectMeta: v1.ObjectMeta{
-			Name: clusterName,
-		},
-	}
-}
-
-func TestCreateControllerScale(t *testing.T) {
-
-	config, err := config.LoadConfig("", "", "")
-	if err != nil {
-		t.Fatal("Could not load Kube Config")
-	}
-
-	mcset, err := managedclusterclient.NewForConfig(config)
-	if err != nil {
-		t.Fatal("Could not create clientset")
-	}
-
-	kubeset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		t.Fatal("Could not create clientset")
-	}
-
-	t.Logf("Create %v ManagedCluster objects", ClusterTestCount)
-	for i := 1; i <= ClusterTestCount; i++ {
-
-		clusterName := clusterNamePrefix + strconv.Itoa(i)
-
-		ns, err := kubeset.CoreV1().Namespaces().Create(context.TODO(), getNamespace(clusterName), v1.CreateOptions{})
-		assert.Nil(t, err, "err nil, when namespace is created")
-
-		_, err = kubeset.CoreV1().ConfigMaps(ns.Name).Create(context.TODO(), getConfigMap(clusterName), v1.CreateOptions{})
-		assert.Nil(t, err, "err nil, when cluster ConfigMap is created")
-
-		_, err = mcset.ClusterV1().ManagedClusters().Create(context.TODO(), getManagedClusterTemplate(clusterNamePrefix+strconv.Itoa(i)), v1.CreateOptions{})
-		assert.Nil(t, err, "err nil, when ManagedCluster is created")
-		t.Logf("Created ManagedCluster: %v", clusterName)
-	}
-}
-
-func TestDeleteManagedClusters(t *testing.T) {
-
-	config, err := config.LoadConfig("", "", "")
-	assert.Nil(t, err, "err nil, when kube config is found")
-
-	mcset, err := managedclusterclient.NewForConfig(config)
-	assert.Nil(t, err, "err nil, when managedCluster clientset is created")
-
-	kubeset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		t.Fatal("Could not create clientset")
-	}
-
-	t.Logf("Delete %v ManagedCluster objects", ClusterTestCount)
-	for i := 1; i <= ClusterTestCount; i++ {
-
-		clusterName := clusterNamePrefix + strconv.Itoa(i)
-		cm, err := mcset.ClusterV1().ManagedClusters().Get(context.TODO(), clusterName, v1.GetOptions{})
-		if err != nil {
-			continue
-		}
-		cm.Finalizers = nil
-		mcset.ClusterV1().ManagedClusters().Update(context.TODO(), cm, v1.UpdateOptions{})
-		kubeset.CoreV1().Namespaces().Delete(context.TODO(), clusterName, v1.DeleteOptions{})
-		mcset.ClusterV1().ManagedClusters().Delete(context.TODO(), clusterName, v1.DeleteOptions{})
-		t.Logf("Deleted ManagedCluster: %v", clusterName)
-	}
-}
-
-func TestRemoveFinalizerForManagedClusters(t *testing.T) {
-
-	config, err := config.LoadConfig("", "", "")
-	assert.Nil(t, err, "err nil, when kube config is found")
-
-	mcset, err := managedclusterclient.NewForConfig(config)
-	assert.Nil(t, err, "err nil, when managedCluster clientset is created")
-
-	t.Logf("Delete %v ManagedCluster objects", ClusterTestCount)
-	for i := 1; i <= ClusterTestCount; i++ {
-
-		clusterName := clusterNamePrefix + strconv.Itoa(i)
-		cm, err := mcset.ClusterV1().ManagedClusters().Get(context.TODO(), clusterName, v1.GetOptions{})
-		if err != nil {
-			continue
-		}
-		cm.Finalizers = nil
-		mcset.ClusterV1().ManagedClusters().Update(context.TODO(), cm, v1.UpdateOptions{})
-		t.Logf("Deleted ManagedCluster: %v", clusterName)
-	}
+func TestFilterConfigMaps(t *testing.T) {
+	listOptions := filterConfigMaps()
+	assert.NotNil(t, listOptions, "filterConfigMaps is not nil")
+	assert.Equal(t, listOptions.LabelSelector, "open-cluster-management=curator", "The label open-cluster-management should be set")
+	t.Log("LabelSelector: " + listOptions.LabelSelector)
 }
