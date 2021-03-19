@@ -7,7 +7,7 @@ rules:
 
 # New Rules added to ClusterInstaller
 - apiGroups: ["tower.ansible.com","batch",""]
-  resources: ["ansiblejobs","jobs","serviceaccounts",]
+  resources: ["ansiblejobs","jobs","serviceaccounts","configmaps"]
   verbs: ["create","get"]
 
 - apiGroups: ["rbac.authorization.k8s.io"]
@@ -18,8 +18,8 @@ rules:
   resources: ["configmaps", "clusterdeployments"]
   verbs: ["patch"]
 
-- apiGroups: ["internal.open-cluster-management.io"]
-  resources: ["managedclusterinfos"]
+- apiGroups: ["internal.open-cluster-management.io",""]
+  resources: ["managedclusterinfos","pods"]
   verbs: ["get"]
 
 # Specific to the controller only
