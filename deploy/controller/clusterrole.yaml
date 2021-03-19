@@ -6,6 +6,7 @@ metadata:
 rules:
 
 # New Rules added to ClusterInstaller
+# Leader Lock requires configmaps(create&get) and pods(get)
 - apiGroups: ["tower.ansible.com","batch",""]
   resources: ["ansiblejobs","jobs","serviceaccounts","configmaps"]
   verbs: ["create","get"]
