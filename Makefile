@@ -108,7 +108,7 @@ endif
 .PHONY: manifests
 ## Generate manifests e.g. CRD, RBAC etc.
 manifests: controller-gen
-	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role output:crd:artifacts:config=deploy/crd/bases
+	$(CONTROLLER_GEN) $(CRD_OPTIONS) paths=./... rbac:roleName=manager-role output:crd:artifacts:config=deploy/crd
 
 .PHONY: generate
 # Generate code

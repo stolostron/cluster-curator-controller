@@ -15,6 +15,6 @@ ENV USER_UID=1001
 
 # Add the binaries
 COPY --from=builder /go/src/github.com/open-cluster-management/cluster-curator-controller/build/_output/curator .
-COPY --from=builder /go/src/github.com/open-cluster-management/cluster-curator-controller/build/_output/cluster-curator-controller .
+COPY --from=builder /go/src/github.com/open-cluster-management/cluster-curator-controller/build/_output/manager .
 
 USER ${USER_UID}

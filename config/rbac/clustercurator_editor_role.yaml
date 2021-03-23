@@ -1,0 +1,24 @@
+# permissions for end users to edit clustercurators.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: clustercurator-editor-role
+rules:
+- apiGroups:
+  - cluster.open-cluster-management.io.cluster.open-cluster-management.io
+  resources:
+  - clustercurators
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - cluster.open-cluster-management.io.cluster.open-cluster-management.io
+  resources:
+  - clustercurators/status
+  verbs:
+  - get

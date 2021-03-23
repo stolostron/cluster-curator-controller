@@ -10,14 +10,21 @@ import (
 	"strings"
 	"time"
 
+	"github.com/open-cluster-management/library-go/pkg/config"
+	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 
 	"k8s.io/klog/v2"
 
+	ajv1 "github.com/open-cluster-management/ansiblejob-go-lib/api/v1alpha1"
+	clustercuratorv1 "github.com/open-cluster-management/cluster-curator-controller/pkg/api/v1alpha1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
+	clientv1 "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const PauseTwoSeconds = 2 * time.Second
@@ -26,8 +33,10 @@ const PauseFiveSeconds = PauseTenSeconds / 2
 const CurrentAnsibleJob = "active-ansible-job"
 const CurrentHiveJob = "hive-provisioning-job"
 const CurrentCuratorContainer = "curating-with-container"
-const CurrentCuratorJob = "curator-job"
+const CurrentCuratorJob = "curatorJob"
 const DefaultImageURI = "registry.ci.openshift.org/open-cluster-management/cluster-curator-controller:latest"
+
+const JobHasFinished = "Job_has_finished"
 
 type PatchStringValue struct {
 	Op    string `json:"op"`
@@ -35,7 +44,7 @@ type PatchStringValue struct {
 	Value string `json:"value"`
 }
 
-const LogVerbosity = 2
+const LogVerbosity = 4
 
 func InitKlog(logLevel int) {
 
@@ -82,49 +91,124 @@ func PathSplitterFromEnv(path string) (namespace string, resource string, err er
 	return values[0], values[1], nil
 }
 
-func RecordAnsibleJobDyn(dynset dynamic.Interface, clusterName string, containerName string) {
-	cmGVR := schema.GroupVersionResource{Version: "v1", Resource: "configmaps"}
+var CCGVR = schema.GroupVersionResource{Group: "cluster.open-cluster-management.io", Version: "v1alpha1", Resource: "clustercurators"}
+
+func RecordCuratorJob(clusterName, containerName string) error {
+	dynset, err := GetDynset(nil)
+	CheckError(err)
+
+	return patchDyn(dynset, clusterName, containerName, CurrentCuratorJob)
+}
+
+func RecordCuratorJobName(client clientv1.Client, clusterName string, curatorJobName string) error {
+	cc, _ := GetClusterCurator(client, clusterName)
+
+	cc.Spec.CuratingJob = curatorJobName
+
+	return client.Update(context.Background(), cc)
+}
+
+func patchDyn(dynset dynamic.Interface, clusterName string, containerName string, specKey string) error {
 
 	patch := []PatchStringValue{{
 		Op:    "replace",
-		Path:  "/data/" + CurrentAnsibleJob,
+		Path:  "/spec/" + specKey,
 		Value: containerName,
 	}}
 
 	patchInBytes, _ := json.Marshal(patch)
 
-	_, err := dynset.Resource(cmGVR).Namespace(clusterName).Patch(
+	_, err := dynset.Resource(CCGVR).Namespace(clusterName).Patch(
 		context.TODO(), clusterName, types.JSONPatchType, patchInBytes, v1.PatchOptions{})
 	if err != nil {
-		klog.Warning(err)
+		return err
 	}
+	return nil
 }
 
-func RecordCurrentCuratorContainer(kubeset kubernetes.Interface, clusterName string, containerName string) {
-	_ = recordJobContainer(kubeset, clusterName, containerName, CurrentCuratorContainer)
-}
+func GetDynset(dynset dynamic.Interface) (dynamic.Interface, error) {
 
-func RecordHiveJobContainer(kubeset kubernetes.Interface, clusterName, containerName string) {
-	_ = recordJobContainer(kubeset, clusterName, containerName, CurrentHiveJob)
-}
-
-func RecordCuratorJob(kubeset kubernetes.Interface, clusterName, containerName string) error {
-	return recordJobContainer(kubeset, clusterName, containerName, CurrentCuratorJob)
-}
-
-func recordJobContainer(kubeset kubernetes.Interface, clusterName string, containerName string, cmKey string) error {
-	patch := []PatchStringValue{{
-		Op:    "replace",
-		Path:  "/data/" + cmKey,
-		Value: containerName,
-	}}
-
-	patchInBytes, _ := json.Marshal(patch)
-	_, err := kubeset.CoreV1().ConfigMaps(clusterName).Patch(
-		context.TODO(), clusterName, types.JSONPatchType, patchInBytes, v1.PatchOptions{})
+	config, err := config.LoadConfig("", "", "")
 	if err != nil {
-		klog.Warning(err)
+		return nil, err
 	}
-	return err
 
+	return dynamic.NewForConfig(config)
+}
+
+func GetClient() (clientv1.Client, error) {
+
+	config, err := config.LoadConfig("", "", "")
+	if err != nil {
+		return nil, err
+	}
+
+	curatorScheme := runtime.NewScheme()
+	clustercuratorv1.AddToScheme(curatorScheme)
+	ajv1.AddToScheme(curatorScheme)
+
+	return clientv1.New(config, clientv1.Options{Scheme: curatorScheme})
+}
+
+func GetKubeset() (kubernetes.Interface, error) {
+
+	config, err := config.LoadConfig("", "", "")
+	if err != nil {
+		return nil, err
+	}
+
+	return kubernetes.NewForConfig(config)
+}
+
+func RecordCurrentStatusCondition(
+
+	client clientv1.Client,
+	clusterName string,
+	containerName string,
+	conditionStatus v1.ConditionStatus,
+	message string) error {
+
+	return recordCuratedStatusCondition(
+		client,
+		clusterName,
+		containerName,
+		conditionStatus,
+		JobHasFinished,
+		message+" "+containerName)
+}
+
+func recordCuratedStatusCondition(client clientv1.Client, clusterName string, containerName string, conditionStatus v1.ConditionStatus, reason string, message string) error {
+
+	curator, err := GetClusterCurator(client, clusterName)
+	if err != nil {
+		return err
+	}
+
+	var newCondition = metav1.Condition{
+		Type:    containerName,
+		Status:  conditionStatus,
+		Reason:  reason,
+		Message: message,
+	}
+
+	meta.SetStatusCondition(&curator.Status.Conditions, newCondition)
+
+	if err := client.Update(context.Background(), curator); err != nil {
+		return err
+	}
+	klog.V(4).Infof("newCondition: %v", newCondition)
+	return nil
+}
+
+func GetClusterCurator(client clientv1.Client, clusterName string) (*clustercuratorv1.ClusterCurator, error) {
+
+	curator := &clustercuratorv1.ClusterCurator{}
+
+	if err := client.Get(context.TODO(), clientv1.ObjectKey{Namespace: clusterName, Name: clusterName},
+		curator); err != nil {
+		return nil, err
+	}
+	klog.V(4).Infof("ClusterCurator: %v", curator)
+
+	return curator, nil
 }

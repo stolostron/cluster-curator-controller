@@ -16,7 +16,8 @@ spec:
     spec:
       containers:
       - command:
-        - ./cluster-curator-controller
+        - "./manager"
+        - "-enable-leader-election"
         image: registry.ci.openshift.org/open-cluster-management/2.3:cluster-curator-controller
         env:
         - name: POD_NAME

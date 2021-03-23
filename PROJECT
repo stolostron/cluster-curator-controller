@@ -1,0 +1,7 @@
+domain: cluster.open-cluster-management.io
+repo: github.com/open-cluster-management/cluster-curator-controller
+resources:
+- group: cluster.open-cluster-management.io
+  kind: ClusterCurator
+  version: v1alpha1
+version: "2"

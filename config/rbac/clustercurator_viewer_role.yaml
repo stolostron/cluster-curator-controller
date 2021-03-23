@@ -1,0 +1,20 @@
+# permissions for end users to view clustercurators.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: clustercurator-viewer-role
+rules:
+- apiGroups:
+  - cluster.open-cluster-management.io.cluster.open-cluster-management.io
+  resources:
+  - clustercurators
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - cluster.open-cluster-management.io.cluster.open-cluster-management.io
+  resources:
+  - clustercurators/status
+  verbs:
+  - get

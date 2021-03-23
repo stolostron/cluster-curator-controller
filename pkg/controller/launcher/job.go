@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 
+	clustercuratorv1 "github.com/open-cluster-management/cluster-curator-controller/pkg/api/v1alpha1"
 	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/utils"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -13,33 +14,36 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
-	"sigs.k8s.io/yaml"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const OverrideJob = "overrideJob"
 const CurCmd = "./curator"
 
 type Launcher struct {
-	client       kubernetes.Interface
-	imageUri     string
-	jobConfigMap corev1.ConfigMap
+	client         client.Client
+	kubeset        kubernetes.Interface
+	imageURI       string
+	clusterCurator clustercuratorv1.ClusterCurator
 }
 
 func NewLauncher(
-	client kubernetes.Interface,
-	imageUri string,
-	jobConfigMap corev1.ConfigMap) *Launcher {
+	client client.Client,
+	kubeset kubernetes.Interface,
+	imageURI string,
+	clusterCurator clustercuratorv1.ClusterCurator) *Launcher {
 
 	return &Launcher{
-		client:       client,
-		imageUri:     imageUri,
-		jobConfigMap: jobConfigMap,
+		client:         client,
+		kubeset:        kubeset,
+		imageURI:       imageURI,
+		clusterCurator: clusterCurator,
 	}
 }
 
 const ActivateAndMonitor = "activate-and-monitor"
 
-func getBatchJob(configMapName string, imageUri string) *batchv1.Job {
+func getBatchJob(configMapName string, imageURI string) *batchv1.Job {
 
 	var ttlf int32 = 3600
 	var resourceSettings = corev1.ResourceRequirements{
@@ -56,15 +60,16 @@ func getBatchJob(configMapName string, imageUri string) *batchv1.Job {
 	newJob := &batchv1.Job{
 		ObjectMeta: v1.ObjectMeta{
 			GenerateName: "curator-job-",
+			Namespace:    configMapName,
 			Labels: map[string]string{
 				"open-cluster-management": "curator-job",
 			},
 			Annotations: map[string]string{
 				"apply-cloud-provider": "Creating secrets",
-				"prehook-ansiblejob":   "Running pre-provisioning Ansible Job",
-				ActivateAndMonitor:     "Start Provisioning the Cluster and monitor to completion",
+				"prehook-ansiblejob":   "Running pre-provisioning AnsibleJob",
+				"ActivateAndMonitor":   "Start Provisioning the Cluster and monitor to completion",
 				"monitor-import":       "Monitor the managed cluster until it is imported",
-				"posthook-ansiblejob":  "Running post-provisioning Ansible Job",
+				"posthook-ansiblejob":  "Running post-provisioning AnsibleJob",
 			},
 		},
 		Spec: batchv1.JobSpec{
@@ -77,7 +82,7 @@ func getBatchJob(configMapName string, imageUri string) *batchv1.Job {
 					InitContainers: []corev1.Container{
 						corev1.Container{
 							Name:            "applycloudprovider-ansible",
-							Image:           imageUri,
+							Image:           imageURI,
 							Command:         append([]string{CurCmd, "applycloudprovider-ansible"}),
 							ImagePullPolicy: corev1.PullAlways,
 							Env: []corev1.EnvVar{
@@ -90,8 +95,8 @@ func getBatchJob(configMapName string, imageUri string) *batchv1.Job {
 						},
 						corev1.Container{
 							Name:            "prehook-ansiblejob",
-							Image:           imageUri,
-							Command:         append([]string{CurCmd, "ansiblejob"}),
+							Image:           imageURI,
+							Command:         append([]string{CurCmd, "prehook-ansiblejob"}),
 							ImagePullPolicy: corev1.PullAlways,
 							Env: []corev1.EnvVar{
 								corev1.EnvVar{
@@ -103,22 +108,22 @@ func getBatchJob(configMapName string, imageUri string) *batchv1.Job {
 						},
 						corev1.Container{
 							Name:            ActivateAndMonitor,
-							Image:           imageUri,
+							Image:           imageURI,
 							Command:         append([]string{CurCmd, ActivateAndMonitor}),
 							ImagePullPolicy: corev1.PullAlways,
 							Resources:       resourceSettings,
 						},
 						corev1.Container{
 							Name:            "monitor-import",
-							Image:           imageUri,
+							Image:           imageURI,
 							Command:         append([]string{CurCmd, "monitor-import"}),
 							ImagePullPolicy: corev1.PullAlways,
 							Resources:       resourceSettings,
 						},
 						corev1.Container{
 							Name:            "posthook-ansiblejob",
-							Image:           imageUri,
-							Command:         append([]string{CurCmd, "ansiblejob"}),
+							Image:           imageURI,
+							Command:         append([]string{CurCmd, "posthook-ansiblejob"}),
 							ImagePullPolicy: corev1.PullAlways,
 							Env: []corev1.EnvVar{
 								corev1.EnvVar{
@@ -132,7 +137,7 @@ func getBatchJob(configMapName string, imageUri string) *batchv1.Job {
 					Containers: []corev1.Container{
 						corev1.Container{
 							Name:    "complete",
-							Image:   imageUri,
+							Image:   imageURI,
 							Command: []string{"echo", "Done!"},
 						},
 					},
@@ -144,25 +149,27 @@ func getBatchJob(configMapName string, imageUri string) *batchv1.Job {
 }
 
 func (I *Launcher) CreateJob() error {
-	kubeset := I.client
-	clusterName := I.jobConfigMap.Namespace
-	if I.jobConfigMap.Data["providerCredentialPath"] == "" {
+	kubeset := I.kubeset
+	clusterName := I.clusterCurator.Namespace
+	if I.clusterCurator.Spec.ProviderCredentialPath == "" {
 		return errors.New("Missing providerCredentialPath in " + clusterName + "-job ConfigMap")
 	}
-	newJob := getBatchJob(I.jobConfigMap.Name, I.imageUri)
+	newJob := getBatchJob(I.clusterCurator.Name, I.imageURI)
 
 	// Allow us to override the job in the configMap
 	klog.V(0).Info("Creating Curator job curator-job in namespace " + clusterName)
 	var err error
-	if I.jobConfigMap.Data[OverrideJob] != "" {
-		klog.V(0).Info(" Overriding the Curator job with overrideJob from the " + clusterName + "-job ConfigMap")
+	if I.clusterCurator.Spec.Install.OverrideJob != nil {
+		klog.V(0).Info(" Overriding the Curator job with overrideJob from the " + clusterName + " ClusterCurator resource")
 		newJob = &batchv1.Job{}
-		//hivev1.ClusterDeployment is defined with json for unmarshaling
-		jobJSON, err := yaml.YAMLToJSON([]byte(I.jobConfigMap.Data[OverrideJob]))
-		if err == nil {
-			err = json.Unmarshal(jobJSON, &newJob)
+
+		err = json.Unmarshal(I.clusterCurator.Spec.Install.OverrideJob.Raw, &newJob)
+		if err != nil {
+			klog.Warningf("overrideJob:\n---\n%v---", string(I.clusterCurator.Spec.Install.OverrideJob.Raw))
+			return err
 		}
-		klog.V(2).Info(" Basic sanity check from the Unmarshal")
+
+		klog.V(2).Info(" Basic sanity check for override job")
 		if len(newJob.Spec.Template.Spec.InitContainers) == 0 &&
 			len(newJob.Spec.Template.Spec.Containers) == 0 {
 
@@ -174,7 +181,7 @@ func (I *Launcher) CreateJob() error {
 		curatorJob, err := kubeset.BatchV1().Jobs(clusterName).Create(context.TODO(), newJob, v1.CreateOptions{})
 		if err == nil {
 			klog.V(0).Infof(" Created Curator job  ✓ (%v)", curatorJob.Name)
-			err = utils.RecordCuratorJob(kubeset, clusterName, curatorJob.Name)
+			err = utils.RecordCuratorJobName(I.client, clusterName, curatorJob.Name)
 			if err != nil {
 				return err
 			}

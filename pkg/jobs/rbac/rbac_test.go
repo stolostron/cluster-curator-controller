@@ -42,6 +42,11 @@ func getRules() []rbacv1.PolicyRule {
 			Resources: []string{"managedclusterinfos"},
 			Verbs:     []string{"get"},
 		},
+		rbacv1.PolicyRule{
+			APIGroups: []string{"cluster.open-cluster-management.io"},
+			Resources: []string{"clustercurators"},
+			Verbs:     []string{"get", "update"},
+		},
 	}
 }
 
@@ -59,14 +64,19 @@ func getCombinedCIRules() []rbacv1.PolicyRule {
 				Verbs:     []string{"get"},
 			},
 			rbacv1.PolicyRule{
-				APIGroups: []string{"", "hive.openshift.io"},
-				Resources: []string{"configmaps", "clusterdeployments"},
+				APIGroups: []string{"hive.openshift.io"},
+				Resources: []string{"clusterdeployments"},
 				Verbs:     []string{"patch"},
 			},
 			rbacv1.PolicyRule{
 				APIGroups: []string{"internal.open-cluster-management.io"},
 				Resources: []string{"managedclusterinfos"},
 				Verbs:     []string{"get"},
+			},
+			rbacv1.PolicyRule{
+				APIGroups: []string{"cluster.open-cluster-management.io"},
+				Resources: []string{"clustercurators"},
+				Verbs:     []string{"get", "update"},
 			},
 		}...)
 }
@@ -125,6 +135,7 @@ func TestExtendClusterInstallerRole(t *testing.T) {
 	kubeset := fake.NewSimpleClientset()
 
 	testRole := getRole()
+	testRole.Rules = getRules()
 	testRole.Name = clusterInstaller
 
 	// Delay 5s so that we can see the ExtendClusterInstallerRole wait
