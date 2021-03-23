@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/open-cluster-management/library-go/pkg/config"
+	batchv1 "k8s.io/api/batch/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -145,6 +146,7 @@ func GetClient() (clientv1.Client, error) {
 
 	curatorScheme := runtime.NewScheme()
 	clustercuratorv1.AddToScheme(curatorScheme)
+	batchv1.AddToScheme(curatorScheme)
 	ajv1.AddToScheme(curatorScheme)
 
 	return clientv1.New(config, clientv1.Options{Scheme: curatorScheme})
