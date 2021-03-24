@@ -48,12 +48,12 @@ func getBatchJob(configMapName string, imageURI string) *batchv1.Job {
 	var ttlf int32 = 3600
 	var resourceSettings = corev1.ResourceRequirements{
 		Requests: corev1.ResourceList{
-			corev1.ResourceCPU:    resource.MustParse("0.2m"),
-			corev1.ResourceMemory: resource.MustParse("46Mi"),
+			corev1.ResourceCPU:    resource.MustParse("0.3m"),
+			corev1.ResourceMemory: resource.MustParse("30Mi"),
 		},
 		Limits: corev1.ResourceList{
 			corev1.ResourceCPU:    resource.MustParse("2m"),
-			corev1.ResourceMemory: resource.MustParse("60Mi"),
+			corev1.ResourceMemory: resource.MustParse("45Mi"),
 		},
 	}
 

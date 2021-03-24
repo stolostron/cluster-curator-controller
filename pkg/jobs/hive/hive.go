@@ -134,6 +134,8 @@ func monitorDeployStatus(client clientv1.Client, hiveset hiveclient.Interface, c
 				time.Sleep(utils.PauseTenSeconds) //10s
 				elapsedTime++
 
+				// Reset the job, so we make sure we're getting clean data (not cached)
+				newJob = &batchv1.Job{}
 				utils.CheckError(client.Get(context.Background(), types.NamespacedName{Namespace: clusterName, Name: jobName}, newJob))
 			}
 

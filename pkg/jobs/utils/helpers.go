@@ -45,7 +45,7 @@ type PatchStringValue struct {
 	Value string `json:"value"`
 }
 
-const LogVerbosity = 4
+const LogVerbosity = 2
 
 func InitKlog(logLevel int) {
 
