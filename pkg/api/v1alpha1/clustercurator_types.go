@@ -14,7 +14,7 @@ type ClusterCuratorSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// This is the desired curation flow
+	// This is the desired curation that will occur
 	DesiredCuration string `json:"desiredCuration,omitempty"`
 
 	// Points to the Cloud Provider or Ansible Provider secret
@@ -29,8 +29,8 @@ type ClusterCuratorSpec struct {
 	// During an destroy curation run these **Pre hook ONLY**
 	Destroy Hooks `json:"destroy,omitempty"`
 
-	// During an destroy curation run these **Pre hook ONLY**
-	Upgrade Hooks `json:"destroy,omitempty"`
+	// During an upgrade curation run these **Pre hook ONLY**
+	Upgrade Hooks `json:"upgrade,omitempty"`
 
 	// Kubernetes job resource created for curation of a cluster
 	CuratingJob string `json:"curatorJob,omitempty"`
@@ -46,23 +46,28 @@ type Hook struct {
 }
 
 type Hooks struct {
-	Prehook  []Hook `json:"prehook,omitempty"`
+	// Jobs to run before the cluster deployment
+	Prehook []Hook `json:"prehook,omitempty"`
+
+	// Jobs to run after the cluster import
 	Posthook []Hook `json:"posthook,omitempty"`
 
-	// When provided, this is a Job specification
+	// When provided, this is a Job specification and overrides the default flow
 	OverrideJob *runtime.RawExtension `json:"overrideJob,omitempty"`
 }
 
-// ClusterCuratorStatus defines the observed state of ClusterCurator
+// ClusterCuratorStatus defines the observed state of ClusterCurator work
 type ClusterCuratorStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// Track the conditions for each step in the desired curation that is being
+	// executed as a job
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 
 // ClusterCurator is the Schema for the clustercurators API
+// This kind allows for prehook and posthook jobs to be executed prior to Hive provisioning
+// and import of a cluster.
 type ClusterCurator struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
