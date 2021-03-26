@@ -15,9 +15,10 @@ type ClusterCuratorSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// This is the desired curation that will occur
+	// +kubebuilder:validation:Enum={install,scale,upgrade,destroy}
 	DesiredCuration string `json:"desiredCuration,omitempty"`
 
-	// Points to the Cloud Provider or Ansible Provider secret
+	// Points to the Cloud Provider or Ansible Provider secret, format: namespace/secretName
 	ProviderCredentialPath string `json:"providerCredentialPath,omitempty"`
 
 	// During an install curation run these Pre/Post hooks
@@ -29,7 +30,7 @@ type ClusterCuratorSpec struct {
 	// During an destroy curation run these **Pre hook ONLY**
 	Destroy Hooks `json:"destroy,omitempty"`
 
-	// During an upgrade curation run these **Pre hook ONLY**
+	// During an upgrade curation run these
 	Upgrade Hooks `json:"upgrade,omitempty"`
 
 	// Kubernetes job resource created for curation of a cluster
@@ -38,6 +39,7 @@ type ClusterCuratorSpec struct {
 
 type Hook struct {
 	// Name of the Ansible Template to run in Tower as a job
+	// +kubebuilder:validation:Required
 	Name string `json:"name"`
 
 	// Ansible job extra_vars is passed to the Ansible job at execution time

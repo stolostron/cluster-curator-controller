@@ -36,7 +36,12 @@ spec:
                 description: Kubernetes job resource created for curation of a cluster
                 type: string
               desiredCuration:
-                description: This is the desired curation that will occur
+                description: 'This is the desired curation that will occur: install, scale, upgrade, destroy'
+                enum:
+                - install
+                - scale
+                - upgrade
+                - destroy
                 type: string
               destroy:
                 description: During an destroy curation run these **Pre hook ONLY**
@@ -109,7 +114,7 @@ spec:
                     type: array
                 type: object
               providerCredentialPath:
-                description: Points to the Cloud Provider or Ansible Provider secret
+                description: 'Points to the Cloud Provider or Ansible Provider secret, format: namespace/secretName'
                 type: string
               scale:
                 description: During an scale curation run these Pre/Post hooks
@@ -147,7 +152,7 @@ spec:
                     type: array
                 type: object
               upgrade:
-                description: During an upgrade curation run these **Pre hook ONLY**
+                description: During an upgrade curation run these
                 properties:
                   overrideJob:
                     description: When provided, this is a Job specification and overrides the default flow
