@@ -44,6 +44,7 @@ type Hook struct {
 
 	// Ansible job extra_vars is passed to the Ansible job at execution time
 	// and is a known Ansible entity.
+	// +kubebuilder:pruning:PreserveUnknownFields
 	ExtraVars *runtime.RawExtension `json:"extra_vars,omitempty"`
 }
 
@@ -55,6 +56,7 @@ type Hooks struct {
 	Posthook []Hook `json:"posthook,omitempty"`
 
 	// When provided, this is a Job specification and overrides the default flow
+	// +kubebuilder:pruning:PreserveUnknownFields
 	OverrideJob *runtime.RawExtension `json:"overrideJob,omitempty"`
 }
 
