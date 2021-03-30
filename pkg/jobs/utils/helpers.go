@@ -92,7 +92,10 @@ func PathSplitterFromEnv(path string) (namespace string, resource string, err er
 	return values[0], values[1], nil
 }
 
-var CCGVR = schema.GroupVersionResource{Group: "cluster.open-cluster-management.io", Version: "v1alpha1", Resource: "clustercurators"}
+var CCGVR = schema.GroupVersionResource{
+	Group:    "cluster.open-cluster-management.io",
+	Version:  "v1alpha1",
+	Resource: "clustercurators"}
 
 func RecordCuratorJob(clusterName, containerName string) error {
 	dynset, err := GetDynset(nil)
@@ -102,7 +105,10 @@ func RecordCuratorJob(clusterName, containerName string) error {
 }
 
 func RecordCuratorJobName(client clientv1.Client, clusterName string, curatorJobName string) error {
-	cc, _ := GetClusterCurator(client, clusterName)
+	cc, err := GetClusterCurator(client, clusterName)
+	if err != nil {
+		return err
+	}
 
 	cc.Spec.CuratingJob = curatorJobName
 
@@ -145,9 +151,9 @@ func GetClient() (clientv1.Client, error) {
 	}
 
 	curatorScheme := runtime.NewScheme()
-	clustercuratorv1.AddToScheme(curatorScheme)
-	batchv1.AddToScheme(curatorScheme)
-	ajv1.AddToScheme(curatorScheme)
+	CheckError(clustercuratorv1.AddToScheme(curatorScheme))
+	CheckError(batchv1.AddToScheme(curatorScheme))
+	CheckError(ajv1.AddToScheme(curatorScheme))
 
 	return clientv1.New(config, clientv1.Options{Scheme: curatorScheme})
 }
@@ -163,7 +169,6 @@ func GetKubeset() (kubernetes.Interface, error) {
 }
 
 func RecordCurrentStatusCondition(
-
 	client clientv1.Client,
 	clusterName string,
 	containerName string,
@@ -179,7 +184,13 @@ func RecordCurrentStatusCondition(
 		message+" "+containerName)
 }
 
-func recordCuratedStatusCondition(client clientv1.Client, clusterName string, containerName string, conditionStatus v1.ConditionStatus, reason string, message string) error {
+func recordCuratedStatusCondition(
+	client clientv1.Client,
+	clusterName string,
+	containerName string,
+	conditionStatus v1.ConditionStatus,
+	reason string,
+	message string) error {
 
 	curator, err := GetClusterCurator(client, clusterName)
 	if err != nil {

@@ -96,7 +96,7 @@ func TestCuratorRunClusterCurator(t *testing.T) {
 
 	os.Args[1] = "SKIP_ALL_TESTING"
 
-	assert.NotPanics(t, func() { curatorRun(nil, &client, ClusterName) }, "no panic when configmap found and skip test")
+	assert.NotPanics(t, func() { curatorRun(nil, &client, ClusterName) }, "no panic when ClusterCurator found and skip test")
 }
 
 func TestCuratorRunNoProviderCredentialPath(t *testing.T) {

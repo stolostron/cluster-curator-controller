@@ -93,7 +93,7 @@ func monitorDeployStatus(client clientv1.Client, hiveset hiveclient.Interface, c
 			klog.V(2).Info("Provisioning succeeded ✓")
 
 			if jobName != "" {
-				utils.RecordCurrentStatusCondition(client, clusterName, jobName, v1.ConditionTrue, "Hive provisioning job")
+				utils.CheckError(utils.RecordCurrentStatusCondition(client, clusterName, jobName, v1.ConditionTrue, "Hive provisioning job"))
 			}
 
 			break
@@ -125,7 +125,7 @@ func monitorDeployStatus(client clientv1.Client, hiveset hiveclient.Interface, c
 			// Wait while the job is running
 			klog.V(0).Info("Wait for the provisioning job in Hive to complete")
 
-			utils.RecordCurrentStatusCondition(client, clusterName, jobName, v1.ConditionFalse, "Hive provisioning job")
+			utils.CheckError(utils.RecordCurrentStatusCondition(client, clusterName, jobName, v1.ConditionFalse, "Hive provisioning job"))
 
 			for newJob.Status.Active == 1 {
 				if elapsedTime%6 == 0 {
@@ -136,7 +136,10 @@ func monitorDeployStatus(client clientv1.Client, hiveset hiveclient.Interface, c
 
 				// Reset the job, so we make sure we're getting clean data (not cached)
 				newJob = &batchv1.Job{}
-				utils.CheckError(client.Get(context.Background(), types.NamespacedName{Namespace: clusterName, Name: jobName}, newJob))
+				utils.CheckError(client.Get(
+					context.Background(),
+					types.NamespacedName{Namespace: clusterName, Name: jobName},
+					newJob))
 			}
 
 			// If succeeded = 0 then we did not finish

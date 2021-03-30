@@ -4,81 +4,132 @@
 This project contains jobs and controllers for curating work around Cluster Provisioning. It is designed to extend the capabilities already present within Hive `ClusterDeployment` and Open Cluster Management `ManagedCluster` kinds.
 
 ## Architecture
-The controller found here, monitors for `ManageCluster` kinds.  When new instances of the resource are created, this controller creates a default Kubernetes Job that runs: `applycloudprovider`, `pre-hook Ansible`, `activate-and-monitor` and `posthook Ansible`.  The Job can be overridden with your own job flow.
+The controller found here, monitors for `ClusterCurator` kind.  When new instances of the resource are created, this controller creates a Kubernetes Job (curator job) that runs: `pre-hook Ansible`, `activate-and-monitor` and `posthook Ansible`.  The Job can be overridden with your own job flow.
 
 ![Architecture diagram](docs/ansiblejob-flow.png "Architecture")\
 For more details on job flow within our architecture see our [**swimlane chart**](https://swimlanes.io/u/kGNg12_Vw).
 ## Controller:
-- cluster-curator-controller (ccc), watches for `ManagedCluster` kind create resource action.
+- cluster-curator-controller (ccc), watches for `ClusterCurator` kind reconcile action.
 
 ### Deploy
 ```bash
 oc apply -k deploy/controller
 ```
-This deployment defaults to the namespace `open-cluster-management`. Each time a new `ManagedCluster` resource is created, you will see operations take place in the controller pod's log.
+This deployment defaults to the namespace `open-cluster-management`. Each time a new `ClusterCurator` resource is created, you will see operations take place in the controller pod's log, as well as the `status.conditions` on the ClusterCurator resource.
 
 ## Jobs
 
-| Job action | Description | Cloud Provider | Override ConfigMap | Template ConfigMap |
-| :---------:| :---------: | :------------: | :----------------: | :----------------: |
-|applycloudprovider-(aws/gcp/azure/vmware)| Creates AWS/GCP/Azure/VMware related credentials for a cluster deployment | X | X | |
-|applycloudprovider-ansible | Creates the Ansible tower secret for a cluster deployment (included in applycloudprovider-aws) | X | X | |
-| activate-and-monitor | Sets `ClusterDeployment.spec.installAttempsLimit: 1`, then monitors the deployment of the cluster | | X |  |
-| monitor-import | Creates the ManagedCluster and KlusterletAddonConfig for a cluster | | X | X |
-| prehook-ansiblejob posthook-ansiblejob | Creates an AnsibleJob resource and monitors it to completion |  | X |  |
-| monitor | Watches a `ClusterDeployment` Provisioning Job | | | |
+| Job action | Description | Cloud Provider | Cluster Curator |
+| :---------:| :---------: | :------------: | :----------------: |
+|applycloudprovider-(aws/gcp/azure/vmware)| Creates AWS/GCP/Azure/VMware related credentials for a cluster deployment | X | X |
+|applycloudprovider-ansible | Creates the Ansible tower secret for a cluster deployment (included in applycloudprovider-aws) | X | X |
+| activate-and-monitor | Sets `ClusterDeployment.spec.installAttempsLimit: 1`, then monitors the deployment of the cluster | | X | 
+| monitor-import | Monitors the ManagedCluster import | | X |
+| prehook-ansiblejob posthook-ansiblejob | Creates an AnsibleJob resource and monitors it to completion |  | X |
+| monitor | Watches a `ClusterDeployment` Provisioning Job | | |
 
 
 Here is an example of each job described above. You can add and remove instances of the job containers as needed. You can also inject your own containers `./deploy/jobs/create-cluster.yaml`
 
 ## Provisioning
-### Prerequisites
-1. Grant access to the Cloud Provider secret (needed for most containers in the job)
-```bash
-## Provide your own values for:
-# * CP_NAME (my-cloud-provider-secret_)
-# * CP_NAMESPACE (default)
-# * CLUSTER_NAME (my-cluster)
+### 1. Creating a cluster (AWS)
 
-## CREATE ## (First time)
-oc process -f deploy/provider-credentials/rbac-cloudprovider.yaml -p CP_NAME=my-cloud-provider-secret -p CP_NAMESPACE=default -p CLUSTER_NAME=my-cluster | oc apply -f -
+* In the Red Hat Advanced Cluster Management console, create a NEW cluster. Before you press the button to create the button, flip the YAML switch.  Look for the key-value field `installAttemptsLimit: 2`, and change it to `installAttemptsLimit: 0`, then press **Create**
 
-## UPDATE ## If the rolebinding already exists
-# * CP_NAMESPACE where the Cloud Provider secret is created
-# * CP_NAME the name of your cloud provider, note the "-cpv" suffix in the command
-# * CLUSTER_NAME the name of our new cluster
-kubectl -n CP_NAMESPACE patch roleBinding CP_NAME-cpv --type=json -p='[{"op": "add", "path": "/subjects/-", "value": {"kind": "ServiceAccount","name":"cluster-installer","namespace":"CLUSTER_NAME"} }]'
-
-## DELETE ##
-oc process -f deploy/provider-credentials/rbac-cloudprovider.yaml -p CP_NAME=my-cloud-provider-secret -p CP_NAMESPACE=default -p CLUSTER_NAME=my-cluster | oc delete -f -
+* The cluster will show in the console as **Creating**, but it is waiting for curation. If you will be using Ansible, create a secret in the cluster namespace. Here is a an example:
+```yaml
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: toweraccess
+  namespace: MY_CLUSTER_NAMESPACE
+stringData:
+  host: https://my-tower-domain.io
+  token: ANSIBLE_TOKEN_FOR_admin  
 ```
-2. Creating a cluster (AWS)
-Edit `./deploy/jobs/create-cluster.yaml` if you want to add your own containers (steps) to the
-curator job. Your containers are added to the overRide job stanza. If you want to use the default curator-job, remove the `overrideJob` stanza.
-```bash
-# Generate a new YAML for your cluster
-# * CLUSTER_NAME (my-cluster)
-# * CLUSTER_IMAGE_SET (img4.6.15-x86-64-appsub, must exist on the ACM hub)
-# * BASE_DOMAIN (my-domain.com)
-# * PROVIDER_CREDENTIAL_PATH (default/secret-name)
-oc process -f deploy/jobs/create-cluster.yaml -p CLUSTER_NAME=my-cluster -p CLUSTER_IMAGE_SET=img4.6.15-x86-64-appsub -p BASE_DOMAIN=my-domain.com -p PROVIDER_CREDENTIAL_PATH=default/secret-name -o yaml --raw=true | sed -e 's/^apiVersion:/---\napiVersion:/g' > my-cluster.yaml
 
-# You can commit this yaml to Git as part of a GitOps flow or apply it directly to an ACM Hub cluster.
-oc apply -f my-cluster.yaml
+* Now create the ClusterCurator resource kind in the cluster namespace. This will begin curation of your cluster provisioning.
+```yaml
+---
+apiVersion: cluster.open-cluster-management.io/v1alpha1
+kind: ClusterCurator
+metadata:
+  name: MY_CLUSTER_NAME
+  namespace: MY_CLUSTER_NAMESPACE
+  labels:
+    open-cluster-management: curator
+spec:
+  desiredCuration: install
+  install:
+    prehook:
+      - name: Demo Job Template
+        extra_vars:
+          variable1: something-interesting
+          variable2: 2
+      - name: Demo Job Template
+    posthook:
+      - name: Demo Job Template
 ```
-This will create a ManagedCluster resource which the cluster-curator-controller will identify and creates a curator-job.  Check the ConfigMap for the keys `curator-job` and `curator-job-container`. These will tell you which step (container) the job is running.  You can view the logs by combining the `curator-job` value and the `curator-job-container` value in the following command
+
+* The provisiong will start. To find the curator job, run the following command:
 ```bash
-# ConfigMap
-#   data:
-#     curator-job: curator-job-MJE7f-m3M39
-#     curator-job-container: applycloudprovider-aws
-
-# Run the following command to see the logs
-oc logs job.batch/curator-job-MJE7f-m3M39 applycloudprovider-aws
-
-# Add a "-f" to the end if you want to tail the output
+oc -n MY_CLUSTER get ClusterCurator -o yaml
 ```
+This will return the YAML for the ClusteCurator resource, in the `spec` is a field `curatorJob`, this has the Job that is curating the cluster. Also note the `status.conditions`, each step performed by the curator job will have a condition where the `status: "False"`. The `type` of each condition is a step(InitContainer) in the curator job. You can combine the job name and the type value to retreive the logs
+```yaml
+spec:
+  curatorJob: curator-job-d9pwh
+  ...
+status:
+  conditions:
+  - lastTransitionTime: "2021-03-30T03:58:59Z"
+    message: Executing init container prehook-ansiblejob
+    reason: Job_has_finished
+    status: "False"
+    type: prehook-ansiblejob
+```
+
+## Run the following command to see the logs
+```bash
+# oc logs job/CURATOR_JOB_NAME TYPE_VALUE
+oc logs job/curator-job-d9pwh prehook-ansiblejob
+
+oc logs job/curator-job-d9pwh activate-and-monitor
+
+oc logs job/curator-job-d9pwh posthook-ansiblejob
+```
+### Add a "-f" to the end if you want to tail the output
+
 If there is a failure, the job will show Failure.  Look at the `curator-job-container` value to see which step in the provisioning failed and review the logs above. If the `curator-job-contianer` is `monitor`, there may be an additional `provisioning` job. Check this log for additional information.
 
 The generated YAML can be committed to a Git repository. You can then use an ACM Subscription to apply the YAML (provision) on the ACM Hub.  Repeat steps 1 & 3 to create new clusters.
- 
+
+# Development
+## Compile binaries
+```bash
+make compile-curator
+```
+This will compile the two binaries `manager` and `curator` in `./build/_output`
+
+## Push image to a repo
+* Connect your local docker daemon to your prefered registry
+```bash
+export VERSION=1.0    # This is used as the docker image tag
+
+export REPO_URL=quay.io/MY_REPOSITORY  # This can also be a docker registry
+
+make push-curator
+```
+* You can now modify the `image:` references (there are x2) in `deploy/controller/deployment.yaml`
+
+## Changing the `Type` and `CRD`
+* Requires controller-gen be installed, the makefile will attempt to install it if it is not present.
+``` bash
+make generate   # Creates the groups and deep copy scafold
+
+make manifests  # Regenerates the CRDs
+```
+
+If you would like to learn more, join us in the https://github.com/open-cluster-management/community
+

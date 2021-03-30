@@ -210,3 +210,30 @@ func TestGetClusterCuratorNoResource(t *testing.T) {
 	assert.NotNil(t, err, "err is not nil, when ClusterCurator is not found")
 	t.Logf("err: %v", err)
 }
+
+func TestRecordCuratorJobName(t *testing.T) {
+
+	cc := getClusterCurator()
+
+	s := scheme.Scheme
+	s.AddKnownTypes(CCGVR.GroupVersion(), &clustercuratorv1.ClusterCurator{})
+	client := clientfake.NewFakeClientWithScheme(s, cc)
+
+	err := RecordCuratorJobName(client, ClusterName, "my-job-ABCDE")
+
+	assert.Nil(t, err, "err nil, when Job name written to ClusterCurator.Spec.curatorJob")
+
+}
+
+func TestRecordCuratorJobNameInvalidCurator(t *testing.T) {
+
+	s := scheme.Scheme
+	s.AddKnownTypes(CCGVR.GroupVersion(), &clustercuratorv1.ClusterCurator{})
+	client := clientfake.NewFakeClientWithScheme(s)
+
+	err := RecordCuratorJobName(client, ClusterName, "my-job-ABCDE")
+
+	assert.NotNil(t, err, "err nil, when Job name written to ClusterCurator.Spec.curatorJob")
+	t.Logf("Detected Errror: %v", err.Error())
+
+}
