@@ -308,7 +308,7 @@ func TestMonitorAnsibleJobK8sJob(t *testing.T) {
 
 	assert.NotNil(t, MonitorAnsibleJob(client, unstructAJ, cc), "err not nil, when condition.reason = Failed")
 
-	// Todo: Come back and figure out why configMap is not returning from dynamic fake.
+	// Todo: Come back and figure out why ClusterCurator is not returning from dynamic fake.
 	curator := &clustercuratorv1.ClusterCurator{}
 	assert.Nil(
 		t,
@@ -318,7 +318,7 @@ func TestMonitorAnsibleJobK8sJob(t *testing.T) {
 	assert.Equal(
 		t,
 		ClusterName+"/"+AnsibleJobName, curator.Status.Conditions[0].Type,
-		"ConfigMap Ansible Job object name correct")
+		"ClusterCurator Ansible Job object name correct")
 }
 
 func TestRunAnsibleJob(t *testing.T) {

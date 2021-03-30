@@ -258,7 +258,10 @@ type AnsibleJob struct {
 	ExtraVars map[string]interface{} `yaml:"extra_vars,omitempty"`
 }
 
-func FindAnsibleTemplateNamefromCurator(hooks *clustercuratorv1.Hooks, jobType string) ([]clustercuratorv1.Hook, error) {
+func FindAnsibleTemplateNamefromCurator(
+	hooks *clustercuratorv1.Hooks,
+	jobType string) ([]clustercuratorv1.Hook, error) {
+
 	if hooks == nil {
 		utils.CheckError(errors.New("No Ansible job hooks found"))
 	}

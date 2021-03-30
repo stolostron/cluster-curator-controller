@@ -3,6 +3,7 @@ package launcher
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"testing"
 
@@ -17,9 +18,10 @@ import (
 	clientfake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-const numInitContainers = 5
+const numInitContainers = 4
 const imageURI = "quay.io/my-repo/cluster-curator-controller@sha123456789"
 const clusterName = "my-cluster"
+const PREHOOK = "prehook"
 
 var s = scheme.Scheme
 
@@ -47,9 +49,9 @@ func TestGetBatchJobImageSHA(t *testing.T) {
 		log.Fatalf("The initContainer.image did not have the correct URI %v, expected %v", initContianer.Image, uri)
 	}
 
-	t.Log("Validate configMapName is placed in initContianer")
-	if initContianer.Env[0].Value != clusterName {
-		t.Fatalf("The configMapName was not corrctly populated %v", initContianer.Env[0].Value)
+	t.Log("Validate ClusterCurator job environment is set in initContianer")
+	if initContianer.Env[0].Value != PREHOOK {
+		t.Fatalf("The ClusterCurator job was not corrctly populated %v", initContianer.Env[0].Value)
 	}
 }
 
@@ -106,7 +108,7 @@ func TestCreateLauncher(t *testing.T) {
 		t.Fatalf("Default imageURI does not match: %v", job.Spec.Template.Spec.InitContainers[0].Image)
 	}
 
-	if job.Spec.Template.Spec.InitContainers[0].Env[0].Value != clusterName {
+	if job.Spec.Template.Spec.InitContainers[0].Env[0].Value != PREHOOK {
 
 		t.Fatalf("Container init name not correct: %v",
 			job.Spec.Template.Spec.InitContainers[0].Env[0].Value)
@@ -114,11 +116,18 @@ func TestCreateLauncher(t *testing.T) {
 
 }
 
-// Test launcher with a bad clusterCurator path
+// Test launcher with a bad clusterCurator no InitContainers
 func TestCreateLauncherBadClusterCurator(t *testing.T) {
 
 	clusterCurator := &clustercuratorv1.ClusterCurator{
 		ObjectMeta: v1.ObjectMeta{Name: clusterName, Namespace: clusterName},
+	}
+	overrideJob, _ := json.Marshal(&batchv1.Job{ObjectMeta: v1.ObjectMeta{
+		Name:      "myjob",
+		Namespace: clusterName,
+	}})
+	clusterCurator.Spec.Install.OverrideJob = &runtime.RawExtension{
+		Raw: overrideJob,
 	}
 
 	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
@@ -131,7 +140,7 @@ func TestCreateLauncherBadClusterCurator(t *testing.T) {
 
 	err := testLauncher.CreateJob()
 
-	assert.NotNil(t, err, "Invalid jobConfigMap detected")
+	assert.NotNil(t, err, "Invalid ClusterCurator detected")
 	t.Log(err)
 }
 

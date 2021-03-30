@@ -98,20 +98,17 @@ func getManagedClusterInfos(conditionType string, conditionMessage string) *unst
 
 func TestMonitorMCInfoConditionMissingManagedClusterInfos(t *testing.T) {
 
-	//s.AddKnownTypes(ajv1.SchemeBuilder.GroupVersion, &ajv1.AnsibleJob{}, &corev1.ConfigMap{})
 	dynfake := dynfake.NewSimpleDynamicClient(runtime.NewScheme())
 	assert.NotNil(t, MonitorMCInfoImport(dynfake, ClusterName), "err not nil, when ManagedClusterInfo resource is not present")
 }
 func TestMonitorMCInfoConditionAvailable(t *testing.T) {
 
-	//s.AddKnownTypes(ajv1.SchemeBuilder.GroupVersion, &ajv1.AnsibleJob{}, &corev1.ConfigMap{})
 	dynfake := dynfake.NewSimpleDynamicClient(runtime.NewScheme(), getManagedClusterInfos(managedclusterv1.ManagedClusterConditionAvailable, "All good"))
 	assert.Nil(t, MonitorMCInfoImport(dynfake, ClusterName), "err nil, when ManagedClusterInfos is available")
 }
 
 func TestMonitorMCInfoConditionDenied(t *testing.T) {
 
-	//s.AddKnownTypes(ajv1.SchemeBuilder.GroupVersion, &ajv1.AnsibleJob{}, &corev1.ConfigMap{})
 	dynfake := dynfake.NewSimpleDynamicClient(runtime.NewScheme(), getManagedClusterInfos(managedclusterv1.ManagedClusterConditionHubDenied, "Not Allowed"))
 	assert.NotNil(t, MonitorMCInfoImport(dynfake, ClusterName), "err not nil, when ManagedClusterInfos is denied")
 }
@@ -121,7 +118,6 @@ var mciGVR = schema.GroupVersionResource{
 
 func TestMonitorMCInfoConditionFullFlowAvailable(t *testing.T) {
 
-	//s.AddKnownTypes(ajv1.SchemeBuilder.GroupVersion, &ajv1.AnsibleJob{}, &corev1.ConfigMap{})
 	dynfake := dynfake.NewSimpleDynamicClient(runtime.NewScheme(), getManagedClusterInfos("", ""))
 	go func() {
 

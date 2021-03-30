@@ -81,7 +81,12 @@ func curatorRun(config *rest.Config, client *clientv1.Client, clusterName string
 	if err == nil {
 		klog.V(2).Info("Found clusterCurator resource \"" + curator.Namespace + "\" ✓")
 
-		utils.CheckError(utils.RecordCurrentStatusCondition(*client, clusterName, jobChoice, v1.ConditionFalse, "Executing init container"))
+		utils.CheckError(utils.RecordCurrentStatusCondition(
+			*client,
+			clusterName,
+			jobChoice,
+			v1.ConditionFalse,
+			"Executing init container"))
 		providerCredentialPath = curator.Spec.ProviderCredentialPath
 
 	} else if err != nil && providerCredentialPath == "" {
@@ -146,7 +151,12 @@ func curatorRun(config *rest.Config, client *clientv1.Client, clusterName string
 		utils.CheckError(err)
 	}
 
-	utils.RecordCurrentStatusCondition(*client, clusterName, jobChoice, v1.ConditionTrue, "Completed executing init container")
+	utils.CheckError(utils.RecordCurrentStatusCondition(
+		*client,
+		clusterName,
+		jobChoice,
+		v1.ConditionTrue,
+		"Completed executing init container"))
 
 	klog.V(2).Info("Done!")
 }
