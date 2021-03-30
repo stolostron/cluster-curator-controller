@@ -19,6 +19,11 @@ import (
 
 const OverrideJob = "overrideJob"
 const CurCmd = "./curator"
+const PreAJob = "prehook-ansiblejob"
+const PostAJob = "posthook-ansiblejob"
+const MonImport = "monitor-import"
+
+const ActivateAndMonitor = "activate-and-monitor"
 
 type Launcher struct {
 	client         client.Client
@@ -41,9 +46,7 @@ func NewLauncher(
 	}
 }
 
-const ActivateAndMonitor = "activate-and-monitor"
-
-func getBatchJob(configMapName string, imageURI string) *batchv1.Job {
+func getBatchJob(clusterName string, imageURI string) *batchv1.Job {
 
 	var ttlf int32 = 3600
 	var resourceSettings = corev1.ResourceRequirements{
@@ -60,16 +63,15 @@ func getBatchJob(configMapName string, imageURI string) *batchv1.Job {
 	newJob := &batchv1.Job{
 		ObjectMeta: v1.ObjectMeta{
 			GenerateName: "curator-job-",
-			Namespace:    configMapName,
+			Namespace:    clusterName,
 			Labels: map[string]string{
 				"open-cluster-management": "curator-job",
 			},
 			Annotations: map[string]string{
-				"apply-cloud-provider": "Creating secrets",
-				"prehook-ansiblejob":   "Running pre-provisioning AnsibleJob",
-				"ActivateAndMonitor":   "Start Provisioning the Cluster and monitor to completion",
-				"monitor-import":       "Monitor the managed cluster until it is imported",
-				"posthook-ansiblejob":  "Running post-provisioning AnsibleJob",
+				PreAJob:            "Running pre-provisioning AnsibleJob",
+				ActivateAndMonitor: "Start Provisioning the Cluster and monitor to completion",
+				MonImport:          "Monitor the managed cluster until it is imported",
+				PostAJob:           "Running post-provisioning AnsibleJob",
 			},
 		},
 		Spec: batchv1.JobSpec{
@@ -81,22 +83,9 @@ func getBatchJob(configMapName string, imageURI string) *batchv1.Job {
 					RestartPolicy:      corev1.RestartPolicyNever,
 					InitContainers: []corev1.Container{
 						corev1.Container{
-							Name:            "applycloudprovider-ansible",
+							Name:            PreAJob,
 							Image:           imageURI,
-							Command:         append([]string{CurCmd, "applycloudprovider-ansible"}),
-							ImagePullPolicy: corev1.PullAlways,
-							Env: []corev1.EnvVar{
-								corev1.EnvVar{
-									Name:  "JOB_CONFIGMAP",
-									Value: configMapName,
-								},
-							},
-							Resources: resourceSettings,
-						},
-						corev1.Container{
-							Name:            "prehook-ansiblejob",
-							Image:           imageURI,
-							Command:         append([]string{CurCmd, "prehook-ansiblejob"}),
+							Command:         append([]string{CurCmd, PreAJob}),
 							ImagePullPolicy: corev1.PullAlways,
 							Env: []corev1.EnvVar{
 								corev1.EnvVar{
@@ -114,16 +103,16 @@ func getBatchJob(configMapName string, imageURI string) *batchv1.Job {
 							Resources:       resourceSettings,
 						},
 						corev1.Container{
-							Name:            "monitor-import",
+							Name:            MonImport,
 							Image:           imageURI,
-							Command:         append([]string{CurCmd, "monitor-import"}),
+							Command:         append([]string{CurCmd, MonImport}),
 							ImagePullPolicy: corev1.PullAlways,
 							Resources:       resourceSettings,
 						},
 						corev1.Container{
-							Name:            "posthook-ansiblejob",
+							Name:            PostAJob,
 							Image:           imageURI,
-							Command:         append([]string{CurCmd, "posthook-ansiblejob"}),
+							Command:         append([]string{CurCmd, PostAJob}),
 							ImagePullPolicy: corev1.PullAlways,
 							Env: []corev1.EnvVar{
 								corev1.EnvVar{
@@ -151,12 +140,10 @@ func getBatchJob(configMapName string, imageURI string) *batchv1.Job {
 func (I *Launcher) CreateJob() error {
 	kubeset := I.kubeset
 	clusterName := I.clusterCurator.Namespace
-	if I.clusterCurator.Spec.ProviderCredentialPath == "" {
-		return errors.New("Missing providerCredentialPath in " + clusterName + "-job ConfigMap")
-	}
+
 	newJob := getBatchJob(I.clusterCurator.Name, I.imageURI)
 
-	// Allow us to override the job in the configMap
+	// Allow us to override the job in the Cluster Curator
 	klog.V(0).Info("Creating Curator job curator-job in namespace " + clusterName)
 	var err error
 	if I.clusterCurator.Spec.Install.OverrideJob != nil {
