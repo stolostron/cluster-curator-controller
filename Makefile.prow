@@ -12,7 +12,7 @@ compile-curator:
 	go mod vendor
 	go mod tidy
 	GOFLAGS="" go build -o build/_output/curator ./cmd/curator/curator.go
-	GOFLAGS="" go build -o build/_output/cluster-curator-controller ./cmd/controller/controller.go
+	GOFLAGS="" go build -o build/_output/manager ./cmd/manager/main.go
 
 .PHONY: build-curator
 build-curator: 
@@ -28,6 +28,7 @@ scale-down-test:
 
 .PHONY: unit-tests
 unit-tests:
-	GOFLAGS="" go test -timeout 60s -v ./pkg/...
+	GOFLAGS="" go test -timeout 120s -v ./pkg/...
 	GOFLAGS="" go test -timeout 60s -v -short ./cmd/...
+	#GOFLAGS="" go test -timeout 60s -v -short ./controllers/...
 

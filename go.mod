@@ -3,19 +3,22 @@ module github.com/open-cluster-management/cluster-curator-controller
 go 1.15
 
 require (
+	github.com/go-logr/logr v0.2.1
+	github.com/onsi/ginkgo v1.14.1
+	github.com/onsi/gomega v1.10.2
 	github.com/open-cluster-management/ansiblejob-go-lib v0.1.12
 	github.com/open-cluster-management/api v0.0.0-20201210143210-581cab55c797
 	github.com/open-cluster-management/library-go v0.0.0-20210208174614-f3ad264f145a
 	github.com/openshift/hive v1.0.14
-	github.com/operator-framework/operator-sdk v0.18.0
 	github.com/stretchr/testify v1.6.1
 	gopkg.in/yaml.v2 v2.3.0
-	gopkg.in/yaml.v3 v3.0.0-20200615113413-eeeca48fe776 // indirect
+	gopkg.in/yaml.v3 v3.0.0-20200615113413-eeeca48fe776
 	k8s.io/api v0.19.0
 	k8s.io/apimachinery v0.19.0
 	k8s.io/client-go v12.0.0+incompatible
+	k8s.io/klog v1.0.0
 	k8s.io/klog/v2 v2.3.0
-	sigs.k8s.io/yaml v1.2.0
+	sigs.k8s.io/controller-runtime v0.6.2
 )
 
 replace (

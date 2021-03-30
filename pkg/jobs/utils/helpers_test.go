@@ -6,14 +6,13 @@ import (
 	"errors"
 	"testing"
 
+	clustercuratorv1 "github.com/open-cluster-management/cluster-curator-controller/pkg/api/v1alpha1"
 	"github.com/stretchr/testify/assert"
-	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	dynfake "k8s.io/client-go/dynamic/fake"
-	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/kubernetes/scheme"
+	clientfake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 func TestCheckErrorNil(t *testing.T) {
@@ -70,110 +69,144 @@ const ClusterName = "my-cluster"
 const PREHOOK = "prehook"
 const jobName = "my-jobname-12345"
 
-func getConfigMap() *corev1.ConfigMap {
-	return &corev1.ConfigMap{
-		TypeMeta: v1.TypeMeta{
-			Kind:       "ConfigMap",
-			APIVersion: "v1",
-		},
+func getClusterCurator() *clustercuratorv1.ClusterCurator {
+	return &clustercuratorv1.ClusterCurator{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      ClusterName,
 			Namespace: ClusterName,
-			Labels: map[string]string{
-				"open-cluster-management": "curator",
-			},
 		},
-		Data: map[string]string{
-			PREHOOK: "    - name: Service now App Update\n" +
-				"      extra_vars:\n" +
-				"        variable1: \"1\"\n" +
-				"        variable2: \"2\"\n",
-		},
+		Spec: clustercuratorv1.ClusterCuratorSpec{},
 	}
 }
 
-var cmGVR = schema.GroupVersionResource{Version: "v1", Resource: "configmaps"}
+func TestRecordCurrentCuratorJob(t *testing.T) {
 
-func TestRecordAnsibleJobDyn(t *testing.T) {
+	cc := getClusterCurator()
 
-	cm := getConfigMap()
 	s := scheme.Scheme
-	s.AddKnownTypes(corev1.SchemeGroupVersion, &corev1.ConfigMap{})
+	s.AddKnownTypes(CCGVR.GroupVersion(), &clustercuratorv1.ClusterCurator{})
 
-	dynclient := dynfake.NewSimpleDynamicClient(s, cm)
+	dynclient := dynfake.NewSimpleDynamicClient(s, cc)
 
-	assert.NotPanics(t, func() { RecordAnsibleJobDyn(dynclient, ClusterName, jobName) }, "no panics, when update successful")
-	cMap, _ := dynclient.Resource(cmGVR).Namespace(ClusterName).Get(context.TODO(), ClusterName, v1.GetOptions{})
-	assert.Equal(t, jobName, cMap.Object["data"].(map[string]interface{})[CurrentAnsibleJob])
+	assert.NotEqual(t, jobName, cc.Spec.CuratingJob, "Nost equal because curating job name not written yet")
+	assert.NotPanics(t, func() {
+		patchDyn(dynclient, ClusterName, jobName, CurrentCuratorJob)
+	}, "no panics, when update successful")
+
+	ccMap, err := dynclient.Resource(CCGVR).Namespace(ClusterName).Get(context.TODO(), ClusterName, v1.GetOptions{})
+	assert.Nil(t, err, "err is nil, when my-cluster clusterCurator resource is retrieved")
+
+	assert.Equal(t,
+		jobName, ccMap.Object["spec"].(map[string]interface{})[CurrentCuratorJob],
+		"Equal when curator job recorded")
 }
 
-func TestRecordAnsibleJobDynWarning(t *testing.T) {
+func TestRecordCurrentCuratorJobError(t *testing.T) {
 
-	dynclient := dynfake.NewSimpleDynamicClient(runtime.NewScheme())
+	s := scheme.Scheme
 
-	assert.NotPanics(t, func() { RecordAnsibleJobDyn(dynclient, ClusterName, jobName) }, "no panics, when update successful")
-}
+	dynclient := dynfake.NewSimpleDynamicClient(s)
 
-func TestRecordCurrentCuratorContainer(t *testing.T) {
+	assert.NotPanics(t, func() {
 
-	cm := getConfigMap()
+		err := patchDyn(dynclient, ClusterName, jobName, CurrentCuratorJob)
+		assert.NotNil(t, err, "err is not nil, when patch fails")
 
-	kubeset := fake.NewSimpleClientset(cm)
+	}, "no panics, when update successful")
 
-	assert.NotEqual(t, jobName, cm.Data[CurrentCuratorContainer])
-	assert.NotPanics(t, func() { RecordCurrentCuratorContainer(kubeset, ClusterName, jobName) }, "no panics, when update successful")
-	cm, _ = kubeset.CoreV1().ConfigMaps(ClusterName).Get(context.TODO(), ClusterName, v1.GetOptions{})
-	assert.Equal(t, jobName, cm.Data[CurrentCuratorContainer])
-}
-
-func TestRecordCurrentCuratorContainerWarning(t *testing.T) {
-
-	kubeset := fake.NewSimpleClientset()
-
-	assert.NotPanics(t, func() { RecordCurrentCuratorContainer(kubeset, ClusterName, jobName) }, "no panics, when update successful")
-}
-
-func TestRecordHiveJobContainer(t *testing.T) {
-
-	cm := getConfigMap()
-
-	kubeset := fake.NewSimpleClientset(cm)
-
-	assert.NotEqual(t, jobName, cm.Data[CurrentHiveJob])
-	assert.NotPanics(t, func() { RecordHiveJobContainer(kubeset, ClusterName, jobName) }, "no panics, when update successful")
-	cm, _ = kubeset.CoreV1().ConfigMaps(ClusterName).Get(context.TODO(), ClusterName, v1.GetOptions{})
-	assert.Equal(t, jobName, cm.Data[CurrentHiveJob])
-}
-
-func TestRecordHiveJobContainerWarning(t *testing.T) {
-
-	kubeset := fake.NewSimpleClientset()
-
-	assert.NotPanics(t, func() { RecordHiveJobContainer(kubeset, ClusterName, jobName) }, "no panics, when update successful")
 }
 
 func TestRecordCuratorJob(t *testing.T) {
 
-	cm := getConfigMap()
-
-	kubeset := fake.NewSimpleClientset(cm)
-
-	assert.NotEqual(t, jobName, cm.Data[CurrentHiveJob])
-	assert.Nil(t, RecordCuratorJob(kubeset, ClusterName, jobName), "err is Nil, when update is successful")
-	cm, _ = kubeset.CoreV1().ConfigMaps(ClusterName).Get(context.TODO(), ClusterName, v1.GetOptions{})
-	assert.Equal(t, jobName, cm.Data[CurrentCuratorJob])
+	err := RecordCuratorJob(ClusterName, jobName)
+	assert.NotNil(t, err, "err is not nil, when failure occurs")
+	t.Logf("err:\n%v", err)
 }
 
-func TestRecordCuratorJobWarning(t *testing.T) {
-
-	kubeset := fake.NewSimpleClientset()
-
-	assert.NotPanics(t, func() { RecordCuratorJob(kubeset, ClusterName, jobName) }, "no panics, when update successful")
+func TestGetDynset(t *testing.T) {
+	_, err := GetDynset(nil)
+	assert.Nil(t, err, "err is nil, when dynset is initialized")
 }
 
-func TestRecordCuratorJobError(t *testing.T) {
+func TestGetClient(t *testing.T) {
+	_, err := GetClient()
+	assert.Nil(t, err, "err is nil, when client is initialized")
+}
 
-	kubeset := fake.NewSimpleClientset()
+func TestGetKubeset(t *testing.T) {
+	_, err := GetKubeset()
+	assert.Nil(t, err, "err is nil, when kubset is initialized")
+}
 
-	assert.NotNil(t, RecordCuratorJob(kubeset, ClusterName, jobName), "Not nil, when error encountered")
+func TestRecordCuratedStatusCondition(t *testing.T) {
+
+	cc := getClusterCurator()
+
+	s := scheme.Scheme
+	s.AddKnownTypes(CCGVR.GroupVersion(), &clustercuratorv1.ClusterCurator{})
+
+	client := clientfake.NewFakeClientWithScheme(s, cc)
+
+	assert.Nil(t,
+		recordCuratedStatusCondition(
+			client,
+			ClusterName,
+			CurrentAnsibleJob,
+			v1.ConditionTrue,
+			JobHasFinished,
+			"Almost finished"),
+		"err is nil, when conditon successfully set")
+
+	ccNew := &clustercuratorv1.ClusterCurator{}
+	assert.Nil(t,
+		client.Get(context.Background(), types.NamespacedName{Namespace: ClusterName, Name: ClusterName}, ccNew),
+		"err is nil, when ClusterCurator resource is retreived")
+	t.Log(ccNew)
+	assert.Equal(t,
+		ccNew.Status.Conditions[0].Type, CurrentAnsibleJob,
+		"equal when status condition correctly recorded")
+
+}
+
+func TestRecordCurrentStatusConditionNoResource(t *testing.T) {
+
+	s := scheme.Scheme
+	s.AddKnownTypes(CCGVR.GroupVersion(), &clustercuratorv1.ClusterCurator{})
+
+	client := clientfake.NewFakeClientWithScheme(s)
+
+	err := RecordCurrentStatusCondition(
+		client,
+		ClusterName,
+		CurrentAnsibleJob,
+		v1.ConditionTrue,
+		"Almost finished")
+	assert.NotNil(t, err, "err is not nil, when conditon can not be written")
+	t.Logf("err: %v", err)
+}
+
+func TestGetClusterCurator(t *testing.T) {
+
+	cc := getClusterCurator()
+
+	s := scheme.Scheme
+	s.AddKnownTypes(CCGVR.GroupVersion(), &clustercuratorv1.ClusterCurator{})
+
+	client := clientfake.NewFakeClientWithScheme(s, cc)
+
+	_, err := GetClusterCurator(client, ClusterName)
+	assert.Nil(t, err, "err is nil, when ClusterCurator resource is retrieved")
+}
+
+func TestGetClusterCuratorNoResource(t *testing.T) {
+
+	s := scheme.Scheme
+	s.AddKnownTypes(CCGVR.GroupVersion(), &clustercuratorv1.ClusterCurator{})
+
+	client := clientfake.NewFakeClientWithScheme(s)
+
+	cc, err := GetClusterCurator(client, ClusterName)
+	assert.Nil(t, cc, "cc is nil, when ClusterCurator resource is not found")
+	assert.NotNil(t, err, "err is not nil, when ClusterCurator is not found")
+	t.Logf("err: %v", err)
 }

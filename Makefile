@@ -97,7 +97,7 @@ ifeq (, $(shell which controller-gen))
 	CONTROLLER_GEN_TMP_DIR=$$(mktemp -d) ;\
 	cd $$CONTROLLER_GEN_TMP_DIR ;\
 	go mod init tmp ;\
-	go get sigs.k8s.io/controller-tools/cmd/controller-gen@v0.3.0 ;\
+	go get sigs.k8s.io/controller-tools/cmd/controller-gen@v0.5.0 ;\
 	rm -rf $$CONTROLLER_GEN_TMP_DIR ;\
 	}
 CONTROLLER_GEN=$(GOBIN)/controller-gen
@@ -108,7 +108,7 @@ endif
 .PHONY: manifests
 ## Generate manifests e.g. CRD, RBAC etc.
 manifests: controller-gen
-	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role output:crd:artifacts:config=deploy/crd/bases
+	$(CONTROLLER_GEN) $(CRD_OPTIONS) paths=./... rbac:roleName=manager-role output:crd:artifacts:config=deploy/crd
 
 .PHONY: generate
 # Generate code

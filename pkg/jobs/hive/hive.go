@@ -15,10 +15,11 @@ import (
 	hiveclient "github.com/openshift/hive/pkg/client/clientset/versioned"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	batchv1 "k8s.io/api/batch/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
+	clientv1 "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 //  patchStringValue specifies a json patch operation for a string.
@@ -66,16 +67,17 @@ func MonitorDeployStatus(config *rest.Config, clusterName string) error {
 	if err = utils.LogError(err); err != nil {
 		return err
 	}
-	kubeset, err := kubernetes.NewForConfig(config)
+	client, err := utils.GetClient()
 	if err = utils.LogError(err); err != nil {
 		return err
 	}
-	return monitorDeployStatus(kubeset, hiveset, clusterName)
+	return monitorDeployStatus(client, hiveset, clusterName)
 }
 
-func monitorDeployStatus(kubeset kubernetes.Interface, hiveset hiveclient.Interface, clusterName string) error {
+func monitorDeployStatus(client clientv1.Client, hiveset hiveclient.Interface, clusterName string) error {
 
 	klog.V(0).Info("Waiting up to 30s for Hive Provisioning job")
+	jobName := ""
 
 	for i := 1; i <= MonitorAttempts; i++ { // 30s wait
 
@@ -89,19 +91,26 @@ func monitorDeployStatus(kubeset kubernetes.Interface, hiveset hiveclient.Interf
 
 		if cluster.Status.WebConsoleURL != "" {
 			klog.V(2).Info("Provisioning succeeded ✓")
+
+			if jobName != "" {
+				utils.RecordCurrentStatusCondition(client, clusterName, jobName, v1.ConditionTrue, "Hive provisioning job")
+			}
+
 			break
 		} else if cluster.Status.ProvisionRef != nil &&
 			cluster.Status.ProvisionRef.Name != "" {
 
 			klog.V(2).Info("Found ClusterDeployment status details ✓")
-			jobName := cluster.Status.ProvisionRef.Name + "-provision"
+			jobName = cluster.Status.ProvisionRef.Name + "-provision"
 			jobPath := clusterName + "/" + jobName
 
 			klog.V(2).Info("Checking for provisioning job " + jobPath)
-			newJob, err := kubeset.BatchV1().Jobs(clusterName).Get(context.TODO(), jobName, v1.GetOptions{})
+			newJob := &batchv1.Job{}
+			err := client.Get(context.Background(), types.NamespacedName{Namespace: clusterName, Name: jobName}, newJob)
 
 			// If the job is missing follow the main loop 5min Pause
 			if err != nil && strings.Contains(err.Error(), " not found") {
+				klog.Warningf("Could not retrieve job: %v", err)
 				time.Sleep(utils.PauseTenSeconds) //10s
 				continue
 			}
@@ -116,7 +125,7 @@ func monitorDeployStatus(kubeset kubernetes.Interface, hiveset hiveclient.Interf
 			// Wait while the job is running
 			klog.V(0).Info("Wait for the provisioning job in Hive to complete")
 
-			utils.RecordHiveJobContainer(kubeset, clusterName, jobName)
+			utils.RecordCurrentStatusCondition(client, clusterName, jobName, v1.ConditionFalse, "Hive provisioning job")
 
 			for newJob.Status.Active == 1 {
 				if elapsedTime%6 == 0 {
@@ -124,8 +133,10 @@ func monitorDeployStatus(kubeset kubernetes.Interface, hiveset hiveclient.Interf
 				}
 				time.Sleep(utils.PauseTenSeconds) //10s
 				elapsedTime++
-				newJob, err = kubeset.BatchV1().Jobs(clusterName).Get(context.TODO(), jobName, v1.GetOptions{})
-				utils.CheckError(err)
+
+				// Reset the job, so we make sure we're getting clean data (not cached)
+				newJob = &batchv1.Job{}
+				utils.CheckError(client.Get(context.Background(), types.NamespacedName{Namespace: clusterName, Name: jobName}, newJob))
 			}
 
 			// If succeeded = 0 then we did not finish

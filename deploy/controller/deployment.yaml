@@ -16,7 +16,8 @@ spec:
     spec:
       containers:
       - command:
-        - ./cluster-curator-controller
+        - "./manager"
+        - "-enable-leader-election"
         image: registry.ci.openshift.org/open-cluster-management/2.3:cluster-curator-controller
         env:
         - name: POD_NAME
@@ -33,5 +34,5 @@ spec:
             memory: "45Mi"
           requests:
             cpu: "3m"                     # Runs < 2m most of the time
-            memory: "25Mi"                # Runs between 25-28Mi
+            memory: "31Mi"                # Runs between 30-32Mi
       serviceAccountName: cluster-curator

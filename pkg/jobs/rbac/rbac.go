@@ -46,6 +46,11 @@ func getRole() *rbacv1.Role {
 				Resources: []string{"managedclusterinfos"},
 				Verbs:     []string{"get"},
 			},
+			rbacv1.PolicyRule{
+				APIGroups: []string{"cluster.open-cluster-management.io"},
+				Resources: []string{"clustercurators"},
+				Verbs:     []string{"get", "update"},
+			},
 		},
 	}
 	return curatorRole
@@ -64,14 +69,19 @@ func getClusterInstallerRules() []rbacv1.PolicyRule {
 			Verbs:     []string{"get"},
 		},
 		rbacv1.PolicyRule{
-			APIGroups: []string{"", "hive.openshift.io"},
-			Resources: []string{"configmaps", "clusterdeployments"},
+			APIGroups: []string{"hive.openshift.io"},
+			Resources: []string{"clusterdeployments"},
 			Verbs:     []string{"patch"},
 		},
 		rbacv1.PolicyRule{
 			APIGroups: []string{"internal.open-cluster-management.io"},
 			Resources: []string{"managedclusterinfos"},
 			Verbs:     []string{"get"},
+		},
+		rbacv1.PolicyRule{
+			APIGroups: []string{"cluster.open-cluster-management.io"},
+			Resources: []string{"clustercurators"},
+			Verbs:     []string{"get", "update"},
 		},
 	}
 	return curatorRule

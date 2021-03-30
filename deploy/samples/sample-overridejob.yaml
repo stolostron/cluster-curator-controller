@@ -1,7 +1,8 @@
 ## This example has all possible containers(tasks) you can run in the Job
 ## Add or Remove (comment out) what you do not want to use, and paste this into the cluster ConfigMap under 
-##   data:
-##     overrideJob: |-
+##   spec:
+##     install:
+##         overrideJob:
 ####
 apiVersion: batch/v1
 kind: Job
