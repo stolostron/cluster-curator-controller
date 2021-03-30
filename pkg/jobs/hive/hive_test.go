@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	clustercuratorv1 "github.com/open-cluster-management/cluster-curator-controller/pkg/api/v1alpha1"
 	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/utils"
 	hivev1 "github.com/openshift/hive/pkg/apis/hive/v1"
 	hivefake "github.com/openshift/hive/pkg/client/clientset/versioned/fake"
@@ -13,32 +14,44 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes/scheme"
+	clientfake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 const ClusterName = "my-cluster"
 
-func getConfigMap() *corev1.ConfigMap {
-	return &corev1.ConfigMap{
-		TypeMeta: v1.TypeMeta{
-			Kind:       "ConfigMap",
-			APIVersion: "v1",
-		},
+func getClusterCurator() *clustercuratorv1.ClusterCurator {
+	return &clustercuratorv1.ClusterCurator{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      ClusterName,
 			Namespace: ClusterName,
-			Labels: map[string]string{
-				"open-cluster-management": "curator",
-			},
 		},
-		Data: map[string]string{
-			"prehook": "    - name: Service now App Update\n" +
-				"      extra_vars:\n" +
-				"        variable1: \"1\"\n" +
-				"        variable2: \"2\"\n",
+		Spec: clustercuratorv1.ClusterCuratorSpec{
+			DesiredCuration: "install",
+			Install: clustercuratorv1.Hooks{
+				Prehook: []clustercuratorv1.Hook{
+					clustercuratorv1.Hook{
+						Name: "Service now App Update",
+						ExtraVars: &runtime.RawExtension{
+							Raw: []byte(`{"variable1": "1","variable2": "2"}`),
+						},
+					},
+				},
+				Posthook: []clustercuratorv1.Hook{
+					clustercuratorv1.Hook{
+						Name: "Service now App Update",
+						ExtraVars: &runtime.RawExtension{
+							Raw: []byte(`{"variable1": "3","variable2": "4"}`),
+						},
+					},
+				},
+			},
 		},
 	}
 }
+
 func TestActivateDeployNoCD(t *testing.T) {
 
 	hiveset := hivefake.NewSimpleClientset()
@@ -180,9 +193,14 @@ func TestMonitorDeployStatusJobFailed(t *testing.T) {
 
 	hiveset := hivefake.NewSimpleClientset(cd)
 
-	kubeset := fake.NewSimpleClientset(job)
+	cc := getClusterCurator()
 
-	assert.NotNil(t, monitorDeployStatus(kubeset, hiveset, ClusterName), "err is not nil, when cluster provisioning has a condition")
+	s := scheme.Scheme
+	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
+
+	client := clientfake.NewFakeClientWithScheme(s, cc, job)
+
+	assert.NotNil(t, monitorDeployStatus(client, hiveset, ClusterName), "err is not nil, when cluster provisioning has a condition")
 }
 
 func TestMonitorDeployStatusJobCompletedWithSuccess(t *testing.T) {
@@ -197,14 +215,13 @@ func TestMonitorDeployStatusJobCompletedWithSuccess(t *testing.T) {
 	cd.Status.ProvisionRef = &corev1.LocalObjectReference{
 		Name: ClusterName + "-12345", // The monitor adds the -provision suffix
 	}
-
-	cm := getConfigMap()
+	cc := getClusterCurator()
 
 	hiveset := hivefake.NewSimpleClientset(cd)
-	kubeset := fake.NewSimpleClientset(getProvisionJob(), cm)
+	s := scheme.Scheme
+	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
 
-	assert.Equal(t, cm.Data[utils.CurrentHiveJob], "", "Should be emtpy")
-	assert.Nil(t, monitorDeployStatus(kubeset, hiveset, ClusterName), "err is nil, when cluster provisioning is successful")
+	client := clientfake.NewFakeClientWithScheme(s, cc)
 
 	// Put a delay to complete the ClusterDeployment to test the wait loop
 	go func() {
@@ -215,9 +232,12 @@ func TestMonitorDeployStatusJobCompletedWithSuccess(t *testing.T) {
 		t.Log("ClusterDeployment webConsoleURL applied")
 	}()
 
-	cm, err := kubeset.CoreV1().ConfigMaps(ClusterName).Get(context.TODO(), ClusterName, v1.GetOptions{})
+	assert.Equal(t, len(cc.Status.Conditions), 0, "Should be emtpy")
+	assert.Nil(t, monitorDeployStatus(client, hiveset, ClusterName), "err is nil, when cluster provisioning is successful")
+
+	err := client.Get(context.Background(), types.NamespacedName{Namespace: ClusterName, Name: ClusterName}, cc)
 	t.Log(err)
-	assert.NotEqual(t, cm.Data[utils.CurrentHiveJob], "", "Should be populated")
+	assert.Greater(t, len(cc.Status.Conditions), 0, "Should be populated")
 }
 
 func TestMonitorDeployStatusJobComplete(t *testing.T) {
@@ -231,15 +251,19 @@ func TestMonitorDeployStatusJobComplete(t *testing.T) {
 	job.Status.Active = 1
 	job.Status.Succeeded = 0
 
+	cc := getClusterCurator()
+
 	hiveset := hivefake.NewSimpleClientset(cd)
-	kubeset := fake.NewSimpleClientset(job)
+	s := scheme.Scheme
+	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
+	client := clientfake.NewFakeClientWithScheme(s, cc)
 
 	// Put a delay to complete the job to test the wait loop
 	go func() {
 		time.Sleep(utils.PauseFiveSeconds)
 		job.Status.Active = 0
 		job.Status.Succeeded = 1
-		kubeset.BatchV1().Jobs(ClusterName).Update(context.TODO(), job, v1.UpdateOptions{})
+		client.Update(context.Background(), job)
 		cd.Status.WebConsoleURL = "https://my-cluster"
 		cd.Status.Conditions = []hivev1.ClusterDeploymentCondition{
 			hivev1.ClusterDeploymentCondition{
@@ -250,7 +274,7 @@ func TestMonitorDeployStatusJobComplete(t *testing.T) {
 		hiveset.HiveV1().ClusterDeployments(ClusterName).Update(context.TODO(), cd, v1.UpdateOptions{})
 	}()
 
-	assert.Nil(t, monitorDeployStatus(kubeset, hiveset, ClusterName), "err is not nil, when cluster provisioning is successful")
+	assert.Nil(t, monitorDeployStatus(client, hiveset, ClusterName), "err is not nil, when cluster provisioning is successful")
 }
 
 func TestMonitorDeployStatusJobDelayedComplete(t *testing.T) {
@@ -261,7 +285,9 @@ func TestMonitorDeployStatusJobDelayedComplete(t *testing.T) {
 	}
 
 	hiveset := hivefake.NewSimpleClientset(cd)
-	kubeset := fake.NewSimpleClientset()
+	s := scheme.Scheme
+	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
+	client := clientfake.NewFakeClientWithScheme(s, getClusterCurator())
 
 	// Put a delay to complete the job to test the wait loop
 	go func() {
@@ -273,9 +299,10 @@ func TestMonitorDeployStatusJobDelayedComplete(t *testing.T) {
 				Reason:  "SuccessfulProvision",
 			},
 		}
+		t.Log("Created the Job resource and update Cluster Deployment as complete")
+		client.Create(context.Background(), getProvisionJob())
 		hiveset.HiveV1().ClusterDeployments(ClusterName).Update(context.TODO(), cd, v1.UpdateOptions{})
-		kubeset.BatchV1().Jobs(ClusterName).Create(context.TODO(), getProvisionJob(), v1.CreateOptions{})
 	}()
 
-	assert.Nil(t, monitorDeployStatus(kubeset, hiveset, ClusterName), "err is not nil, when cluster provisioning is successful")
+	assert.Nil(t, monitorDeployStatus(client, hiveset, ClusterName), "err is not nil, when cluster provisioning is successful")
 }

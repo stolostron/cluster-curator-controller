@@ -8,15 +8,19 @@ rules:
 # New Rules added to ClusterInstaller
 # Leader Lock requires configmaps(create&get) and pods(get)
 - apiGroups: ["tower.ansible.com","batch",""]
-  resources: ["ansiblejobs","jobs","serviceaccounts","configmaps"]
-  verbs: ["create","get"]
+  resources: ["ansiblejobs","jobs","secrets","serviceaccounts"]
+  verbs: ["create"]
 
-- apiGroups: ["rbac.authorization.k8s.io"]
+- apiGroups: ["batch", "hive.openshift.io", "tower.ansible.com",""]
+  resources: ["ansiblejobs","jobs","clusterdeployments","serviceaccounts"]
+  verbs: ["get"]
+
+- apiGroups: ["rbac.authorization.k8s.io",""]
   resources: ["roles","rolebindings"]
   verbs: ["create","get"]
 
-- apiGroups: ["", "hive.openshift.io"]
-  resources: ["configmaps", "clusterdeployments"]
+- apiGroups: ["hive.openshift.io"]
+  resources: ["clusterdeployments"]
   verbs: ["patch"]
 
 - apiGroups: ["internal.open-cluster-management.io",""]
@@ -26,18 +30,54 @@ rules:
 # Specific to the controller only
 - apiGroups: ["cluster.open-cluster-management.io"] 
   resources: ["managedclusters"]
-  verbs: ["watch","list"]
+  verbs: ["list"]
 
-# Existing rules in Role cluster-installer
-#- apiGroups: ["",] 
-#  resources: ["secrets", "configmaps"]
-#  verbs: ["create","delete","get","list","update"]
-#- apiGroups: ["hive.openshift.io"] 
-#  resources: ["dnszones"]
-#  verbs: ["get"]
-#- apiGroups: ["hive.openshift.io"] 
-#  resources: ["clusterdeployments","clusterdeployments/finalizers","clusterdeployments/status"]
-#  verbs: ["get","update"]
-#- apiGroups: ["hive.openshift.io"] 
-#  resources: ["clusterprovisions","clusterprovisions/finalizers","clusterprovisions/status"]
-#  verbs: ["get","list","update","watch"]
+# ClusterCurator apiGroup
+- apiGroups:
+  - cluster.open-cluster-management.io
+  resources:
+  - clustercurators
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - cluster.open-cluster-management.io
+  resources:
+  - clustercurators/status
+  verbs:
+  - get
+  - patch
+  - update
+
+# Leader election
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - configmaps/status
+  verbs:
+  - get
+  - update
+  - patch
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create

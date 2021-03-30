@@ -26,7 +26,7 @@ objects:
         - image: ${REPO_URL}/cluster-curator-controller@${IMAGE_SHA}
           name: cluster-curator-controller
           imagePullPolicy: Always
-          command: ["./cluster-curator-controller"]
+          command: ["./manager","-enable-leader-election"]
           imagePullPolicy: Always
           env:
           - name: IMAGE_TAG

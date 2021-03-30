@@ -3,18 +3,20 @@ package ansible
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"time"
 
+	clustercuratorv1 "github.com/open-cluster-management/cluster-curator-controller/pkg/api/v1alpha1"
 	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/utils"
-	"gopkg.in/yaml.v2"
-	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/dynamic"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const PREHOOK = "prehook"
@@ -23,57 +25,78 @@ const POSTHOOK = "posthook"
 var ansibleJobGVR = schema.GroupVersionResource{
 	Group: "tower.ansible.com", Version: "v1alpha1", Resource: "ansiblejobs"}
 
-func Job(dynclient dynamic.Interface, clusterConfigOverride *corev1.ConfigMap) error {
+func Job(client client.Client, curator *clustercuratorv1.ClusterCurator) error {
 	jobType := os.Getenv("JOB_TYPE")
 	if jobType != PREHOOK && jobType != POSTHOOK {
 		return errors.New("Missing JOB_TYPE environment parameter, use \"prehook\" or \"posthook\"")
 	}
 
-	towerTemplateNames, err := FindAnsibleTemplateNamefromConfigMap(
-		clusterConfigOverride,
-		jobType)
+	var hooks clustercuratorv1.Hooks
+	switch curator.Spec.DesiredCuration {
+	case "install":
+		hooks = curator.Spec.Install
+		/*	case "scale":
+				hooks = curator.Spec.Scale
+			case "upgrade":
+				hooks = curator.Spec.Upgrade
+			case "Destroy":
+				hooks = curator.Spec.Destroy
+		*/
+	default:
+		return errors.New("The Spec.DesiredCuration value is not supported: " + curator.Spec.DesiredCuration)
+	}
 
-	// Continue when configmap is missing or job hook is missing
-	if err != nil {
-		klog.V(0).Infof("No ansibleJob detected for %v", jobType)
+	// Extract the prehooks or posthooks
+	hooksToRun := hooks.Prehook
+	if jobType == POSTHOOK {
+		hooksToRun = hooks.Posthook
+	}
+
+	// Move on when clusterCurator is missing or job hook is missing
+	klog.V(0).Infof("No ansibleJob detected for %v", jobType)
+	if len(hooksToRun) == 0 {
 		return nil
 	}
 
-	for _, ttn := range towerTemplateNames {
+	for _, ttn := range hooksToRun {
 		klog.V(3).Info("Tower Job name: " + ttn.Name)
-		jobResource, err := RunAnsibleJob(dynclient, clusterConfigOverride, jobType, ttn, "toweraccess")
+		jobResource, err := RunAnsibleJob(client, curator, jobType, ttn, "toweraccess")
 		if err != nil {
 			return err
 		}
+
 		klog.V(0).Infof("Monitor AnsibleJob: %v", jobResource.GetName())
 		if jobResource.GetName() == "" {
 			return errors.New("Name was not generated")
 		}
-
-		err = MonitorAnsibleJob(dynclient, jobResource, clusterConfigOverride)
+		klog.V(4).Infof("AnsibleJob: %v", jobResource)
+		err = MonitorAnsibleJob(client, jobResource, curator)
 		if err != nil {
 			return err
 		}
 	}
-	if err == nil {
-		utils.RecordAnsibleJobDyn(
-			dynclient,
-			clusterConfigOverride.Name,
-			jobType+" ansibleJobs Complete")
-	}
-	return err
+
+	return nil
 }
 
 func getAnsibleJob(jobtype string,
 	ansibleJobTemplate string,
 	secretRef string,
-	extraVars map[string]interface{},
+	extraVars *runtime.RawExtension,
 	ansibleJobName string,
 	clusterName string) *unstructured.Unstructured {
 
-	if extraVars == nil {
-		extraVars = map[string]interface{}{}
-	}
+	/*mapExtraVars := map[string]interface{}{}
+	if extraVars != nil {
+
+		klog.V(4).Infof("Converting extra_vars to map: %v",extraVars)
+		marshalledExtraVars, err := json.Marshal(extraVars)
+		utils.CheckError(err)
+
+		err = json.Unmarshal(marshalledExtraVars, &mapExtraVars)
+		utils.CheckError(err)
+	}*/
+
 	ansibleJob := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": "tower.ansible.com/v1alpha1",
@@ -89,10 +112,22 @@ func getAnsibleJob(jobtype string,
 			"spec": map[string]interface{}{
 				"job_template_name": ansibleJobTemplate,
 				"tower_auth_secret": secretRef,
-				"extra_vars":        extraVars,
 			},
 		},
 	}
+
+	if extraVars != nil {
+
+		// This is to translate the runtime.RawExtension to a map[string]interface{}
+		mapExtraVars := map[string]interface{}{}
+
+		err := json.Unmarshal(extraVars.Raw, &mapExtraVars)
+		utils.CheckError(err)
+
+		//delete(ansibleJob.Object["spec"].(map[string]interface{}), "extra_vars")
+		ansibleJob.Object["spec"].(map[string]interface{})["extra_vars"] = mapExtraVars
+	}
+
 	return ansibleJob
 }
 
@@ -104,28 +139,28 @@ func getAnsibleJob(jobtype string,
  *  secretRef		 # The secret to connect to Tower in the cluster namespace, ie. toweraccess
  */
 func RunAnsibleJob(
-	dynclient dynamic.Interface,
-	clusterConfigOverride *corev1.ConfigMap,
+	client client.Client,
+	curator *clustercuratorv1.ClusterCurator,
 	jobtype string,
-	jobTemplate AnsibleJob,
+	hookToRun clustercuratorv1.Hook,
 	secretRef string) (*unstructured.Unstructured, error) {
 
 	klog.V(2).Info("* Run " + jobtype + " AnsibleJob")
 
-	namespace := clusterConfigOverride.Namespace
-	klog.V(4).Info((jobTemplate))
+	namespace := curator.Namespace
+	klog.V(4).Infof("hookToRun: %v", hookToRun)
 
 	ansibleJob := getAnsibleJob(
 		jobtype,
-		jobTemplate.Name,
+		hookToRun.Name,
 		secretRef,
-		jobTemplate.ExtraVars,
+		hookToRun.ExtraVars,
 		"",
-		clusterConfigOverride.Namespace)
+		curator.Namespace)
 
 	klog.V(0).Info("Creating AnsibleJob " + ansibleJob.GetName() + " in namespace " + namespace)
-	jobResource, err := dynclient.Resource(ansibleJobGVR).Namespace(namespace).
-		Create(context.TODO(), ansibleJob, v1.CreateOptions{})
+	klog.V(4).Infof("ansibleJob: %v", ansibleJob)
+	err := client.Create(context.Background(), ansibleJob)
 
 	if err != nil {
 		return nil, err
@@ -133,28 +168,38 @@ func RunAnsibleJob(
 
 	klog.V(2).Info("Created AnsibleJob ✓")
 
-	return jobResource, nil
+	return ansibleJob, nil
 }
 
 func MonitorAnsibleJob(
-	dynclient dynamic.Interface,
+	client client.Client,
 	jobResource *unstructured.Unstructured,
-	clusterConfigOverride *corev1.ConfigMap) error {
+	curator *clustercuratorv1.ClusterCurator) error {
 
 	namespace := jobResource.GetNamespace()
 	ansibleJobName := jobResource.GetName()
 	klog.V(0).Info("* Monitoring AnsibleJob " + namespace + "/" + jobResource.GetName())
 
+	utils.CheckError(utils.RecordCurrentStatusCondition(
+		client,
+		curator.Namespace,
+		namespace+"/"+jobResource.GetName(),
+		v1.ConditionFalse,
+		"Executing AnsibleJob"))
+
 	// Monitor the AnsibeJob resource
 	for {
-		jobResource, err := dynclient.Resource(ansibleJobGVR).Namespace(namespace).
-			Get(context.TODO(), ansibleJobName, v1.GetOptions{})
+
+		err := client.Get(context.Background(), types.NamespacedName{
+			Namespace: namespace,
+			Name:      ansibleJobName,
+		}, jobResource)
 
 		if err != nil {
 			return err
 		}
 
-		klog.V(4).Info(jobResource)
+		klog.V(4).Infof("ansibleJob: %v", jobResource)
 
 		// Track initialization of status
 		if jobResource.Object == nil || jobResource.Object["status"] == nil ||
@@ -174,20 +219,25 @@ func MonitorAnsibleJob(
 			if jobStatus == "successful" {
 
 				klog.V(2).Infof("AnsibleJob %v/%v finished successfully ✓", namespace, ansibleJobName)
-				break
 
+				err = utils.RecordCurrentStatusCondition(
+					client,
+					curator.Namespace,
+					namespace+"/"+jobResource.GetName(),
+					v1.ConditionTrue,
+					"Completed executing AnsibleJob")
+				utils.CheckError(err)
+
+				break
 			} else if jobStatus == "error" {
 
-				klog.Warningf("Status: \n\n%v", jobResource.Object["status"])
 				return errors.New("AnsibleJob " + namespace + "/" + ansibleJobName + " exited with an error")
 			}
 		}
 
-		// Store the job name for the UI to use
+		// This is where you would be able to store the actual KubernetesJob name
 		if jos.(map[string]interface{})["k8sJob"] != nil {
-			utils.RecordAnsibleJobDyn(
-				dynclient,
-				clusterConfigOverride.Namespace,
+			klog.V(2).Infof("Ansible Kube Job: %v",
 				jos.(map[string]interface{})["k8sJob"].(map[string]interface{})["namespacedName"].(string))
 		}
 
@@ -208,16 +258,17 @@ type AnsibleJob struct {
 	ExtraVars map[string]interface{} `yaml:"extra_vars,omitempty"`
 }
 
-func FindAnsibleTemplateNamefromConfigMap(cm *corev1.ConfigMap, jobType string) ([]AnsibleJob, error) {
-	if cm == nil {
-		utils.CheckError(errors.New("No ConfigMap provided"))
+func FindAnsibleTemplateNamefromCurator(hooks *clustercuratorv1.Hooks, jobType string) ([]clustercuratorv1.Hook, error) {
+	if hooks == nil {
+		utils.CheckError(errors.New("No Ansible job hooks found"))
 	}
-	if cm.Data[jobType] == "" {
-		return nil, errors.New("Missing " + jobType + " in job ConfigMap " + cm.Name)
+	hooksToRun := hooks.Prehook
+	if jobType == POSTHOOK {
+		hooksToRun = hooks.Posthook
 	}
-	ansibleJobs := &[]AnsibleJob{}
-	klog.V(4).Info(cm.Data[jobType])
-	utils.CheckError(yaml.Unmarshal([]byte(cm.Data[jobType]), &ansibleJobs))
-	klog.V(4).Info(ansibleJobs)
-	return *ansibleJobs, nil
+
+	if len(hooksToRun) == 0 {
+		return nil, errors.New("Missing " + jobType + " in curator kind ")
+	}
+	return hooksToRun, nil
 }

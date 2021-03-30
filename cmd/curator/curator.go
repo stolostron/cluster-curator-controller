@@ -3,7 +3,6 @@
 package main
 
 import (
-	"context"
 	"errors"
 	"io/ioutil"
 	"os"
@@ -18,11 +17,9 @@ import (
 	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/utils"
 	"github.com/open-cluster-management/library-go/pkg/config"
 	hiveclient "github.com/openshift/hive/pkg/client/clientset/versioned"
-	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	clientv1 "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 /* Uses the following environment variables:
@@ -48,14 +45,13 @@ func main() {
 	config, err := config.LoadConfig("", "", "")
 	utils.CheckError(err)
 
-	// Create a typed client for kubernetes
-	kubeset, err := kubernetes.NewForConfig(config)
+	client, err := utils.GetClient()
 	utils.CheckError(err)
 
-	curatorRun(kubeset, config, clusterName)
+	curatorRun(config, &client, clusterName)
 }
 
-func curatorRun(kubeset kubernetes.Interface, config *rest.Config, clusterName string) {
+func curatorRun(config *rest.Config, client *clientv1.Client, clusterName string) {
 
 	var err error
 	var cmdErrorMsg = errors.New("Invalid Parameter: \"" + os.Args[1] +
@@ -65,7 +61,8 @@ func curatorRun(kubeset kubernetes.Interface, config *rest.Config, clusterName s
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
 		case "applycloudprovider-aws", "applycloudprovider-ansible", "monitor-import", "monitor", "ansiblejob",
-			"applycloudprovider-gcp", "applycloudprovider-azure", "activate-and-monitor", "SKIP_ALL_TESTING":
+			"applycloudprovider-gcp", "applycloudprovider-azure", "activate-and-monitor", "SKIP_ALL_TESTING",
+			"prehook-ansiblejob", "posthook-ansiblejob":
 		default:
 			utils.CheckError(cmdErrorMsg)
 		}
@@ -77,27 +74,17 @@ func curatorRun(kubeset kubernetes.Interface, config *rest.Config, clusterName s
 
 	providerCredentialPath := os.Getenv("PROVIDER_CREDENTIAL_PATH")
 
-	var clusterConfigOverride *corev1.ConfigMap
 	// Gets the Cluster Configuration overrides
-	clusterConfigOverride, err = kubeset.CoreV1().ConfigMaps(clusterName).Get(context.TODO(), clusterName, v1.GetOptions{})
+	curator, err := utils.GetClusterCurator(*client, clusterName)
+
 	// Allow an override with the PROVIDER_CREDENTIAL_PATH
 	if err == nil {
-		klog.V(2).Info("Found clusterConfigOverride \"" + clusterConfigOverride.Data["clusterName"] + "\" ✓")
+		klog.V(2).Info("Found clusterCurator resource \"" + curator.Namespace + "\" ✓")
 
-		if clusterConfigOverride.Data["clusterName"] == "" {
-			clusterConfigOverride.Data["clusterName"] = clusterName
-		}
+		utils.CheckError(utils.RecordCurrentStatusCondition(*client, clusterName, jobChoice, v1.ConditionFalse, "Executing init container"))
+		providerCredentialPath = curator.Spec.ProviderCredentialPath
 
-		if clusterName != clusterConfigOverride.Data["clusterName"] {
-			utils.CheckError(errors.New("Cluster namespace \"" + clusterName +
-				"\" does not match the cluster ConfigMap override \"" +
-				clusterConfigOverride.Data["clusterName"] + "\""))
-		}
-
-		utils.RecordCurrentCuratorContainer(kubeset, clusterName, jobChoice)
-		providerCredentialPath = clusterConfigOverride.Data["providerCredentialPath"]
-
-	} else if !strings.Contains(jobChoice, "applycloudprovider-") && err != nil {
+	} else if err != nil && providerCredentialPath == "" {
 		utils.CheckError(err)
 
 	} else {
@@ -105,13 +92,19 @@ func curatorRun(kubeset kubernetes.Interface, config *rest.Config, clusterName s
 	}
 
 	if providerCredentialPath == "" && strings.Contains(jobChoice, "applycloudprovider-") {
-		utils.CheckError(errors.New("Missing spec.data.providerCredentialPath in Configmap: " + clusterName))
+		klog.Warningf("providerCredentialPath: " + providerCredentialPath)
+		utils.CheckError(errors.New("Missing spec.providerCredentialPath in ClusterCurator: " + clusterName))
 	}
 
 	var secretData *map[string]string
 	if strings.Contains(jobChoice, "applycloudprovider-") {
+
+		kubeset, err := utils.GetKubeset()
+		utils.CheckError(err)
+
 		secretData = secrets.GetSecretData(kubeset, providerCredentialPath)
 		klog.V(2).Info("=> Applying Provider credential \"" + providerCredentialPath + "\" to cluster " + clusterName)
+
 		if jobChoice == "applycloudprovider-aws" {
 			err := secrets.CreateAWSSecrets(kubeset, *secretData, clusterName)
 			utils.CheckError(err)
@@ -122,7 +115,7 @@ func curatorRun(kubeset kubernetes.Interface, config *rest.Config, clusterName s
 			err := secrets.CreateAzureSecrets(kubeset, *secretData, clusterName)
 			utils.CheckError(err)
 		}
-		err := secrets.CreateAnsibleSecret(kubeset, *secretData, clusterName)
+		err = secrets.CreateAnsibleSecret(kubeset, *secretData, clusterName)
 		utils.CheckError(err)
 
 	}
@@ -141,19 +134,19 @@ func curatorRun(kubeset kubernetes.Interface, config *rest.Config, clusterName s
 	}
 	// Create a client for the manageclusterV1 CustomResourceDefinitions
 	if jobChoice == "monitor-import" {
-		dynclient, err := dynamic.NewForConfig(config)
+		dynclient, err := utils.GetDynset(nil)
 		utils.CheckError(err)
 
 		utils.CheckError(importer.MonitorMCInfoImport(dynclient, clusterName))
 	}
 
-	if jobChoice == "ansiblejob" {
-		dynclient, err := dynamic.NewForConfig(config)
-		utils.CheckError(err)
+	if strings.Contains(jobChoice, "ansiblejob") {
 
-		err = ansible.Job(dynclient, clusterConfigOverride)
+		err = ansible.Job(*client, curator)
 		utils.CheckError(err)
 	}
+
+	utils.RecordCurrentStatusCondition(*client, clusterName, jobChoice, v1.ConditionTrue, "Completed executing init container")
 
 	klog.V(2).Info("Done!")
 }

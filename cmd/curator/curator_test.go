@@ -7,28 +7,25 @@ import (
 	"strings"
 	"testing"
 
+	clustercuratorv1 "github.com/open-cluster-management/cluster-curator-controller/pkg/api/v1alpha1"
+	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/utils"
 	"github.com/stretchr/testify/assert"
-	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/kubernetes/scheme"
+	clientfake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 const ClusterName = "my-cluster"
 
-func getConfigMap() *corev1.ConfigMap {
-	return &corev1.ConfigMap{
-		TypeMeta: v1.TypeMeta{
-			Kind:       "ConfigMap",
-			APIVersion: "v1",
-		},
+func getClusterCurator() *clustercuratorv1.ClusterCurator {
+	return &clustercuratorv1.ClusterCurator{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      ClusterName,
 			Namespace: ClusterName,
-			Labels: map[string]string{
-				"open-cluster-management": "curator",
-			},
 		},
-		Data: map[string]string{},
+		Spec: clustercuratorv1.ClusterCuratorSpec{
+			DesiredCuration: "install",
+		},
 	}
 }
 
@@ -68,32 +65,38 @@ func TestCuratorRunWrongParam(t *testing.T) {
 	curatorRun(nil, nil, ClusterName)
 }
 
-func TestCuratorRunNoConfigMap(t *testing.T) {
+func TestCuratorRunNoClusterCurator(t *testing.T) {
 
 	defer func() {
 		r := recover()
 		t.Log(r.(error).Error())
 
-		if !strings.Contains(r.(error).Error(), "configmaps \"my-cluster\"") {
+		if !strings.Contains(r.(error).Error(), "clustercurators.cluster.open-cluster-management.io \"my-cluster\"") {
 			t.Fatal(r)
 		}
-		t.Log("Detected missing ConfigMap")
+		t.Log("Detected missing ClusterCurator resource")
 	}()
 
-	kubeset := fake.NewSimpleClientset()
+	s := scheme.Scheme
+	s.AddKnownTypes(utils.CCGVR.GroupVersion(), &clustercuratorv1.ClusterCurator{})
+
+	client := clientfake.NewFakeClientWithScheme(s)
 
 	os.Args[1] = "SKIP_ALL_TESTING"
 
-	curatorRun(kubeset, nil, ClusterName)
+	curatorRun(nil, &client, ClusterName)
 }
 
-func TestCuratorRunConfigMap(t *testing.T) {
+func TestCuratorRunClusterCurator(t *testing.T) {
 
-	kubeset := fake.NewSimpleClientset(getConfigMap())
+	s := scheme.Scheme
+	s.AddKnownTypes(utils.CCGVR.GroupVersion(), &clustercuratorv1.ClusterCurator{})
+
+	client := clientfake.NewFakeClientWithScheme(s, getClusterCurator())
 
 	os.Args[1] = "SKIP_ALL_TESTING"
 
-	assert.NotPanics(t, func() { curatorRun(kubeset, nil, ClusterName) }, "no panic when configmap found and skip test")
+	assert.NotPanics(t, func() { curatorRun(nil, &client, ClusterName) }, "no panic when configmap found and skip test")
 }
 
 func TestCuratorRunNoProviderCredentialPath(t *testing.T) {
@@ -102,17 +105,20 @@ func TestCuratorRunNoProviderCredentialPath(t *testing.T) {
 		r := recover()
 		t.Log(r.(error).Error())
 
-		if !strings.Contains(r.(error).Error(), "Missing spec.data.providerCredentialPath") {
+		if !strings.Contains(r.(error).Error(), "Missing spec.providerCredentialPath") {
 			t.Fatal(r)
 		}
 		t.Log("Detected missing provierCredentialPath")
 	}()
 
-	kubeset := fake.NewSimpleClientset(getConfigMap())
+	s := scheme.Scheme
+	s.AddKnownTypes(utils.CCGVR.GroupVersion(), &clustercuratorv1.ClusterCurator{})
+
+	client := clientfake.NewFakeClientWithScheme(s, getClusterCurator())
 
 	os.Args[1] = "applycloudprovider-ansible"
 
-	curatorRun(kubeset, nil, ClusterName)
+	curatorRun(nil, &client, ClusterName)
 }
 
 func TestCuratorRunProviderCredentialPathEnv(t *testing.T) {
@@ -121,39 +127,16 @@ func TestCuratorRunProviderCredentialPathEnv(t *testing.T) {
 		r := recover()
 		t.Log(r.(error).Error())
 
-		if !strings.Contains(r.(error).Error(), "secrets \"secretname\" not found") {
+		if !strings.Contains(r.(error).Error(), "secrets \"secretname\"") {
 			t.Fatal(r)
 		}
 		t.Log("Detected missing namespace/secretName")
 	}()
 
 	os.Setenv("PROVIDER_CREDENTIAL_PATH", "namespace/secretname")
-	kubeset := fake.NewSimpleClientset()
+	client := clientfake.NewFakeClient()
 
 	os.Args[1] = "applycloudprovider-ansible"
 
-	curatorRun(kubeset, nil, ClusterName)
-}
-
-func TestCuratorRunConfigMapDifferentClusterName(t *testing.T) {
-
-	defer func() {
-		r := recover()
-		t.Log(r.(error).Error())
-
-		if !strings.Contains(r.(error).Error(),
-			"Cluster namespace \"my-cluster\" does not match the cluster") {
-			t.Fatal(r)
-		}
-		t.Log("Detected ConfigMap.Data.clusterName mis-match")
-	}()
-
-	cm := getConfigMap()
-	cm.Data["clusterName"] = ClusterName + "123"
-
-	kubeset := fake.NewSimpleClientset(cm)
-
-	os.Args[1] = "SKIP_ALL_TESTING"
-
-	curatorRun(kubeset, nil, ClusterName)
+	curatorRun(nil, &client, ClusterName)
 }
