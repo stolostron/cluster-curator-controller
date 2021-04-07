@@ -12,6 +12,7 @@ import (
 	"github.com/open-cluster-management/api/client/cluster/clientset/versioned/scheme"
 	clustercuratorv1 "github.com/open-cluster-management/cluster-curator-controller/pkg/api/v1alpha1"
 	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/utils"
+	hivev1 "github.com/openshift/hive/pkg/apis/hive/v1"
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -67,6 +68,24 @@ func getClusterCuratorEmpty() *clustercuratorv1.ClusterCurator {
 		},
 		Spec: clustercuratorv1.ClusterCuratorSpec{
 			DesiredCuration: "install",
+		},
+	}
+}
+
+func genClusterDeployment() *hivev1.ClusterDeployment {
+	return &hivev1.ClusterDeployment{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      ClusterName,
+			Namespace: ClusterName,
+		},
+	}
+}
+
+func genMachinePool() *hivev1.MachinePool {
+	return &hivev1.MachinePool{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      ClusterName + MPSUFFIX,
+			Namespace: ClusterName,
 		},
 	}
 }
@@ -172,7 +191,8 @@ func TestJob(t *testing.T) {
 
 	s.AddKnownTypes(ajv1.SchemeBuilder.GroupVersion, &ajv1.AnsibleJob{})
 	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
-	client := clientfake.NewFakeClientWithScheme(s, getClusterCurator())
+	s.AddKnownTypes(hivev1.SchemeBuilder.GroupVersion, &hivev1.ClusterDeployment{}, &hivev1.MachinePool{})
+	client := clientfake.NewFakeClientWithScheme(s, getClusterCurator(), genClusterDeployment(), genMachinePool())
 
 	// buildAnsibleJob("successful", AnsibleJobTemplateName),
 	go func() {
@@ -217,7 +237,8 @@ func TestJobPosthook(t *testing.T) {
 
 	s.AddKnownTypes(ajv1.SchemeBuilder.GroupVersion, &ajv1.AnsibleJob{})
 	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
-	client := clientfake.NewFakeClientWithScheme(s, getClusterCurator())
+	s.AddKnownTypes(hivev1.SchemeBuilder.GroupVersion, &hivev1.ClusterDeployment{}, &hivev1.MachinePool{})
+	client := clientfake.NewFakeClientWithScheme(s, getClusterCurator(), genClusterDeployment(), genMachinePool())
 
 	// buildAnsibleJob("successful", AnsibleJobTemplateName),
 	go func() {
@@ -330,7 +351,8 @@ func TestRunAnsibleJob(t *testing.T) {
 
 	s.AddKnownTypes(ajv1.SchemeBuilder.GroupVersion, &ajv1.AnsibleJob{})
 	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
-	client := clientfake.NewFakeClientWithScheme(s, cc)
+	s.AddKnownTypes(hivev1.SchemeBuilder.GroupVersion, &hivev1.ClusterDeployment{}, &hivev1.MachinePool{})
+	client := clientfake.NewFakeClientWithScheme(s, cc, genClusterDeployment(), genMachinePool())
 
 	aJob, err := RunAnsibleJob(client, cc, POSTHOOK, cc.Spec.Install.Posthook[0], "toweraccess")
 	assert.Nil(t, err, "err is nil when job is started")
