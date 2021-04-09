@@ -20,6 +20,7 @@ import (
 
 	ajv1 "github.com/open-cluster-management/ansiblejob-go-lib/api/v1alpha1"
 	clustercuratorv1 "github.com/open-cluster-management/cluster-curator-controller/pkg/api/v1alpha1"
+	hivev1 "github.com/openshift/hive/pkg/apis/hive/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -154,6 +155,7 @@ func GetClient() (clientv1.Client, error) {
 	CheckError(clustercuratorv1.AddToScheme(curatorScheme))
 	CheckError(batchv1.AddToScheme(curatorScheme))
 	CheckError(ajv1.AddToScheme(curatorScheme))
+	CheckError(hivev1.AddToScheme(curatorScheme))
 
 	return clientv1.New(config, clientv1.Options{Scheme: curatorScheme})
 }
