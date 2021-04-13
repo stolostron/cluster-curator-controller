@@ -16,7 +16,7 @@ spec:
     singular: clustercurator
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - name: v1beta1
     schema:
       openAPIV3Schema:
         description: ClusterCurator is the Schema for the clustercurators API This kind allows for prehook and posthook jobs to be executed prior to Hive provisioning and import of a cluster.

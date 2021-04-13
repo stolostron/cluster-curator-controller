@@ -89,7 +89,7 @@ For more details on job flow within our architecture see our [**swimlane chart**
   * Now create the ClusterCurator resource kind in the cluster namespace. This will begin curation of your cluster provisioning.
     ```yaml
     ---
-    apiVersion: cluster.open-cluster-management.io/v1alpha1
+    apiVersion: cluster.open-cluster-management.io/v1beta1
     kind: ClusterCurator
     metadata:
       name: MY_CLUSTER_NAME

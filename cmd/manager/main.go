@@ -15,7 +15,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	"github.com/open-cluster-management/cluster-curator-controller/controllers"
-	clusteropenclustermanagementiov1alpha1 "github.com/open-cluster-management/cluster-curator-controller/pkg/api/v1alpha1"
+	clusteropenclustermanagementiov1beta1 "github.com/open-cluster-management/cluster-curator-controller/pkg/api/v1beta1"
 	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/utils"
 	// +kubebuilder:scaffold:imports
 )
@@ -28,7 +28,7 @@ var (
 func init() {
 	_ = clientgoscheme.AddToScheme(scheme)
 
-	_ = clusteropenclustermanagementiov1alpha1.AddToScheme(scheme)
+	_ = clusteropenclustermanagementiov1beta1.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
 }
 
