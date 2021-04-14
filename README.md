@@ -1,6 +1,8 @@
-# Cluster-Curator
+# Cluster-Curator-Controller
 
-## Purpose
+[![License](https://img.shields.io/:license-apache-blue.svg)](http://www.apache.org/licenses/LICENSE-2.0.html)
+
+## What is cluster-curator-controller
 This project contains jobs and controllers for curating work around Cluster Provisioning. It is designed to extend the capabilities already present within Hive `ClusterDeployment` and Open Cluster Management `ManagedCluster` kinds.
 
 ## Architecture
@@ -8,128 +10,161 @@ The controller found here, monitors for `ClusterCurator` kind.  When new instanc
 
 ![Architecture diagram](docs/ansiblejob-flow.png "Architecture")\
 For more details on job flow within our architecture see our [**swimlane chart**](https://swimlanes.io/u/kGNg12_Vw).
-## Controller:
-- cluster-curator-controller (ccc), watches for `ClusterCurator` kind reconcile action.
 
-### Deploy
-```bash
-oc apply -k deploy/controller
-```
-This deployment defaults to the namespace `open-cluster-management`. Each time a new `ClusterCurator` resource is created, you will see operations take place in the controller pod's log, as well as the `status.conditions` on the ClusterCurator resource.
+## Getting started
 
-## Jobs
+- ### Built in curation jobs:
 
-| Job action | Description | Cloud Provider | Cluster Curator |
-| :---------:| :---------: | :------------: | :----------------: |
-|applycloudprovider-(aws/gcp/azure/vmware)| Creates AWS/GCP/Azure/VMware related credentials for a cluster deployment | X | X |
-|applycloudprovider-ansible | Creates the Ansible tower secret for a cluster deployment (included in applycloudprovider-aws) | X | X |
-| activate-and-monitor | Sets `ClusterDeployment.spec.installAttempsLimit: 1`, then monitors the deployment of the cluster | | X | 
-| monitor-import | Monitors the ManagedCluster import | | X |
-| prehook-ansiblejob posthook-ansiblejob | Creates an AnsibleJob resource and monitors it to completion |  | X |
-| monitor | Watches a `ClusterDeployment` Provisioning Job | | |
+  | Job action | Description | Cloud Provider | Cluster Curator |
+  | :---------:| :---------: | :------------: | :----------------: |
+  |applycloudprovider-(aws/gcp/azure/vmware)| Creates AWS/GCP/Azure/VMware related credentials for a cluster deployment | X | X |
+  |applycloudprovider-ansible | Creates the Ansible tower secret for a cluster deployment (included in applycloudprovider-aws) | X | X |
+  | activate-and-monitor | Sets `ClusterDeployment.spec.installAttempsLimit: 1`, then monitors the deployment of the cluster | | X | 
+  | monitor-import | Monitors the ManagedCluster import | | X |
+  | prehook-ansiblejob posthook-ansiblejob | Creates an AnsibleJob resource and monitors it to completion |  | X |
+  | monitor | Watches a `ClusterDeployment` Provisioning Job | | |
 
 
-Here is an example of each job described above. You can add and remove instances of the job containers as needed. You can also inject your own containers `./deploy/jobs/create-cluster.yaml`
+  - Here is an example of each job described above. You can add and remove instances of the job containers as needed. You can also inject your own containers `./deploy/jobs/create-cluster.yaml`
 
-## Provisioning
-### 1. Creating a cluster (AWS)
-
-* In the Red Hat Advanced Cluster Management console, create a NEW cluster. Before you press the button to create the button, flip the YAML switch.  Look for the key-value field `installAttemptsLimit: 2`, and change it to `installAttemptsLimit: 0`, then press **Create**
-
-* The cluster will show in the console as **Creating**, but it is waiting for curation. If you will be using Ansible, create a secret in the cluster namespace. Here is a an example:
-```yaml
 ---
-apiVersion: v1
-kind: Secret
-metadata:
-  name: toweraccess
-  namespace: MY_CLUSTER_NAMESPACE
-stringData:
-  host: https://my-tower-domain.io
-  token: ANSIBLE_TOKEN_FOR_admin  
-```
 
-* Now create the ClusterCurator resource kind in the cluster namespace. This will begin curation of your cluster provisioning.
-```yaml
+- ### Steps for development:
+
+  - Compile binaries
+    ```bash
+    make compile-curator
+    ```
+    This will compile the two binaries `manager` and `curator` in `./build/_output`
+
+  - Push image to a repo
+    
+    * Connect your local docker daemon to your prefered registry
+      ```bash
+      export VERSION=1.0    # This is used as the docker image tag
+
+      export REPO_URL=quay.io/MY_REPOSITORY  # This can also be a docker registry
+
+      make push-curator
+      ```
+    * You can now modify the `image:` references (there are x2) in `deploy/controller/deployment.yaml`
+
+  - Updating the `Type.go` and `CRD`
+  
+    * Requires controller-gen be installed, the makefile will attempt to install it if it is not present.
+      ``` bash
+      make generate   # Creates the groups and deep copy scafold
+
+      make manifests  # Regenerates the CRDs
+      ```
+
 ---
-apiVersion: cluster.open-cluster-management.io/v1alpha1
-kind: ClusterCurator
-metadata:
-  name: MY_CLUSTER_NAME
-  namespace: MY_CLUSTER_NAMESPACE
-  labels:
-    open-cluster-management: curator
-spec:
-  desiredCuration: install
-  install:
-    prehook:
-      - name: Demo Job Template
-        extra_vars:
-          variable1: something-interesting
-          variable2: 2
-      - name: Demo Job Template
-    posthook:
-      - name: Demo Job Template
-```
 
-* The provisiong will start. To find the curator job, run the following command:
-```bash
-oc -n MY_CLUSTER get ClusterCurator -o yaml
-```
-This will return the YAML for the ClusteCurator resource, in the `spec` is a field `curatorJob`, this has the Job that is curating the cluster. Also note the `status.conditions`, each step performed by the curator job will have a condition where the `status: "False"`. The `type` of each condition is a step(InitContainer) in the curator job. You can combine the job name and the type value to retreive the logs
-```yaml
-spec:
-  curatorJob: curator-job-d9pwh
-  ...
-status:
-  conditions:
-  - lastTransitionTime: "2021-03-30T03:58:59Z"
-    message: Executing init container prehook-ansiblejob
-    reason: Job_has_finished
-    status: "False"
-    type: prehook-ansiblejob
-```
+- ### Steps for deployment:
+  - Connect to the OpenShift hub, the cluster  with Open Cluster Management installed
+    ```bash
+    oc apply -k deploy/controller
+    ```
+  - This deployment defaults to the namespace `open-cluster-management`. Each time a new `ClusterCurator` resource is created, you will see operations take place in the controller pod's log, as well as the `status.conditions` on the ClusterCurator resource.
 
-## Run the following command to see the logs
-```bash
-# oc logs job/CURATOR_JOB_NAME TYPE_VALUE
-oc logs job/curator-job-d9pwh prehook-ansiblejob
+---
 
-oc logs job/curator-job-d9pwh activate-and-monitor
+- ### Cluster provisioning example: _(AWS)_
 
-oc logs job/curator-job-d9pwh posthook-ansiblejob
-```
-### Add a "-f" to the end if you want to tail the output
+  * In the Red Hat Advanced Cluster Management console, create a NEW cluster. Before you press the button to create the button, flip the YAML switch.  Look for the key-value field `installAttemptsLimit: 2`, and change it to `installAttemptsLimit: 0`, then press **Create**
 
-If there is a failure, the job will show Failure.  Look at the `curator-job-container` value to see which step in the provisioning failed and review the logs above. If the `curator-job-contianer` is `monitor`, there may be an additional `provisioning` job. Check this log for additional information.
+  * The cluster will show in the console as **Creating**, but it is waiting for curation. If you will be using Ansible, create a secret in the cluster namespace. Here is a an example:
+    ```yaml
+    ---
+    apiVersion: v1
+    kind: Secret
+    metadata:
+      name: toweraccess
+      namespace: MY_CLUSTER_NAMESPACE
+    stringData:
+      host: https://my-tower-domain.io
+      token: ANSIBLE_TOKEN_FOR_admin  
+    ```
 
-The generated YAML can be committed to a Git repository. You can then use an ACM Subscription to apply the YAML (provision) on the ACM Hub.  Repeat steps 1 & 3 to create new clusters.
+  * Now create the ClusterCurator resource kind in the cluster namespace. This will begin curation of your cluster provisioning.
+    ```yaml
+    ---
+    apiVersion: cluster.open-cluster-management.io/v1alpha1
+    kind: ClusterCurator
+    metadata:
+      name: MY_CLUSTER_NAME
+      namespace: MY_CLUSTER_NAMESPACE
+      labels:
+        open-cluster-management: curator
+    spec:
+      desiredCuration: install
+      install:
+        prehook:
+          - name: Demo Job Template
+            extra_vars:
+              variable1: something-interesting
+              variable2: 2
+          - name: Demo Job Template
+        posthook:
+          - name: Demo Job Template
+    ```
+  * For each ansibleJob that will be created, two special keys will be created in `extra_vars`:
+    1. `cluster_deployment`, which has general information about the cluster
+    2. `machine_pool` which has details about the worker nodes being created in the cluster
+    
+    These are made available to be used by the AnsibleJob during execution
 
-# Development
-## Compile binaries
-```bash
-make compile-curator
-```
-This will compile the two binaries `manager` and `curator` in `./build/_output`
+  * The provisiong will start. To find the curator job, run the following command:
+    ```bash
+    oc -n MY_CLUSTER get ClusterCurator -o yaml
+    ```
+    This will return the YAML for the ClusteCurator resource, in the `spec` is a field `curatorJob`, this has the Job that is curating the cluster. Also note the `status.conditions`, each step performed by the curator job will have a condition where the `status: "False"`. The `type` of each condition is a step(InitContainer) in the curator job. You can combine the job name and the type value to retreive the logs
+    ```yaml
+    spec:
+      curatorJob: curator-job-d9pwh
+      ...
+    status:
+      conditions:
+      - lastTransitionTime: "2021-03-30T03:58:59Z"
+        message: Executing init container prehook-ansiblejob
+        reason: Job_has_finished
+        status: "False"
+        type: prehook-ansiblejob
+  
+    ```
 
-## Push image to a repo
-* Connect your local docker daemon to your prefered registry
-```bash
-export VERSION=1.0    # This is used as the docker image tag
+---
 
-export REPO_URL=quay.io/MY_REPOSITORY  # This can also be a docker registry
+- ### Diagnostic steps:
+  
+  - Run the following command to see the logs
+    ```bash
+    # oc logs job/CURATOR_JOB_NAME TYPE_VALUE
+    oc logs job/curator-job-d9pwh prehook-ansiblejob
 
-make push-curator
-```
-* You can now modify the `image:` references (there are x2) in `deploy/controller/deployment.yaml`
+    oc logs job/curator-job-d9pwh activate-and-monitor
 
-## Changing the `Type` and `CRD`
-* Requires controller-gen be installed, the makefile will attempt to install it if it is not present.
-``` bash
-make generate   # Creates the groups and deep copy scafold
+    oc logs job/curator-job-d9pwh posthook-ansiblejob
+    ```
+  - Add a "-f" to the end if you want to tail the output
 
-make manifests  # Regenerates the CRDs
-```
+    If there is a failure, the job will show Failure.  Look at the `curator-job-container` value to see which step in the provisioning failed and review the logs above. If the `curator-job-contianer` is `monitor`, there may be an additional `provisioning` job. Check this log for additional information.
 
-If you would like to learn more, join us in the https://github.com/open-cluster-management/community
+    The generated YAML can be committed to a Git repository. You can then use an ACM Subscription to apply the YAML (provision) on the ACM Hub.  Repeat steps 1 & 3 to create new clusters.
+
+---
+
+- ### Steps for test:
+
+  ```bash
+  make unit-tests
+  ```
+
+- Check the [Security guide](SECURITY.md) if you need to report a security issue.
+
+
+## References
+
+- The `cloudprovider-secret-controller` is part of the `open-cluster-management` community. For more information, visit: [open-cluster-management.io](https://open-cluster-management.io).
+
 

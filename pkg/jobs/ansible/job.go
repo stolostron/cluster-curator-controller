@@ -10,6 +10,7 @@ import (
 
 	clustercuratorv1 "github.com/open-cluster-management/cluster-curator-controller/pkg/api/v1alpha1"
 	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/utils"
+	hivev1 "github.com/openshift/hive/pkg/apis/hive/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -21,6 +22,7 @@ import (
 
 const PREHOOK = "prehook"
 const POSTHOOK = "posthook"
+const MPSUFFIX = "-worker"
 
 var ansibleJobGVR = schema.GroupVersionResource{
 	Group: "tower.ansible.com", Version: "v1alpha1", Resource: "ansiblejobs"}
@@ -53,8 +55,8 @@ func Job(client client.Client, curator *clustercuratorv1.ClusterCurator) error {
 	}
 
 	// Move on when clusterCurator is missing or job hook is missing
-	klog.V(0).Infof("No ansibleJob detected for %v", jobType)
 	if len(hooksToRun) == 0 {
+		klog.V(0).Infof("No ansibleJob detected for %v", jobType)
 		return nil
 	}
 
@@ -116,19 +118,46 @@ func getAnsibleJob(jobtype string,
 		},
 	}
 
-	if extraVars != nil {
+	// This is to translate the runtime.RawExtension to a map[string]interface{}
+	mapExtraVars := map[string]interface{}{}
 
-		// This is to translate the runtime.RawExtension to a map[string]interface{}
-		mapExtraVars := map[string]interface{}{}
+	if extraVars != nil {
 
 		err := json.Unmarshal(extraVars.Raw, &mapExtraVars)
 		utils.CheckError(err)
-
-		//delete(ansibleJob.Object["spec"].(map[string]interface{}), "extra_vars")
-		ansibleJob.Object["spec"].(map[string]interface{})["extra_vars"] = mapExtraVars
 	}
 
+	ansibleJob.Object["spec"].(map[string]interface{})["extra_vars"] = mapExtraVars
+
 	return ansibleJob
+}
+
+// Retreive the cluster deployment for use in the extra_vars
+func getClusterDeployment(client client.Client, clusterName string) (map[string]interface{}, error) {
+	cd := hivev1.ClusterDeployment{}
+
+	if err := client.Get(context.Background(), types.NamespacedName{
+		Namespace: clusterName,
+		Name:      clusterName,
+	}, &cd); err != nil {
+		return nil, err
+	}
+
+	return runtime.DefaultUnstructuredConverter.ToUnstructured(&cd)
+}
+
+// Retreive the Machine Pool for use in the extra_vars
+func getMachinePool(client client.Client, clusterName string) (map[string]interface{}, error) {
+	mp := hivev1.MachinePool{}
+
+	if err := client.Get(context.Background(), types.NamespacedName{
+		Namespace: clusterName,
+		Name:      clusterName + MPSUFFIX,
+	}, &mp); err != nil {
+		return nil, err
+	}
+
+	return runtime.DefaultUnstructuredConverter.ToUnstructured(&mp)
 }
 
 /* RunAnsibleJob - Run a basic AnsbileJob kind to trigger an Ansible Teamplte Job playbook
@@ -156,11 +185,24 @@ func RunAnsibleJob(
 		secretRef,
 		hookToRun.ExtraVars,
 		"",
-		curator.Namespace)
+		namespace)
+
+	cd, err := getClusterDeployment(client, namespace)
+	if err != nil {
+		return nil, err
+	}
+
+	mp, err := getMachinePool(client, namespace)
+	if err != nil {
+		return nil, err
+	}
+
+	ansibleJob.Object["spec"].(map[string]interface{})["extra_vars"].(map[string]interface{})["cluster_deployment"] = cd["spec"]
+	ansibleJob.Object["spec"].(map[string]interface{})["extra_vars"].(map[string]interface{})["machine_pool"] = mp["spec"]
 
 	klog.V(0).Info("Creating AnsibleJob " + ansibleJob.GetName() + " in namespace " + namespace)
 	klog.V(4).Infof("ansibleJob: %v", ansibleJob)
-	err := client.Create(context.Background(), ansibleJob)
+	err = client.Create(context.Background(), ansibleJob)
 
 	if err != nil {
 		return nil, err

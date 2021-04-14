@@ -7,7 +7,6 @@ metadata:
     open-cluster-management: curator
 spec:
   desiredCuration: install
-  providerCredentialPath: default/aws4jnp
   install:
     prehook:
     - name: Demo Job Template
