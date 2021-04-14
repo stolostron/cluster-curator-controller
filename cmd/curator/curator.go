@@ -56,13 +56,13 @@ func curatorRun(config *rest.Config, client *clientv1.Client, clusterName string
 	var err error
 	var cmdErrorMsg = errors.New("Invalid Parameter: \"" + os.Args[1] +
 		"\"\nCommand: ./curator [monitor-import|monitor|activate-and-monitor|applycloudprovider-aws|" +
-		"applycloudprovider-gcp|applycloudprovider-azure]")
+		"applycloudprovider-gcp|applycloudprovider-azure|upgrade-cluster]")
 
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
 		case "applycloudprovider-aws", "applycloudprovider-ansible", "monitor-import", "monitor", "ansiblejob",
-			"applycloudprovider-gcp", "applycloudprovider-azure", "activate-and-monitor", "SKIP_ALL_TESTING",
-			"prehook-ansiblejob", "posthook-ansiblejob":
+			"applycloudprovider-gcp", "applycloudprovider-azure", "activate-and-monitor", "upgrade-cluster",
+			"SKIP_ALL_TESTING", "prehook-ansiblejob", "posthook-ansiblejob":
 		default:
 			utils.CheckError(cmdErrorMsg)
 		}
@@ -143,6 +143,17 @@ func curatorRun(config *rest.Config, client *clientv1.Client, clusterName string
 		utils.CheckError(err)
 
 		utils.CheckError(importer.MonitorMCInfoImport(dynclient, clusterName))
+	}
+
+	if strings.Contains(jobChoice, "upgrade-cluster") {
+		// hiveset, err := hiveclient.NewForConfig(config)
+		// utils.CheckError(err)
+		dynclient, err := utils.GetDynset(nil)
+		utils.CheckError(err)
+
+		err = hive.UpgradeCluster(dynclient, clusterName, curator)
+		// err = hive.ActivateDeploy(hiveset, clusterName)
+		utils.CheckError(err)
 	}
 
 	if strings.Contains(jobChoice, "ansiblejob") {

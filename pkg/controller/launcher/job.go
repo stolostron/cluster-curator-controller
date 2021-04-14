@@ -24,6 +24,7 @@ const PostAJob = "posthook-ansiblejob"
 const MonImport = "monitor-import"
 
 const ActivateAndMonitor = "activate-and-monitor"
+const UpgradeCluster = "upgrade-cluster"
 
 type Launcher struct {
 	client         client.Client
@@ -46,7 +47,7 @@ func NewLauncher(
 	}
 }
 
-func getBatchJob(clusterName string, imageURI string) *batchv1.Job {
+func getBatchJob(clusterName string, imageURI string, desiredCuration string) *batchv1.Job {
 
 	var ttlf int32 = 3600
 	var resourceSettings = corev1.ResourceRequirements{
@@ -59,80 +60,150 @@ func getBatchJob(clusterName string, imageURI string) *batchv1.Job {
 			corev1.ResourceMemory: resource.MustParse("45Mi"),
 		},
 	}
-
-	newJob := &batchv1.Job{
-		ObjectMeta: v1.ObjectMeta{
-			GenerateName: "curator-job-",
-			Namespace:    clusterName,
-			Labels: map[string]string{
-				"open-cluster-management": "curator-job",
+	var newJob = &batchv1.Job{}
+	switch desiredCuration {
+	case "install":
+		newJob := &batchv1.Job{
+			ObjectMeta: v1.ObjectMeta{
+				GenerateName: "curator-job-",
+				Namespace:    clusterName,
+				Labels: map[string]string{
+					"open-cluster-management": "curator-job",
+				},
+				Annotations: map[string]string{
+					PreAJob:            "Running pre-provisioning AnsibleJob",
+					ActivateAndMonitor: "Start Provisioning the Cluster and monitor to completion",
+					MonImport:          "Monitor the managed cluster until it is imported",
+					PostAJob:           "Running post-provisioning AnsibleJob",
+				},
 			},
-			Annotations: map[string]string{
-				PreAJob:            "Running pre-provisioning AnsibleJob",
-				ActivateAndMonitor: "Start Provisioning the Cluster and monitor to completion",
-				MonImport:          "Monitor the managed cluster until it is imported",
-				PostAJob:           "Running post-provisioning AnsibleJob",
-			},
-		},
-		Spec: batchv1.JobSpec{
-			BackoffLimit:            new(int32),
-			TTLSecondsAfterFinished: &ttlf,
-			Template: corev1.PodTemplateSpec{
-				Spec: corev1.PodSpec{
-					ServiceAccountName: "cluster-installer",
-					RestartPolicy:      corev1.RestartPolicyNever,
-					InitContainers: []corev1.Container{
-						corev1.Container{
-							Name:            PreAJob,
-							Image:           imageURI,
-							Command:         append([]string{CurCmd, PreAJob}),
-							ImagePullPolicy: corev1.PullAlways,
-							Env: []corev1.EnvVar{
-								corev1.EnvVar{
-									Name:  "JOB_TYPE",
-									Value: "prehook",
+			Spec: batchv1.JobSpec{
+				BackoffLimit:            new(int32),
+				TTLSecondsAfterFinished: &ttlf,
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						ServiceAccountName: "cluster-installer",
+						RestartPolicy:      corev1.RestartPolicyNever,
+						InitContainers: []corev1.Container{
+							corev1.Container{
+								Name:            PreAJob,
+								Image:           imageURI,
+								Command:         append([]string{CurCmd, PreAJob}),
+								ImagePullPolicy: corev1.PullAlways,
+								Env: []corev1.EnvVar{
+									corev1.EnvVar{
+										Name:  "JOB_TYPE",
+										Value: "prehook",
+									},
 								},
+								Resources: resourceSettings,
 							},
-							Resources: resourceSettings,
-						},
-						corev1.Container{
-							Name:            ActivateAndMonitor,
-							Image:           imageURI,
-							Command:         append([]string{CurCmd, ActivateAndMonitor}),
-							ImagePullPolicy: corev1.PullAlways,
-							Resources:       resourceSettings,
-						},
-						corev1.Container{
-							Name:            MonImport,
-							Image:           imageURI,
-							Command:         append([]string{CurCmd, MonImport}),
-							ImagePullPolicy: corev1.PullAlways,
-							Resources:       resourceSettings,
-						},
-						corev1.Container{
-							Name:            PostAJob,
-							Image:           imageURI,
-							Command:         append([]string{CurCmd, PostAJob}),
-							ImagePullPolicy: corev1.PullAlways,
-							Env: []corev1.EnvVar{
-								corev1.EnvVar{
-									Name:  "JOB_TYPE",
-									Value: "posthook",
+							corev1.Container{
+								Name:            ActivateAndMonitor,
+								Image:           imageURI,
+								Command:         append([]string{CurCmd, ActivateAndMonitor}),
+								ImagePullPolicy: corev1.PullAlways,
+								Resources:       resourceSettings,
+							},
+							corev1.Container{
+								Name:            MonImport,
+								Image:           imageURI,
+								Command:         append([]string{CurCmd, MonImport}),
+								ImagePullPolicy: corev1.PullAlways,
+								Resources:       resourceSettings,
+							},
+							corev1.Container{
+								Name:            PostAJob,
+								Image:           imageURI,
+								Command:         append([]string{CurCmd, PostAJob}),
+								ImagePullPolicy: corev1.PullAlways,
+								Env: []corev1.EnvVar{
+									corev1.EnvVar{
+										Name:  "JOB_TYPE",
+										Value: "posthook",
+									},
 								},
+								Resources: resourceSettings,
 							},
-							Resources: resourceSettings,
 						},
-					},
-					Containers: []corev1.Container{
-						corev1.Container{
-							Name:    "complete",
-							Image:   imageURI,
-							Command: []string{"echo", "Done!"},
+						Containers: []corev1.Container{
+							corev1.Container{
+								Name:    "complete",
+								Image:   imageURI,
+								Command: []string{"echo", "Done!"},
+							},
 						},
 					},
 				},
 			},
-		},
+		}
+	case "upgrade":
+		newJob := &batchv1.Job{
+			ObjectMeta: v1.ObjectMeta{
+				GenerateName: "curator-job-",
+				Namespace:    clusterName,
+				Labels: map[string]string{
+					"open-cluster-management": "curator-job",
+				},
+				Annotations: map[string]string{
+					PreAJob:        "Running pre-provisioning AnsibleJob",
+					UpgradeCluster: "Start Upgrading the Cluster and monitor to completion",
+					PostAJob:       "Running post-provisioning AnsibleJob",
+				},
+			},
+			Spec: batchv1.JobSpec{
+				BackoffLimit:            new(int32),
+				TTLSecondsAfterFinished: &ttlf,
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						ServiceAccountName: "cluster-installer",
+						RestartPolicy:      corev1.RestartPolicyNever,
+						InitContainers: []corev1.Container{
+							corev1.Container{
+								Name:            PreAJob,
+								Image:           imageURI,
+								Command:         append([]string{CurCmd, PreAJob}),
+								ImagePullPolicy: corev1.PullAlways,
+								Env: []corev1.EnvVar{
+									corev1.EnvVar{
+										Name:  "JOB_TYPE",
+										Value: "prehook",
+									},
+								},
+								Resources: resourceSettings,
+							},
+							corev1.Container{
+								Name:            UpgradeCluster,
+								Image:           imageURI,
+								Command:         append([]string{CurCmd, UpgradeCluster}),
+								ImagePullPolicy: corev1.PullAlways,
+								Resources:       resourceSettings,
+							},
+							corev1.Container{
+								Name:            PostAJob,
+								Image:           imageURI,
+								Command:         append([]string{CurCmd, PostAJob}),
+								ImagePullPolicy: corev1.PullAlways,
+								Env: []corev1.EnvVar{
+									corev1.EnvVar{
+										Name:  "JOB_TYPE",
+										Value: "posthook",
+									},
+								},
+								Resources: resourceSettings,
+							},
+						},
+						Containers: []corev1.Container{
+							corev1.Container{
+								Name:    "complete",
+								Image:   imageURI,
+								Command: []string{"echo", "Done!"},
+							},
+						},
+					},
+				},
+			},
+		}
 	}
 	return newJob
 }
@@ -141,7 +212,7 @@ func (I *Launcher) CreateJob() error {
 	kubeset := I.kubeset
 	clusterName := I.clusterCurator.Namespace
 
-	newJob := getBatchJob(I.clusterCurator.Name, I.imageURI)
+	newJob := getBatchJob(I.clusterCurator.Name, I.imageURI, I.clusterCurator.Spec.DesiredCuration)
 
 	// Allow us to override the job in the Cluster Curator
 	klog.V(0).Info("Creating Curator job curator-job in namespace " + clusterName)

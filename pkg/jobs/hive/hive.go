@@ -14,9 +14,11 @@ import (
 	hivev1 "github.com/openshift/hive/pkg/apis/hive/v1"
 	hiveclient "github.com/openshift/hive/pkg/client/clientset/versioned"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	batchv1 "k8s.io/api/batch/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	clientv1 "sigs.k8s.io/controller-runtime/pkg/client"
@@ -180,4 +182,24 @@ func monitorDeployStatus(client clientv1.Client, hiveset hiveclient.Interface, c
 		}
 	}
 	return nil
+}
+
+func UpgradeCluster(mcset dynamic.Interface, clusterName string, curator *clustercuratorv1.ClusterCurator) error {
+	klog.V(0).Info("* Initiate Upgrade")
+	klog.V(2).Info("Looking up managedclusterinfo " + clusterName)
+
+	var mciGVR = schema.GroupVersionResource{
+		Group: "internal.open-cluster-management.io", Version: "v1beta1", Resource: "managedclusterinfos"}
+
+	managedClusterInfo, err := mcset.Resource(mciGVR).Namespace(clusterName).Get(context.TODO(), clusterName, v1.GetOptions{})
+	if err != nil {
+		return err
+	}
+	if managedClusterInfo.Object["status"].(map[string]interface{})["kubeVendor"] != "OpenShift" {
+		return errors.New("Can not upgrade non openshift cluster")
+	}
+	if curator.Spec.Upgrade.DesiredUpdate == "" || curator.Spec.Upgrade.DesiredUpdate == nil {
+		return errors.New("Provide valid upgrade version")
+	}
+
 }

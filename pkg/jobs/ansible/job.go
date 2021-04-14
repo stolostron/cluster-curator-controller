@@ -37,6 +37,8 @@ func Job(client client.Client, curator *clustercuratorv1.ClusterCurator) error {
 	switch curator.Spec.DesiredCuration {
 	case "install":
 		hooks = curator.Spec.Install
+	case "upgrade":
+		hooks = curator.Spec.Upgrade
 		/*	case "scale":
 				hooks = curator.Spec.Scale
 			case "upgrade":
