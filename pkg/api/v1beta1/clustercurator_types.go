@@ -1,5 +1,5 @@
 // +kubebuilder:object:generate=true
-package v1alpha1
+package v1beta1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -31,7 +31,7 @@ type ClusterCuratorSpec struct {
 	Destroy Hooks `json:"destroy,omitempty"`
 
 	// During an upgrade curation run these
-	Upgrade Hooks `json:"upgrade,omitempty"`
+	Upgrade UpgradeHooks `json:"upgrade,omitempty"`
 
 	// Kubernetes job resource created for curation of a cluster
 	CuratingJob string `json:"curatorJob,omitempty"`
@@ -58,6 +58,28 @@ type Hooks struct {
 	// When provided, this is a Job specification and overrides the default flow
 	// +kubebuilder:pruning:PreserveUnknownFields
 	OverrideJob *runtime.RawExtension `json:"overrideJob,omitempty"`
+}
+
+type UpgradeHooks struct {
+
+	// DesiredUpdate indicates the desired value of
+	// the cluster version. Setting this value will trigger an upgrade (if
+	// the current version does not match the desired version).
+	// +optional
+	DesiredUpdate string `json:"desiredUpdate,omitempty"`
+
+	// Channel is an identifier for explicitly requesting that a non-default
+	// set of updates be applied to this cluster. The default channel will be
+	// contain stable updates that are appropriate for production clusters.
+	// +optional
+	Channel string `json:"channel,omitempty"`
+
+	// Upstream may be used to specify the preferred update server. By default
+	// it will use the appropriate update server for the cluster and region.
+	// +optional
+	Upstream string `json:"upstream,omitempty"`
+
+	Hooks Hooks `json:"hooks,omitempty"`
 }
 
 // ClusterCuratorStatus defines the observed state of ClusterCurator work

@@ -19,7 +19,7 @@ import (
 	"k8s.io/klog/v2"
 
 	ajv1 "github.com/open-cluster-management/ansiblejob-go-lib/api/v1alpha1"
-	clustercuratorv1 "github.com/open-cluster-management/cluster-curator-controller/pkg/api/v1alpha1"
+	clustercuratorv1 "github.com/open-cluster-management/cluster-curator-controller/pkg/api/v1beta1"
 	hivev1 "github.com/openshift/hive/pkg/apis/hive/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -95,7 +95,7 @@ func PathSplitterFromEnv(path string) (namespace string, resource string, err er
 
 var CCGVR = schema.GroupVersionResource{
 	Group:    "cluster.open-cluster-management.io",
-	Version:  "v1alpha1",
+	Version:  "v1beta1",
 	Resource: "clustercurators"}
 
 func RecordCuratorJob(clusterName, containerName string) error {

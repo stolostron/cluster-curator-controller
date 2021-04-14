@@ -6,8 +6,6 @@ export BINDATA_TEMP_DIR := $(shell mktemp -d)
 
 export GIT_COMMIT      = $(shell git rev-parse --short HEAD)
 export GIT_REMOTE_URL  = $(shell git config --get remote.origin.url)
-export GITHUB_USER    := $(shell echo $(GITHUB_USER) | sed 's/@/%40/g')
-export GITHUB_TOKEN   ?=
 
 export ARCH       ?= $(shell uname -m)
 export ARCH_TYPE   = $(if $(patsubst x86_64,,$(ARCH)),$(ARCH),amd64)
@@ -42,15 +40,6 @@ export DOCKER_TAG        ?= $(shell whoami)
 CRD_OPTIONS ?= "crd:trivialVersions=true"
 
 BEFORE_SCRIPT := $(shell build/before-make.sh)
-
-USE_VENDORIZED_BUILD_HARNESS ?=
-
-ifndef USE_VENDORIZED_BUILD_HARNESS
-# -include $(shell curl -s -H 'Authorization: token ${GITHUB_TOKEN}' -H 'Accept: application/vnd.github.v4.raw' -L https://api.github.com/repos/itdove/build-harness-extensions/contents/templates/Makefile.build-harness-bootstrap?branch=code_coverage -o .build-harness-bootstrap; echo .build-harness-bootstrap)
--include $(shell curl -s -H 'Authorization: token ${GITHUB_TOKEN}' -H 'Accept: application/vnd.github.v4.raw' -L https://api.github.com/repos/open-cluster-management/build-harness-extensions/contents/templates/Makefile.build-harness-bootstrap -o .build-harness-bootstrap; echo .build-harness-bootstrap)
-else
--include vbh/.build-harness-vendorized
-endif
 
 export DOCKER_BUILD_OPTS  = --build-arg VCS_REF=$(VCS_REF) \
 	--build-arg VCS_URL=$(GIT_REMOTE_URL) \
