@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/utils"
+	managedclusterviewv1beta1 "github.com/open-cluster-management/multicloud-operators-foundation/pkg/apis/view/v1beta1"
 	hivev1 "github.com/openshift/hive/pkg/apis/hive/v1"
 	hiveclient "github.com/openshift/hive/pkg/client/clientset/versioned"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -201,5 +202,21 @@ func UpgradeCluster(mcset dynamic.Interface, clusterName string, curator *cluste
 	if curator.Spec.Upgrade.DesiredUpdate == "" || curator.Spec.Upgrade.DesiredUpdate == nil {
 		return errors.New("Provide valid upgrade version")
 	}
-
+	klog.V(2).Info("create managedclusterview " + clusterName)
+	managedclusterview := &managedclusterviewv1beta1.ManagedClusterView{
+		ObjectMeta: v1.ObjectMeta{
+			Name: "curator-job-",
+			Namespace:    clusterName,
+		}
+		Spec: managedclusterviewv1beta1.ViewSpec{
+			Scope: managedclusterviewv1beta1.ViewScope{
+				Group: "config.openshift.io",
+				Kind: "ClusterVersion",
+				Name: "version",
+				Namespace: "",
+				Version: "v1"
+			}
+		}
+	}
+	return nil
 }

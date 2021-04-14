@@ -63,7 +63,7 @@ func getBatchJob(clusterName string, imageURI string, desiredCuration string) *b
 	var newJob = &batchv1.Job{}
 	switch desiredCuration {
 	case "install":
-		newJob := &batchv1.Job{
+		newJob = &batchv1.Job{
 			ObjectMeta: v1.ObjectMeta{
 				GenerateName: "curator-job-",
 				Namespace:    clusterName,
@@ -138,7 +138,7 @@ func getBatchJob(clusterName string, imageURI string, desiredCuration string) *b
 			},
 		}
 	case "upgrade":
-		newJob := &batchv1.Job{
+		newJob = &batchv1.Job{
 			ObjectMeta: v1.ObjectMeta{
 				GenerateName: "curator-job-",
 				Namespace:    clusterName,
