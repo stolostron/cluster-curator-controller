@@ -62,7 +62,7 @@ func Job(client client.Client, curator *clustercuratorv1.ClusterCurator) error {
 
 	for _, ttn := range hooksToRun {
 		klog.V(3).Info("Tower Job name: " + ttn.Name)
-		jobResource, err := RunAnsibleJob(client, curator, jobType, ttn, "toweraccess")
+		jobResource, err := RunAnsibleJob(client, curator, jobType, ttn, hooks.TowerAuthSecret)
 		if err != nil {
 			return err
 		}

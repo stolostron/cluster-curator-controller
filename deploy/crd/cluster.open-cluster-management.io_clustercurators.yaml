@@ -80,6 +80,9 @@ spec:
                       - name
                       type: object
                     type: array
+                  towerAuthSecret:
+                    description: TowerAuthSecret is ansible secret used in template to run in tower
+                    type: string
                 type: object
               install:
                 description: During an install curation run these Pre/Post hooks
@@ -118,6 +121,9 @@ spec:
                       - name
                       type: object
                     type: array
+                  towerAuthSecret:
+                    description: TowerAuthSecret is ansible secret used in template to run in tower
+                    type: string
                 type: object
               providerCredentialPath:
                 description: 'Points to the Cloud Provider or Ansible Provider secret, format: namespace/secretName'
@@ -159,6 +165,9 @@ spec:
                       - name
                       type: object
                     type: array
+                  towerAuthSecret:
+                    description: TowerAuthSecret is ansible secret used in template to run in tower
+                    type: string
                 type: object
               upgrade:
                 description: During an upgrade curation run these
@@ -205,7 +214,13 @@ spec:
                           - name
                           type: object
                         type: array
+                      towerAuthSecret:
+                        description: TowerAuthSecret is ansible secret used in template to run in tower
+                        type: string
                     type: object
+                  towerAuthSecret:
+                    description: TowerAuthSecret is ansible secret used in template to run in tower
+                    type: string
                   upstream:
                     description: Upstream may be used to specify the preferred update server. By default it will use the appropriate update server for the cluster and region.
                     type: string

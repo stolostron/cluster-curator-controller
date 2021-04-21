@@ -4,8 +4,6 @@ go 1.15
 
 require (
 	github.com/go-logr/logr v0.2.1
-	github.com/onsi/ginkgo v1.14.1
-	github.com/onsi/gomega v1.10.2
 	github.com/open-cluster-management/ansiblejob-go-lib v0.1.12
 	github.com/open-cluster-management/api v0.0.0-20201210143210-581cab55c797
 	github.com/open-cluster-management/library-go v0.0.0-20210208174614-f3ad264f145a

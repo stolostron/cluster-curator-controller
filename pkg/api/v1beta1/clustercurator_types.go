@@ -49,6 +49,11 @@ type Hook struct {
 }
 
 type Hooks struct {
+
+	// TowerAuthSecret is ansible secret used in template to run in tower
+	// +kubebuilder:validation:Required
+	TowerAuthSecret string `json:"towerAuthSecret,omitempty"`
+
 	// Jobs to run before the cluster deployment
 	Prehook []Hook `json:"prehook,omitempty"`
 
@@ -61,6 +66,10 @@ type Hooks struct {
 }
 
 type UpgradeHooks struct {
+
+	// TowerAuthSecret is ansible secret used in template to run in tower
+	// +kubebuilder:validation:Required
+	TowerAuthSecret string `json:"towerAuthSecret,omitempty"`
 
 	// DesiredUpdate indicates the desired value of
 	// the cluster version. Setting this value will trigger an upgrade (if
