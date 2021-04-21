@@ -88,7 +88,15 @@ type UpgradeHooks struct {
 	// +optional
 	Upstream string `json:"upstream,omitempty"`
 
-	Hooks Hooks `json:"hooks,omitempty"`
+	// Jobs to run before the cluster upgrade
+	Prehook []Hook `json:"prehook,omitempty"`
+
+	// Jobs to run after the cluster upgrade
+	Posthook []Hook `json:"posthook,omitempty"`
+
+	// When provided, this is a Job specification and overrides the default flow
+	// +kubebuilder:pruning:PreserveUnknownFields
+	OverrideJob *runtime.RawExtension `json:"overrideJob,omitempty"`
 }
 
 // ClusterCuratorStatus defines the observed state of ClusterCurator work
