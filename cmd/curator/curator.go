@@ -56,12 +56,12 @@ func curatorRun(config *rest.Config, client *clientv1.Client, clusterName string
 	var err error
 	var cmdErrorMsg = errors.New("Invalid Parameter: \"" + os.Args[1] +
 		"\"\nCommand: ./curator [monitor-import|monitor|activate-and-monitor|applycloudprovider-aws|" +
-		"applycloudprovider-gcp|applycloudprovider-azure|upgrade-cluster]")
+		"applycloudprovider-gcp|applycloudprovider-azure|upgrade-cluster|monitor-upgrade]")
 
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
 		case "applycloudprovider-aws", "applycloudprovider-ansible", "monitor-import", "monitor", "ansiblejob",
-			"applycloudprovider-gcp", "applycloudprovider-azure", "activate-and-monitor", "upgrade-cluster",
+			"applycloudprovider-gcp", "applycloudprovider-azure", "activate-and-monitor", "upgrade-cluster", "monitor-upgrade",
 			"SKIP_ALL_TESTING", "prehook-ansiblejob", "posthook-ansiblejob":
 		default:
 			utils.CheckError(cmdErrorMsg)
@@ -125,7 +125,7 @@ func curatorRun(config *rest.Config, client *clientv1.Client, clusterName string
 
 	}
 
-	if strings.Contains(jobChoice, "activate-and-monitor") {
+	if jobChoice == "activate-and-monitor" {
 		hiveset, err := hiveclient.NewForConfig(config)
 		utils.CheckError(err)
 
@@ -133,7 +133,7 @@ func curatorRun(config *rest.Config, client *clientv1.Client, clusterName string
 		utils.CheckError(err)
 	}
 
-	if strings.Contains(jobChoice, "monitor") {
+	if jobChoice == "monitor" {
 		err := hive.MonitorDeployStatus(config, clusterName)
 		utils.CheckError(err)
 	}
@@ -145,18 +145,20 @@ func curatorRun(config *rest.Config, client *clientv1.Client, clusterName string
 		utils.CheckError(importer.MonitorMCInfoImport(dynclient, clusterName))
 	}
 
-	if strings.Contains(jobChoice, "upgrade-cluster") {
-		// hiveset, err := hiveclient.NewForConfig(config)
+	if jobChoice == "upgrade-cluster" {
+		// dynclient, err := utils.GetDynset(nil)
 		// utils.CheckError(err)
-		dynclient, err := utils.GetDynset(nil)
-		utils.CheckError(err)
 
-		err = hive.UpgradeCluster(dynclient, clusterName, curator)
-		// err = hive.ActivateDeploy(hiveset, clusterName)
+		err = hive.UpgradeCluster(*client, clusterName, curator)
 		utils.CheckError(err)
 	}
 
-	if strings.Contains(jobChoice, "ansiblejob") {
+	if jobChoice == "monitor-upgrade" {
+		err = hive.MonitorUpgradeStatus(*client, clusterName, curator)
+		utils.CheckError(err)
+	}
+
+	if jobChoice == "ansiblejob" {
 
 		err = ansible.Job(*client, curator)
 		utils.CheckError(err)

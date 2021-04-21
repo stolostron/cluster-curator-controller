@@ -28,7 +28,7 @@ var s = scheme.Scheme
 // Validate that we are correctly building the job.batchv1 object
 func TestGetBatchJobImageSHA(t *testing.T) {
 
-	batchJobObj := getBatchJob(clusterName, imageURI)
+	batchJobObj := getBatchJob(clusterName, imageURI, "install")
 
 	t.Log("Test count initContainers in job")
 	foundInitContainers := len(batchJobObj.Spec.Template.Spec.InitContainers)
@@ -59,7 +59,7 @@ func TestGetBatchJobImageSHA(t *testing.T) {
 func TestGetBatchJobImageDefault(t *testing.T) {
 
 	t.Log("Create a batchJobObj with no sha256 or URI")
-	batchJobObj := getBatchJob(clusterName, imageURI)
+	batchJobObj := getBatchJob(clusterName, imageURI, "install")
 
 	t.Logf("Check image is applied correclty %v", imageURI)
 	uri := imageURI

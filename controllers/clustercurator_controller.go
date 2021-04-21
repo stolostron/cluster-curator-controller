@@ -4,12 +4,16 @@ package controllers
 
 import (
 	"context"
+	"fmt"
+	"reflect"
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	clustercuratorv1 "github.com/open-cluster-management/cluster-curator-controller/pkg/api/v1beta1"
 	"github.com/open-cluster-management/cluster-curator-controller/pkg/controller/launcher"
@@ -39,11 +43,20 @@ func (r *ClusterCuratorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		return ctrl.Result{}, nil
 	}
 
+	// Remove curator job name from curator if job is complete
+	// if curator.Spec.CuratingJob != "" {
+	// 	if err := utils.RemoveCuratorJobName(r.Client, r.Kubeset, req.Namespace, &curator); err != nil {
+	// 		//log.V(2).Error(err.Error())
+	// 		return ctrl.Result{}, err
+	// 	}
+	// }
+
 	log.V(3).Info("Reconcile: %v, DesiredCuration: %v, Previous CuratingJob: %v",
 		req.NamespacedName, curator.Spec.DesiredCuration, curator.Spec.CuratingJob)
 
-	// Curating work has already started OR no curation work supplied
-	if curator.Spec.CuratingJob != "" || curator.Spec.DesiredCuration == "" {
+	// Curating work has already started OR no curation work supplied curator.Spec.CuratingJob != "" ||
+	if curator.Spec.DesiredCuration == "" {
+		fmt.Println("hi")
 		log.V(3).Info("No curation to do for %v", req.NamespacedName)
 		return ctrl.Result{}, nil
 	}
@@ -67,5 +80,25 @@ func (r *ClusterCuratorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 func (r *ClusterCuratorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&clustercuratorv1.ClusterCurator{}).
+		WithEventFilter(newClusterCuratorPredicate()).
 		Complete(r)
+}
+
+func newClusterCuratorPredicate() predicate.Predicate {
+	return predicate.Funcs{
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			newClusterCurator, okNew := e.ObjectNew.(*clustercuratorv1.ClusterCurator)
+			oldClusterCurator, okOld := e.ObjectOld.(*clustercuratorv1.ClusterCurator)
+			if okNew && okOld {
+				if reflect.DeepEqual(newClusterCurator.Spec.CuratingJob, oldClusterCurator.Spec.CuratingJob) {
+					if !reflect.DeepEqual(newClusterCurator.Spec.Upgrade, oldClusterCurator.Spec.Upgrade) {
+						return true
+					}
+					return false
+				}
+				return reflect.DeepEqual(newClusterCurator.Spec.CuratingJob, oldClusterCurator.Spec.CuratingJob)
+			}
+			return false
+		},
+	}
 }

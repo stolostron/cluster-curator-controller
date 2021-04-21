@@ -25,6 +25,7 @@ const MonImport = "monitor-import"
 
 const ActivateAndMonitor = "activate-and-monitor"
 const UpgradeCluster = "upgrade-cluster"
+const MonUpgrade = "monitor-upgrade"
 
 type Launcher struct {
 	client         client.Client
@@ -180,6 +181,13 @@ func getBatchJob(clusterName string, imageURI string, desiredCuration string) *b
 								Resources:       resourceSettings,
 							},
 							corev1.Container{
+								Name:            MonUpgrade,
+								Image:           imageURI,
+								Command:         append([]string{CurCmd, MonUpgrade}),
+								ImagePullPolicy: corev1.PullAlways,
+								Resources:       resourceSettings,
+							},
+							corev1.Container{
 								Name:            PostAJob,
 								Image:           imageURI,
 								Command:         append([]string{CurCmd, PostAJob}),
@@ -236,12 +244,31 @@ func (I *Launcher) CreateJob() error {
 		}
 	}
 	if err == nil {
-		curatorJob, err := kubeset.BatchV1().Jobs(clusterName).Create(context.TODO(), newJob, v1.CreateOptions{})
-		if err == nil {
-			klog.V(0).Infof(" Created Curator job  ✓ (%v)", curatorJob.Name)
-			err = utils.RecordCuratorJobName(I.client, clusterName, curatorJob.Name)
+		isNewJobCreate := false
+		if I.clusterCurator.Spec.CuratingJob != "" {
+			curatorJob, err := kubeset.BatchV1().Jobs(clusterName).Get(context.TODO(), I.clusterCurator.Spec.CuratingJob, v1.GetOptions{})
 			if err != nil {
 				return err
+			}
+			if curatorJob.Status.Conditions != nil {
+				for _, condition := range curatorJob.Status.Conditions {
+					if (condition.Type == "Complete" && condition.Status == "True") || (condition.Type == "Failed" && condition.Status == "True") {
+						isNewJobCreate = true
+					}
+				}
+			} else {
+				klog.V(0).Infof(" Previous Curator job is still running (%v)", curatorJob.Name)
+			}
+		}
+		// Create a new curating job only if previous job Completed or Failed
+		if isNewJobCreate {
+			curatorJob, err := kubeset.BatchV1().Jobs(clusterName).Create(context.TODO(), newJob, v1.CreateOptions{})
+			if err == nil {
+				klog.V(0).Infof(" Created Curator job  ✓ (%v)", curatorJob.Name)
+				err = utils.RecordCuratorJobName(I.client, clusterName, curatorJob.Name)
+				if err != nil {
+					return err
+				}
 			}
 		}
 	}
