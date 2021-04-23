@@ -96,9 +96,9 @@ func monitorDeployStatus(client clientv1.Client, hiveset hiveclient.Interface, c
 				utils.CheckError(utils.RecordCurrentStatusCondition(
 					client,
 					clusterName,
-					jobName,
+					"hive-provisioning-job",
 					v1.ConditionTrue,
-					"Hive provisioning job"))
+					jobName))
 			}
 
 			break
@@ -133,9 +133,9 @@ func monitorDeployStatus(client clientv1.Client, hiveset hiveclient.Interface, c
 			utils.CheckError(utils.RecordCurrentStatusCondition(
 				client,
 				clusterName,
-				jobName,
+				"hive-provisioning-job",
 				v1.ConditionFalse,
-				"Hive provisioning job"))
+				jobName))
 
 			for newJob.Status.Active == 1 {
 				if elapsedTime%6 == 0 {

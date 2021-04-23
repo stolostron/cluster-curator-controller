@@ -225,9 +225,9 @@ func MonitorAnsibleJob(
 	utils.CheckError(utils.RecordCurrentStatusCondition(
 		client,
 		curator.Namespace,
-		namespace+"/"+jobResource.GetName(),
+		"current-ansiblejob",
 		v1.ConditionFalse,
-		"Executing AnsibleJob"))
+		jobResource.GetName()))
 
 	// Monitor the AnsibeJob resource
 	for {
@@ -262,13 +262,12 @@ func MonitorAnsibleJob(
 
 				klog.V(2).Infof("AnsibleJob %v/%v finished successfully ✓", namespace, ansibleJobName)
 
-				err = utils.RecordCurrentStatusCondition(
+				utils.CheckError(utils.RecordCurrentStatusCondition(
 					client,
 					curator.Namespace,
-					namespace+"/"+jobResource.GetName(),
-					v1.ConditionTrue,
-					"Completed executing AnsibleJob")
-				utils.CheckError(err)
+					"current-ansiblejob",
+					v1.ConditionFalse,
+					jobResource.GetName()))
 
 				break
 			} else if jobStatus == "error" {

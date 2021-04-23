@@ -22,6 +22,7 @@ const CurCmd = "./curator"
 const PreAJob = "prehook-ansiblejob"
 const PostAJob = "posthook-ansiblejob"
 const MonImport = "monitor-import"
+const DoneDoneDone = "done"
 
 const ActivateAndMonitor = "activate-and-monitor"
 
@@ -72,6 +73,7 @@ func getBatchJob(clusterName string, imageURI string) *batchv1.Job {
 				ActivateAndMonitor: "Start Provisioning the Cluster and monitor to completion",
 				MonImport:          "Monitor the managed cluster until it is imported",
 				PostAJob:           "Running post-provisioning AnsibleJob",
+				DoneDoneDone:       "Cluster Curator job has completed",
 			},
 		},
 		Spec: batchv1.JobSpec{
@@ -125,9 +127,9 @@ func getBatchJob(clusterName string, imageURI string) *batchv1.Job {
 					},
 					Containers: []corev1.Container{
 						corev1.Container{
-							Name:    "complete",
+							Name:    DoneDoneDone,
 							Image:   imageURI,
-							Command: []string{"echo", "Done!"},
+							Command: append([]string{CurCmd, DoneDoneDone}),
 						},
 					},
 				},
