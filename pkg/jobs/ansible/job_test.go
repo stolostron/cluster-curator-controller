@@ -4,7 +4,6 @@ package ansible
 import (
 	"context"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -205,13 +204,13 @@ func TestJob(t *testing.T) {
 			types.NamespacedName{Namespace: ClusterName, Name: ClusterName},
 			curator)
 
-		namespaceName := curator.Status.Conditions[0].Type
-		t.Logf("clusterCurator job: %v", namespaceName)
-		s := strings.Split(namespaceName, "/")
+		jobName := curator.Status.Conditions[0].Message
+		t.Logf("clusterCurator job: %v", jobName)
+
 		newJob := buildAnsibleJob("successful", AnsibleJobTemplateName)
 
-		newJob.SetName(s[1])
-		newJob.SetNamespace(s[0])
+		newJob.SetName(jobName)
+		newJob.SetNamespace(ClusterName)
 
 		// This is not the best way to simulate the job being completed.
 		assert.Nil(t,
@@ -220,7 +219,7 @@ func TestJob(t *testing.T) {
 		assert.Nil(t,
 			client.Create(context.Background(), newJob),
 			"err is nil, when ansibleJob resource is created")
-		t.Logf("AnsibleJob %v marked successful", s[1])
+		t.Logf("AnsibleJob %v marked successful", jobName)
 	}()
 	err := Job(client, cc)
 
@@ -251,13 +250,13 @@ func TestJobPosthook(t *testing.T) {
 			types.NamespacedName{Namespace: ClusterName, Name: ClusterName},
 			curator)
 
-		namespaceName := curator.Status.Conditions[0].Type
-		t.Logf("clusterCurator job: %v", namespaceName)
-		s := strings.Split(namespaceName, "/")
+		jobName := curator.Status.Conditions[0].Message
+		t.Logf("clusterCurator job: %v", jobName)
+
 		newJob := buildAnsibleJob("successful", AnsibleJobTemplateName)
 
-		newJob.SetName(s[1])
-		newJob.SetNamespace(s[0])
+		newJob.SetName(jobName)
+		newJob.SetNamespace(ClusterName)
 
 		// This is not the best way to simulate the job being completed.
 		assert.Nil(t,
@@ -266,7 +265,7 @@ func TestJobPosthook(t *testing.T) {
 		assert.Nil(t,
 			client.Create(context.Background(), newJob),
 			"err is nil, when ansibleJob resource is created")
-		t.Logf("AnsibleJob %v marked successful", s[1])
+		t.Logf("AnsibleJob %v marked successful", jobName)
 	}()
 	err := Job(client, cc)
 
@@ -338,7 +337,7 @@ func TestMonitorAnsibleJobK8sJob(t *testing.T) {
 
 	assert.Equal(
 		t,
-		ClusterName+"/"+AnsibleJobName, curator.Status.Conditions[0].Type,
+		AnsibleJobName, curator.Status.Conditions[0].Message,
 		"ClusterCurator Ansible Job object name correct")
 }
 
