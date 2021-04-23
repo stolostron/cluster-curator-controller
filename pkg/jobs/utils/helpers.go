@@ -190,7 +190,7 @@ func RecordCurrentStatusCondition(
 		containerName,
 		conditionStatus,
 		JobHasFinished,
-		message+" "+containerName)
+		message)
 }
 
 func recordCuratedStatusCondition(

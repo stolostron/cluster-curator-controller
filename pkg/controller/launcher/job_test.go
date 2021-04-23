@@ -79,6 +79,7 @@ func TestCreateLauncher(t *testing.T) {
 		ObjectMeta: v1.ObjectMeta{Name: clusterName, Namespace: clusterName},
 		Spec: clustercuratorv1.ClusterCuratorSpec{
 			ProviderCredentialPath: "default/provider-secret",
+			DesiredCuration:        "install",
 		},
 	}
 

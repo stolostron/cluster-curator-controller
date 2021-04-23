@@ -47,6 +47,16 @@ func getRules() []rbacv1.PolicyRule {
 			Resources: []string{"clustercurators"},
 			Verbs:     []string{"get", "update"},
 		},
+		rbacv1.PolicyRule{
+			APIGroups: []string{"view.open-cluster-management.io"},
+			Resources: []string{"managedclusterviews"},
+			Verbs:     []string{"get", "create", "update", "delete"},
+		},
+		rbacv1.PolicyRule{
+			APIGroups: []string{"action.open-cluster-management.io"},
+			Resources: []string{"managedclusteractions"},
+			Verbs:     []string{"get", "create", "update"},
+		},
 	}
 }
 

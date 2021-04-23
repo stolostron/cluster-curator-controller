@@ -22,6 +22,7 @@ const CurCmd = "./curator"
 const PreAJob = "prehook-ansiblejob"
 const PostAJob = "posthook-ansiblejob"
 const MonImport = "monitor-import"
+const DoneDoneDone = "done"
 
 const ActivateAndMonitor = "activate-and-monitor"
 const UpgradeCluster = "upgrade-cluster"
@@ -76,6 +77,7 @@ func getBatchJob(clusterName string, imageURI string, desiredCuration string) *b
 					ActivateAndMonitor: "Start Provisioning the Cluster and monitor to completion",
 					MonImport:          "Monitor the managed cluster until it is imported",
 					PostAJob:           "Running post-provisioning AnsibleJob",
+					DoneDoneDone:       "Cluster Curator job has completed",
 				},
 			},
 			Spec: batchv1.JobSpec{
@@ -129,9 +131,9 @@ func getBatchJob(clusterName string, imageURI string, desiredCuration string) *b
 						},
 						Containers: []corev1.Container{
 							corev1.Container{
-								Name:    "complete",
+								Name:    DoneDoneDone,
 								Image:   imageURI,
-								Command: []string{"echo", "Done!"},
+								Command: append([]string{CurCmd, DoneDoneDone}),
 							},
 						},
 					},
@@ -203,9 +205,9 @@ func getBatchJob(clusterName string, imageURI string, desiredCuration string) *b
 						},
 						Containers: []corev1.Container{
 							corev1.Container{
-								Name:    "complete",
+								Name:    DoneDoneDone,
 								Image:   imageURI,
-								Command: []string{"echo", "Done!"},
+								Command: append([]string{CurCmd, DoneDoneDone}),
 							},
 						},
 					},
@@ -244,35 +246,35 @@ func (I *Launcher) CreateJob() error {
 		}
 	}
 	if err == nil {
-		isNewJobCreate := false
-		if I.clusterCurator.Spec.CuratingJob != "" {
-			curatorJob, err := kubeset.BatchV1().Jobs(clusterName).Get(context.TODO(), I.clusterCurator.Spec.CuratingJob, v1.GetOptions{})
+		// isNewJobCreate := false
+		// if I.clusterCurator.Spec.CuratingJob != "" {
+		// 	curatorJob, err := kubeset.BatchV1().Jobs(clusterName).Get(context.TODO(), I.clusterCurator.Spec.CuratingJob, v1.GetOptions{})
+		// 	if err != nil {
+		// 		return err
+		// 	}
+		// 	if curatorJob.Status.Conditions != nil {
+		// 		for _, condition := range curatorJob.Status.Conditions {
+		// 			if (condition.Type == "Complete" && condition.Status == "True") || (condition.Type == "Failed" && condition.Status == "True") {
+		// 				isNewJobCreate = true
+		// 			}
+		// 		}
+		// 	} else {
+		// 		klog.V(0).Infof(" Previous Curator job is still running (%v)", curatorJob.Name)
+		// 	}
+		// } else {
+		// 	isNewJobCreate = true
+		// }
+		// // Create a new curating job only if previous job Completed or Failed
+		// if isNewJobCreate {
+		curatorJob, err := kubeset.BatchV1().Jobs(clusterName).Create(context.TODO(), newJob, v1.CreateOptions{})
+		if err == nil {
+			klog.V(0).Infof(" Created Curator job  ✓ (%v)", curatorJob.Name)
+			err = utils.RecordCuratorJobName(I.client, clusterName, curatorJob.Name)
 			if err != nil {
 				return err
 			}
-			if curatorJob.Status.Conditions != nil {
-				for _, condition := range curatorJob.Status.Conditions {
-					if (condition.Type == "Complete" && condition.Status == "True") || (condition.Type == "Failed" && condition.Status == "True") {
-						isNewJobCreate = true
-					}
-				}
-			} else {
-				klog.V(0).Infof(" Previous Curator job is still running (%v)", curatorJob.Name)
-			}
-		} else {
-			isNewJobCreate = true
 		}
-		// Create a new curating job only if previous job Completed or Failed
-		if isNewJobCreate {
-			curatorJob, err := kubeset.BatchV1().Jobs(clusterName).Create(context.TODO(), newJob, v1.CreateOptions{})
-			if err == nil {
-				klog.V(0).Infof(" Created Curator job  ✓ (%v)", curatorJob.Name)
-				err = utils.RecordCuratorJobName(I.client, clusterName, curatorJob.Name)
-				if err != nil {
-					return err
-				}
-			}
-		}
+		//}
 	}
 	if err != nil {
 		return err

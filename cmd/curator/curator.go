@@ -11,6 +11,7 @@ import (
 
 	"k8s.io/klog/v2"
 
+	"github.com/open-cluster-management/cluster-curator-controller/pkg/controller/launcher"
 	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/ansible"
 	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/hive"
 	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/importer"
@@ -22,6 +23,8 @@ import (
 	"k8s.io/client-go/rest"
 	clientv1 "sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+const CuratorJob = "clustercurator-job"
 
 /* Uses the following environment variables:
  * ./curator applycloudprovider
@@ -51,15 +54,14 @@ func main() {
 
 	curatorRun(config, &client, clusterName)
 	// Gets the Cluster Configuration overrides
-	curator, err := utils.GetClusterCurator(*client, clusterName)
+	curator, err := utils.GetClusterCurator(client, clusterName)
 	utils.CheckError(err)
 
 	curator.Spec.DesiredCuration = ""
 	curator.Spec.CuratingJob = ""
 	curator.Status.Conditions = nil
-	if err := client.Update(context.TODO(), curator); err != nil {
-		return err
-	}
+	err = client.Update(context.TODO(), curator)
+	utils.CheckError(err)
 }
 
 func curatorRun(config *rest.Config, client *clientv1.Client, clusterName string) {
@@ -67,13 +69,13 @@ func curatorRun(config *rest.Config, client *clientv1.Client, clusterName string
 	var err error
 	var cmdErrorMsg = errors.New("Invalid Parameter: \"" + os.Args[1] +
 		"\"\nCommand: ./curator [monitor-import|monitor|activate-and-monitor|applycloudprovider-aws|" +
-		"applycloudprovider-gcp|applycloudprovider-azure|upgrade-cluster|monitor-upgrade]")
+		"applycloudprovider-gcp|applycloudprovider-azure|upgrade-cluster|monitor-upgrade|done]")
 
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
 		case "applycloudprovider-aws", "applycloudprovider-ansible", "monitor-import", "monitor", "ansiblejob",
 			"applycloudprovider-gcp", "applycloudprovider-azure", "activate-and-monitor", "upgrade-cluster", "monitor-upgrade",
-			"SKIP_ALL_TESTING", "prehook-ansiblejob", "posthook-ansiblejob":
+			"SKIP_ALL_TESTING", "prehook-ansiblejob", "posthook-ansiblejob", "done":
 		default:
 			utils.CheckError(cmdErrorMsg)
 		}
@@ -95,11 +97,33 @@ func curatorRun(config *rest.Config, client *clientv1.Client, clusterName string
 		utils.CheckError(utils.RecordCurrentStatusCondition(
 			*client,
 			clusterName,
-			jobChoice,
+			CuratorJob,
 			v1.ConditionFalse,
-			"Executing init container"))
+			curator.Spec.CuratingJob))
+
+		// Special case
+		if jobChoice != launcher.DoneDoneDone {
+			utils.CheckError(utils.RecordCurrentStatusCondition(
+				*client,
+				clusterName,
+				jobChoice,
+				v1.ConditionFalse,
+				"Executing init container "+jobChoice))
+		}
 		providerCredentialPath = curator.Spec.ProviderCredentialPath
 
+		// This makes sure we set the curator-job condition to false when there is a failure
+		defer func() {
+			if r := recover(); r != nil {
+				utils.CheckError(utils.RecordCurrentStatusCondition(
+					*client,
+					clusterName,
+					CuratorJob,
+					v1.ConditionTrue,
+					curator.Spec.CuratingJob))
+				panic(r)
+			}
+		}()
 	} else if err != nil && providerCredentialPath == "" {
 		utils.CheckError(err)
 
@@ -175,12 +199,23 @@ func curatorRun(config *rest.Config, client *clientv1.Client, clusterName string
 		utils.CheckError(err)
 	}
 
+	// Override finished init container message with finished curator-job message
+	msg := "Completed executing init container"
+	condition := v1.ConditionTrue
+
+	if jobChoice == "done" {
+		jobChoice = CuratorJob
+		msg = curator.Spec.CuratingJob
+		condition = v1.ConditionTrue
+	}
+
+	// Used to signal end of job as well as end of initi container
 	utils.CheckError(utils.RecordCurrentStatusCondition(
 		*client,
 		clusterName,
 		jobChoice,
-		v1.ConditionTrue,
-		"Completed executing init container"))
+		condition,
+		msg))
 
 	klog.V(2).Info("Done!")
 }

@@ -65,21 +65,19 @@ func getUpgradeClusterCurator() *clustercuratorv1.ClusterCurator {
 			DesiredCuration: "upgrade",
 			Upgrade: clustercuratorv1.UpgradeHooks{
 				DesiredUpdate: "4.5.13",
-				Hooks: clustercuratorv1.Hooks{
-					Prehook: []clustercuratorv1.Hook{
-						clustercuratorv1.Hook{
-							Name: "Service now App Update",
-							ExtraVars: &runtime.RawExtension{
-								Raw: []byte(`{"variable1": "1","variable2": "2"}`),
-							},
+				Prehook: []clustercuratorv1.Hook{
+					clustercuratorv1.Hook{
+						Name: "Service now App Update",
+						ExtraVars: &runtime.RawExtension{
+							Raw: []byte(`{"variable1": "1","variable2": "2"}`),
 						},
 					},
-					Posthook: []clustercuratorv1.Hook{
-						clustercuratorv1.Hook{
-							Name: "Service now App Update",
-							ExtraVars: &runtime.RawExtension{
-								Raw: []byte(`{"variable1": "3","variable2": "4"}`),
-							},
+				},
+				Posthook: []clustercuratorv1.Hook{
+					clustercuratorv1.Hook{
+						Name: "Service now App Update",
+						ExtraVars: &runtime.RawExtension{
+							Raw: []byte(`{"variable1": "3","variable2": "4"}`),
 						},
 					},
 				},
