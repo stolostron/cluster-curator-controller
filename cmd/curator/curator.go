@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"io/ioutil"
 	"os"
@@ -49,6 +50,16 @@ func main() {
 	utils.CheckError(err)
 
 	curatorRun(config, &client, clusterName)
+	// Gets the Cluster Configuration overrides
+	curator, err := utils.GetClusterCurator(*client, clusterName)
+	utils.CheckError(err)
+
+	curator.Spec.DesiredCuration = ""
+	curator.Spec.CuratingJob = ""
+	curator.Status.Conditions = nil
+	if err := client.Update(context.TODO(), curator); err != nil {
+		return err
+	}
 }
 
 func curatorRun(config *rest.Config, client *clientv1.Client, clusterName string) {

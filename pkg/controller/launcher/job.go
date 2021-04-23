@@ -259,6 +259,8 @@ func (I *Launcher) CreateJob() error {
 			} else {
 				klog.V(0).Infof(" Previous Curator job is still running (%v)", curatorJob.Name)
 			}
+		} else {
+			isNewJobCreate = true
 		}
 		// Create a new curating job only if previous job Completed or Failed
 		if isNewJobCreate {

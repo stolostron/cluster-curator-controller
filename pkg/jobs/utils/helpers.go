@@ -21,6 +21,7 @@ import (
 	ajv1 "github.com/open-cluster-management/ansiblejob-go-lib/api/v1alpha1"
 	clustercuratorv1 "github.com/open-cluster-management/cluster-curator-controller/pkg/api/v1beta1"
 	managedclusteractionv1beta1 "github.com/open-cluster-management/multicloud-operators-foundation/pkg/apis/action/v1beta1"
+	managedclusterinfov1beta1 "github.com/open-cluster-management/multicloud-operators-foundation/pkg/apis/internal.open-cluster-management.io/v1beta1"
 	managedclusterviewv1beta1 "github.com/open-cluster-management/multicloud-operators-foundation/pkg/apis/view/v1beta1"
 	hivev1 "github.com/openshift/hive/pkg/apis/hive/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -161,6 +162,7 @@ func GetClient() (clientv1.Client, error) {
 	CheckError(hivev1.AddToScheme(curatorScheme))
 	CheckError(managedclusteractionv1beta1.AddToScheme(curatorScheme))
 	CheckError(managedclusterviewv1beta1.AddToScheme(curatorScheme))
+	CheckError(managedclusterinfov1beta1.AddToScheme(curatorScheme))
 
 	return clientv1.New(config, clientv1.Options{Scheme: curatorScheme})
 }
