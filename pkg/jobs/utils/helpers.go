@@ -35,7 +35,7 @@ import (
 const PauseTwoSeconds = 2 * time.Second
 const PauseTenSeconds = PauseTwoSeconds * 5
 const PauseFiveSeconds = PauseTenSeconds / 2
-const PauseNintySeconds = 90 * time.Second
+const PauseSixtySeconds = 60 * time.Second
 const CurrentAnsibleJob = "active-ansible-job"
 const CurrentHiveJob = "hive-provisioning-job"
 const CurrentCuratorContainer = "curating-with-container"
@@ -43,6 +43,7 @@ const CurrentCuratorJob = "curatorJob"
 const DefaultImageURI = "registry.ci.openshift.org/open-cluster-management/cluster-curator-controller:latest"
 
 const JobHasFinished = "Job_has_finished"
+const JobFailed = "Job_failed"
 
 type PatchStringValue struct {
 	Op    string `json:"op"`
@@ -215,11 +216,27 @@ func recordCuratedStatusCondition(
 
 	meta.SetStatusCondition(&curator.Status.Conditions, newCondition)
 
-	if err := client.Update(context.Background(), curator); err != nil {
+	if err := client.Update(context.TODO(), curator); err != nil {
 		return err
 	}
 	klog.V(4).Infof("newCondition: %v", newCondition)
 	return nil
+}
+
+func RecordFailedCuratorStatusCondition(
+	client clientv1.Client,
+	clusterName string,
+	containerName string,
+	conditionStatus v1.ConditionStatus,
+	message string) error {
+
+	return recordCuratedStatusCondition(
+		client,
+		clusterName,
+		containerName,
+		conditionStatus,
+		JobFailed,
+		message)
 }
 
 func GetClusterCurator(client clientv1.Client, clusterName string) (*clustercuratorv1.ClusterCurator, error) {
@@ -233,29 +250,4 @@ func GetClusterCurator(client clientv1.Client, clusterName string) (*clustercura
 	klog.V(4).Infof("ClusterCurator: %v", curator)
 
 	return curator, nil
-}
-
-func RemoveCuratorJobName(client clientv1.Client, kubeset kubernetes.Interface, clusterName string, curator *clustercuratorv1.ClusterCurator) error {
-	isRemove := false
-	curatorJob, err := kubeset.BatchV1().Jobs(clusterName).Get(context.TODO(), curator.Spec.CuratingJob, v1.GetOptions{})
-	if err != nil {
-		return err
-	}
-
-	for _, condition := range curatorJob.Status.Conditions {
-		if (condition.Type == "Complete" && condition.Status == "True") || (condition.Type == "Failed" && condition.Status == "True") {
-			isRemove = true
-		}
-		// if condition.Type == "Failed" && condition.Status == "True" {
-		// 	klog.Error(fmt.Errorf("Previous curator job has been failed. Reason: %s, Message: %s", condition.Reason, condition.Message))
-		// 	//return fmt.Errorf("Previous curator job has been failed. Reason: %s, Message: %s", condition.Reason, condition.Message)
-		// }
-	}
-	if isRemove {
-		curator.Spec.CuratingJob = ""
-		if err := client.Update(context.Background(), curator); err != nil {
-			return err
-		}
-	}
-	return nil
 }

@@ -246,26 +246,6 @@ func (I *Launcher) CreateJob() error {
 		}
 	}
 	if err == nil {
-		// isNewJobCreate := false
-		// if I.clusterCurator.Spec.CuratingJob != "" {
-		// 	curatorJob, err := kubeset.BatchV1().Jobs(clusterName).Get(context.TODO(), I.clusterCurator.Spec.CuratingJob, v1.GetOptions{})
-		// 	if err != nil {
-		// 		return err
-		// 	}
-		// 	if curatorJob.Status.Conditions != nil {
-		// 		for _, condition := range curatorJob.Status.Conditions {
-		// 			if (condition.Type == "Complete" && condition.Status == "True") || (condition.Type == "Failed" && condition.Status == "True") {
-		// 				isNewJobCreate = true
-		// 			}
-		// 		}
-		// 	} else {
-		// 		klog.V(0).Infof(" Previous Curator job is still running (%v)", curatorJob.Name)
-		// 	}
-		// } else {
-		// 	isNewJobCreate = true
-		// }
-		// // Create a new curating job only if previous job Completed or Failed
-		// if isNewJobCreate {
 		curatorJob, err := kubeset.BatchV1().Jobs(clusterName).Create(context.TODO(), newJob, v1.CreateOptions{})
 		if err == nil {
 			klog.V(0).Infof(" Created Curator job  ✓ (%v)", curatorJob.Name)
@@ -274,7 +254,6 @@ func (I *Launcher) CreateJob() error {
 				return err
 			}
 		}
-		//}
 	}
 	if err != nil {
 		return err

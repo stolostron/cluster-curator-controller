@@ -3,14 +3,17 @@ package hive
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
 
 	clustercuratorv1 "github.com/open-cluster-management/cluster-curator-controller/pkg/api/v1beta1"
 	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/utils"
+	managedclusteractionv1beta1 "github.com/open-cluster-management/multicloud-operators-foundation/pkg/apis/action/v1beta1"
 	managedclusterinfov1beta1 "github.com/open-cluster-management/multicloud-operators-foundation/pkg/apis/internal.open-cluster-management.io/v1beta1"
 	managedclusterviewv1beta1 "github.com/open-cluster-management/multicloud-operators-foundation/pkg/apis/view/v1beta1"
+	clusterversionv1 "github.com/openshift/api/config/v1"
 	hivev1 "github.com/openshift/hive/pkg/apis/hive/v1"
 	hivefake "github.com/openshift/hive/pkg/client/clientset/versioned/fake"
 	"github.com/stretchr/testify/assert"
@@ -467,7 +470,70 @@ func getManagedClusterView() *managedclusterviewv1beta1.ManagedClusterView {
 	}
 }
 
-/*func TestUpgradeCluster(t *testing.T) {
+func TestUpgradeClusterMCVExists(t *testing.T) {
+
+	s := scheme.Scheme
+	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
+	s.AddKnownTypes(managedclusterinfov1beta1.GroupVersion, &managedclusterinfov1beta1.ManagedClusterInfo{})
+	s.AddKnownTypes(managedclusteractionv1beta1.GroupVersion, &managedclusteractionv1beta1.ManagedClusterAction{})
+	s.AddKnownTypes(managedclusterviewv1beta1.GroupVersion, &managedclusterviewv1beta1.ManagedClusterView{})
+
+	managedclusterinfo := &managedclusterinfov1beta1.ManagedClusterInfo{
+		TypeMeta: v1.TypeMeta{
+			APIVersion: managedclusterinfov1beta1.GroupVersion.String(),
+			Kind:       "ManagedClusterInfo",
+		},
+		ObjectMeta: v1.ObjectMeta{
+			Name:      ClusterName,
+			Namespace: ClusterName,
+		},
+		Status: managedclusterinfov1beta1.ClusterInfoStatus{
+			KubeVendor: managedclusterinfov1beta1.KubeVendorOpenShift,
+			DistributionInfo: managedclusterinfov1beta1.DistributionInfo{
+				OCP: managedclusterinfov1beta1.OCPDistributionInfo{
+					AvailableUpdates: []string{"4.5.14", "4.5.16", "4.5.17"},
+				},
+			},
+		},
+	}
+
+	clustercurator := &clustercuratorv1.ClusterCurator{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      ClusterName,
+			Namespace: ClusterName,
+		},
+		Spec: clustercuratorv1.ClusterCuratorSpec{
+			DesiredCuration: "upgrade",
+			Upgrade: clustercuratorv1.UpgradeHooks{
+				DesiredUpdate: "4.5.14",
+			},
+		},
+	}
+
+	managedclusterview := &managedclusterviewv1beta1.ManagedClusterView{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      ClusterName,
+			Namespace: ClusterName,
+		},
+		Spec: managedclusterviewv1beta1.ViewSpec{
+			Scope: managedclusterviewv1beta1.ViewScope{
+				Group:     "config.openshift.io",
+				Kind:      "ClusterVersion",
+				Name:      "version",
+				Namespace: "",
+				Version:   "v1",
+			},
+		},
+	}
+
+	client := clientfake.NewFakeClientWithScheme(s, []runtime.Object{
+		clustercurator, managedclusterinfo, managedclusterview,
+	}...)
+
+	assert.NotNil(t, UpgradeCluster(client, ClusterName, clustercurator), "err not nil when managedclusterview already exists")
+}
+
+func TestUpgradeCluster(t *testing.T) {
 
 	s := scheme.Scheme
 	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
@@ -521,7 +587,7 @@ func getManagedClusterView() *managedclusterviewv1beta1.ManagedClusterView {
 			Upstream:  "https://api.openshift.com/api",
 		},
 		Status: clusterversionv1.ClusterVersionStatus{
-			AvailableUpdates: []clusterversionv1.Release{
+			AvailableUpdates: []clusterversionv1.Update{
 				{
 					Version: "4.5.14",
 					Image:   "quay.io/openshift-release",
@@ -534,54 +600,130 @@ func getManagedClusterView() *managedclusterviewv1beta1.ManagedClusterView {
 		},
 	}
 	b, _ := json.Marshal(clusterversion)
-	// managedclusterview := &managedclusterviewv1beta1.ManagedClusterView{
-	// 	ObjectMeta: v1.ObjectMeta{
-	// 		Name:      ClusterName,
-	// 		Namespace: ClusterName,
-	// 	},
-	// 	Spec: managedclusterviewv1beta1.ViewSpec{
-	// 		Scope: managedclusterviewv1beta1.ViewScope{
-	// 			Group:     "config.openshift.io",
-	// 			Kind:      "ClusterVersion",
-	// 			Name:      "version",
-	// 			Namespace: "",
-	// 			Version:   "v1",
-	// 		},
-	// 	},
-	// 	Status: managedclusterviewv1beta1.ViewStatus{
-	// 		Result: runtime.RawExtension{
-	// 			Raw: b,
-	// 		},
-	// 	},
-	// }
 
 	client := clientfake.NewFakeClientWithScheme(s, []runtime.Object{
 		clustercurator, managedclusterinfo,
 	}...)
 
-	managedclusterview := getManagedClusterView()
-
 	go func() {
 		for i := 0; i < 10; i++ {
-			managedclusterview.Status.Result.Raw = b
 			resultmcview := managedclusterviewv1beta1.ManagedClusterView{}
 			client.Get(context.TODO(), types.NamespacedName{
 				Namespace: ClusterName,
 				Name:      ClusterName,
 			}, &resultmcview)
-			fmt.Println("mcv: ", resultmcview)
-			err := client.Status().Patch(context.TODO(), managedclusterview, client.MergeFrom(resultmcview))
-			fmt.Println("err: ", err)
+			resultmcview.Status.Result.Raw = b
+			client.Update(context.TODO(), &resultmcview)
 		}
 	}()
 
-	// resultmcview := managedclusterviewv1beta1.ManagedClusterView{}
-	// client.Get(context.TODO(), types.NamespacedName{
-	// 	Namespace: ClusterName,
-	// 	Name:      ClusterName,
-	// }, &resultmcview)
-	// fmt.Println("mcv: ", resultmcview)
-
 	assert.Nil(t, UpgradeCluster(client, ClusterName, clustercurator))
+}
 
-}*/
+func TestMonitorUpgradeStatusJobComplete(t *testing.T) {
+
+	cc := getUpgradeClusterCurator()
+
+	clusterversion := &clusterversionv1.ClusterVersion{
+		TypeMeta: v1.TypeMeta{
+			APIVersion: "config.openshift.io/v1",
+			Kind:       "ClusterVersion",
+		},
+		ObjectMeta: v1.ObjectMeta{
+			Name: "version",
+		},
+		Spec: clusterversionv1.ClusterVersionSpec{
+			Channel:   "stable-4.5",
+			ClusterID: "201ad26c-67d6-416a",
+			Upstream:  "https://api.openshift.com/api",
+		},
+		Status: clusterversionv1.ClusterVersionStatus{
+			Conditions: []clusterversionv1.ClusterOperatorStatusCondition{
+				{
+					LastTransitionTime: v1.NewTime(time.Now()),
+					Message:            "Done applying 4.5.12",
+					Status:             "True",
+					Type:               "Available",
+				},
+				{
+					LastTransitionTime: v1.NewTime(time.Now()),
+					Message:            "Working towards 4.5.13: 28% complete",
+					Status:             "True",
+					Type:               "Progressing",
+				},
+			},
+		},
+	}
+	b, _ := json.Marshal(clusterversion)
+	managedclusterview := &managedclusterviewv1beta1.ManagedClusterView{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      ClusterName,
+			Namespace: ClusterName,
+		},
+		Spec: managedclusterviewv1beta1.ViewSpec{
+			Scope: managedclusterviewv1beta1.ViewScope{
+				Group:     "config.openshift.io",
+				Kind:      "ClusterVersion",
+				Name:      "version",
+				Namespace: "",
+				Version:   "v1",
+			},
+		},
+		Status: managedclusterviewv1beta1.ViewStatus{
+			Result: runtime.RawExtension{
+				Raw: b,
+			},
+		},
+	}
+
+	updatedclusterversion := &clusterversionv1.ClusterVersion{
+		TypeMeta: v1.TypeMeta{
+			APIVersion: "config.openshift.io/v1",
+			Kind:       "ClusterVersion",
+		},
+		ObjectMeta: v1.ObjectMeta{
+			Name: "version",
+		},
+		Spec: clusterversionv1.ClusterVersionSpec{
+			Channel:   "stable-4.5",
+			ClusterID: "201ad26c-67d6-416a",
+			Upstream:  "https://api.openshift.com/api",
+		},
+		Status: clusterversionv1.ClusterVersionStatus{
+			Conditions: []clusterversionv1.ClusterOperatorStatusCondition{
+				{
+					LastTransitionTime: v1.NewTime(time.Now()),
+					Message:            "Done applying 4.5.13",
+					Status:             "True",
+					Type:               "Available",
+				},
+				{
+					LastTransitionTime: v1.NewTime(time.Now()),
+					Message:            "Working towards 4.5.13: 28% complete",
+					Status:             "True",
+					Type:               "Progressing",
+				},
+			},
+		},
+	}
+	b1, _ := json.Marshal(updatedclusterversion)
+
+	s := scheme.Scheme
+	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
+	client := clientfake.NewFakeClientWithScheme(s, []runtime.Object{
+		cc, managedclusterview,
+	}...)
+
+	// Put a delay to complete the job to test the wait loop
+	go func() {
+		resultmcview := managedclusterviewv1beta1.ManagedClusterView{}
+		client.Get(context.TODO(), types.NamespacedName{
+			Namespace: ClusterName,
+			Name:      ClusterName,
+		}, &resultmcview)
+		resultmcview.Status.Result.Raw = b1
+		client.Update(context.TODO(), &resultmcview)
+	}()
+
+	assert.Nil(t, MonitorUpgradeStatus(client, ClusterName, cc), "err is nil, when cluster upgrade is successful")
+}

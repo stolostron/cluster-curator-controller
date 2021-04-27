@@ -49,7 +49,7 @@ func getRole() *rbacv1.Role {
 			rbacv1.PolicyRule{
 				APIGroups: []string{"cluster.open-cluster-management.io"},
 				Resources: []string{"clustercurators"},
-				Verbs:     []string{"get", "update"},
+				Verbs:     []string{"get", "update", "patch"},
 			},
 			rbacv1.PolicyRule{
 				APIGroups: []string{"view.open-cluster-management.io"},
@@ -91,7 +91,7 @@ func getClusterInstallerRules() []rbacv1.PolicyRule {
 		rbacv1.PolicyRule{
 			APIGroups: []string{"cluster.open-cluster-management.io"},
 			Resources: []string{"clustercurators"},
-			Verbs:     []string{"get", "update"},
+			Verbs:     []string{"get", "update", "patch"},
 		},
 	}
 	return curatorRule
@@ -139,7 +139,7 @@ func ApplyRBAC(kubeset kubernetes.Interface, namespace string) error {
 		klog.V(0).Info(" Created serviceAccount ✓")
 	}
 
-	klog.V(2).Info("Check if Role cluster-installer exists")
+	klog.V(2).Info("Check if Role curator exists")
 	if _, err := kubeset.RbacV1().Roles(namespace).Get(context.TODO(), "curator", v1.GetOptions{}); err != nil {
 		klog.V(2).Info(" Creating Role curator")
 		_, err = kubeset.RbacV1().Roles(namespace).Create(context.TODO(), getRole(), v1.CreateOptions{})

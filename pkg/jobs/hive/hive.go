@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log"
 	"strconv"
 	"strings"
@@ -36,7 +35,7 @@ type patchStringValue struct {
 }
 
 const MonitorAttempts = 6
-const UpgradeAttempts = 30
+const UpgradeAttempts = 60
 
 func ActivateDeploy(hiveset hiveclient.Interface, clusterName string) error {
 	klog.V(0).Info("* Initiate Provisioning")
@@ -195,13 +194,6 @@ func UpgradeCluster(client clientv1.Client, clusterName string, curator *cluster
 
 	desiredUpdate := curator.Spec.Upgrade.DesiredUpdate
 
-	// var mciGVR = schema.GroupVersionResource{
-	// 	Group: "internal.open-cluster-management.io", Version: "v1beta1", Resource: "managedclusterinfos"}
-
-	// managedClusterInfo, err := mcset.Resource(mciGVR).Namespace(clusterName).Get(context.TODO(), clusterName, v1.GetOptions{})
-	// if err != nil {
-	// 	return err
-	// }
 	managedClusterInfo := managedclusterinfov1beta1.ManagedClusterInfo{}
 	if err := client.Get(context.TODO(), types.NamespacedName{
 		Namespace: clusterName,
@@ -220,17 +212,6 @@ func UpgradeCluster(client clientv1.Client, clusterName string, curator *cluster
 		return errors.New("Provide valid upgrade version")
 	}
 
-	//isValidVersion := false
-	// if availableUpdates, ok := managedClusterInfo.Object["status"].(map[string]interface{})["distributionInfo"].(map[string]interface{})["ocp"].(map[string]interface{})["availableUpdates"]; ok {
-	// 	if cvAvailableUpdates, ok := availableUpdates.([]interface{}); ok {
-	// 		for _, version := range cvAvailableUpdates {
-	// 			version = fmt.Sprintf("%v", version)
-	// 			if version == desiredUpdate {
-	// 				isValidVersion = true
-	// 			}
-	// 		}
-	// 	}
-	// }
 	isValidVersion := false
 	if managedClusterInfo.Status.DistributionInfo.OCP.AvailableUpdates != nil {
 		for _, version := range managedClusterInfo.Status.DistributionInfo.OCP.AvailableUpdates {
@@ -274,7 +255,6 @@ func UpgradeCluster(client clientv1.Client, clusterName string, curator *cluster
 			return err
 		}
 		if resultmcview.Status.Result.Raw != nil {
-			fmt.Println("hi1")
 			break
 		}
 	}
@@ -287,7 +267,7 @@ func UpgradeCluster(client clientv1.Client, clusterName string, curator *cluster
 		err := json.Unmarshal(resultClusterVersion.Raw, &clusterVersion)
 		utils.CheckError(err)
 	}
-	fmt.Printf("mcv: %+v", resultmcview)
+
 	var desiredVersion interface{}
 	if status, ok := clusterVersion["status"]; ok {
 		cvstatus := status.(map[string]interface{})
@@ -296,7 +276,6 @@ func UpgradeCluster(client clientv1.Client, clusterName string, curator *cluster
 				for _, version := range cvAvailableUpdates {
 					if version.(map[string]interface{})["version"] == desiredUpdate {
 						desiredVersion = version
-						fmt.Println("version: ", version)
 						break
 					}
 				}
@@ -346,9 +325,8 @@ func MonitorUpgradeStatus(client clientv1.Client, clusterName string, curator *c
 	resultmcview := managedclusterviewv1beta1.ManagedClusterView{}
 
 	var timeoutErr error
-	//isTimeout := true
 	for i := 0; i < UpgradeAttempts; i++ {
-		time.Sleep(utils.PauseNintySeconds)
+		time.Sleep(utils.PauseSixtySeconds)
 
 		if err := client.Get(context.TODO(), types.NamespacedName{
 			Namespace: clusterName,
@@ -373,7 +351,6 @@ func MonitorUpgradeStatus(client clientv1.Client, clusterName string, curator *c
 					for _, condition := range cvConditions {
 						if condition.(map[string]interface{})["type"] == "Available" && condition.(map[string]interface{})["status"] == "True" {
 							if strings.Contains(condition.(map[string]interface{})["message"].(string), desiredUpdate) {
-								//isTimeout = false
 								klog.V(2).Info("Upgrade succeeded ✓")
 								i = UpgradeAttempts
 								break
@@ -381,6 +358,7 @@ func MonitorUpgradeStatus(client clientv1.Client, clusterName string, curator *c
 						} else if i == (UpgradeAttempts - 1) {
 							klog.Warning(cvConditions)
 							timeoutErr = errors.New("Timed out waiting for monitor upgrade job")
+							break
 						} else if condition.(map[string]interface{})["type"] == "Progressing" && condition.(map[string]interface{})["status"] == "True" {
 							klog.V(2).Info(" Upgrade status " + condition.(map[string]interface{})["message"].(string))
 						}
@@ -389,11 +367,6 @@ func MonitorUpgradeStatus(client clientv1.Client, clusterName string, curator *c
 			}
 		}
 	}
-
-	// if isTimeout && i == UpgradeAttempts {
-	// 	klog.Warning(cvConditions)
-	// 	timeoutErr = errors.New("Timed out waiting for monitor upgrade job")
-	// }
 
 	if err := client.Delete(context.TODO(), &resultmcview); err != nil {
 		return err

@@ -45,7 +45,7 @@ func getRules() []rbacv1.PolicyRule {
 		rbacv1.PolicyRule{
 			APIGroups: []string{"cluster.open-cluster-management.io"},
 			Resources: []string{"clustercurators"},
-			Verbs:     []string{"get", "update"},
+			Verbs:     []string{"get", "update", "patch"},
 		},
 		rbacv1.PolicyRule{
 			APIGroups: []string{"view.open-cluster-management.io"},
@@ -86,7 +86,7 @@ func getCombinedCIRules() []rbacv1.PolicyRule {
 			rbacv1.PolicyRule{
 				APIGroups: []string{"cluster.open-cluster-management.io"},
 				Resources: []string{"clustercurators"},
-				Verbs:     []string{"get", "update"},
+				Verbs:     []string{"get", "update", "patch"},
 			},
 		}...)
 }
