@@ -171,6 +171,7 @@ func curatorRun(config *rest.Config, client *clientv1.Client, clusterName string
 			klog.Error(err.Error())
 			panic(err)
 		}
+		jobChoice = "monitor"
 	}
 
 	if jobChoice == "monitor" {
