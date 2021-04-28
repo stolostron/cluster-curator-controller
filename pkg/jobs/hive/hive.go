@@ -252,7 +252,12 @@ func UpgradeCluster(client clientv1.Client, clusterName string, curator *cluster
 			Namespace: clusterName,
 			Name:      clusterName,
 		}, &resultmcview); err != nil {
-			return err
+			if i == 5 {
+				klog.Warning(err)
+				return errors.New("Failed to get remote clusterversion")
+			}
+			klog.Warning(err)
+			continue
 		}
 		if resultmcview.Status.Result.Raw != nil {
 			break
@@ -266,6 +271,8 @@ func UpgradeCluster(client clientv1.Client, clusterName string, curator *cluster
 	if resultClusterVersion.Raw != nil {
 		err := json.Unmarshal(resultClusterVersion.Raw, &clusterVersion)
 		utils.CheckError(err)
+	} else {
+		return errors.New("Failed to get remote clusterversion")
 	}
 
 	var desiredVersion interface{}
@@ -316,6 +323,37 @@ func UpgradeCluster(client clientv1.Client, clusterName string, curator *cluster
 	}
 	if err := client.Create(context.TODO(), managedclusteraction); err != nil {
 		return err
+	}
+
+	mcaStatus := managedclusteractionv1beta1.ManagedClusterAction{}
+	for i := 1; i <= 5; i++ {
+		if err := client.Get(context.TODO(), types.NamespacedName{
+			Namespace: clusterName,
+			Name:      clusterName,
+		}, &mcaStatus); err != nil {
+			if i == 5 {
+				return err
+			}
+			klog.Warning(err)
+			continue
+		}
+		if mcaStatus.Status.Conditions != nil {
+			break
+		}
+	}
+
+	if mcaStatus.Status.Conditions != nil {
+		for _, condition := range mcaStatus.Status.Conditions {
+			if condition.Status == v1.ConditionFalse && condition.Reason == managedclusteractionv1beta1.ReasonUpdateResourceFailed {
+				klog.Warning("ManagedClusterAction failed to update remote clusterversion", mcaStatus.Status.Conditions)
+				return errors.New("Remote clusterversion update failed")
+			}
+			if condition.Status == v1.ConditionTrue && condition.Type == managedclusteractionv1beta1.ConditionActionCompleted {
+				klog.V(2).Info("Remote clusterversion updated successfully " + clusterName)
+			}
+		}
+	} else {
+		return errors.New("Remote clusterversion update failed")
 	}
 	return nil
 }

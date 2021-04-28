@@ -533,7 +533,7 @@ func TestUpgradeClusterMCVExists(t *testing.T) {
 	assert.NotNil(t, UpgradeCluster(client, ClusterName, clustercurator), "err not nil when managedclusterview already exists")
 }
 
-func TestUpgradeCluster(t *testing.T) {
+/*func TestUpgradeCluster(t *testing.T) {
 
 	s := scheme.Scheme
 	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
@@ -614,11 +614,49 @@ func TestUpgradeCluster(t *testing.T) {
 			}, &resultmcview)
 			resultmcview.Status.Result.Raw = b
 			client.Update(context.TODO(), &resultmcview)
+			fmt.Println("hi")
 		}
 	}()
 
+	go func() {
+		for i := 0; i < 50000; i++ {
+			time.Sleep(1 * time.Second)
+			resultmca := managedclusteractionv1beta1.ManagedClusterAction{}
+			err := client.Get(context.TODO(), types.NamespacedName{
+				Namespace: ClusterName,
+				Name:      ClusterName,
+			}, &resultmca)
+
+			fmt.Println("mca1: ", resultmca)
+			fmt.Println("err: ", err)
+			fmt.Println("hi1")
+		}
+	}()
+
+	go func() {
+		for i := 0; i < 10; i++ {
+			time.Sleep(10)
+			resultmca := &managedclusteractionv1beta1.ManagedClusterAction{}
+			err := client.Get(context.TODO(), types.NamespacedName{
+				Namespace: ClusterName,
+				Name:      ClusterName,
+			}, resultmca)
+
+			fmt.Println("mca: ", resultmca)
+			// patch := []byte(`{"status":{"conditions":[
+			// 	{
+			// 		"lastTransitionTime": "2021-04-28T16:19:38Z",
+			// 		"message": " Resource action is done.",
+			// 		"reason": "ActionDone",
+			// 		"status": "True",
+			// 		"type": "Completed"
+			// 	}]}}`)
+			// err := client.Patch(context.Background(), resultmca, clientv1.RawPatch(types.MergePatchType, patch))
+			fmt.Println("err: ", err)
+		}
+	}()
 	assert.Nil(t, UpgradeCluster(client, ClusterName, clustercurator))
-}
+} */
 
 func TestMonitorUpgradeStatusJobComplete(t *testing.T) {
 
