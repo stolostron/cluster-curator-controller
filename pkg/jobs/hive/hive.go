@@ -327,6 +327,7 @@ func UpgradeCluster(client clientv1.Client, clusterName string, curator *cluster
 
 	mcaStatus := managedclusteractionv1beta1.ManagedClusterAction{}
 	for i := 1; i <= 5; i++ {
+		time.Sleep(utils.PauseFiveSeconds)
 		if err := client.Get(context.TODO(), types.NamespacedName{
 			Namespace: clusterName,
 			Name:      clusterName,
