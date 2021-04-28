@@ -355,6 +355,11 @@ func UpgradeCluster(client clientv1.Client, clusterName string, curator *cluster
 	} else {
 		return errors.New("Remote clusterversion update failed")
 	}
+
+	if err := client.Delete(context.TODO(), &mcaStatus); err != nil {
+		return err
+	}
+
 	return nil
 }
 
