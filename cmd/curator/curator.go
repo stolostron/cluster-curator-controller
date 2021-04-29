@@ -249,7 +249,7 @@ func curatorRun(config *rest.Config, client *clientv1.Client, clusterName string
 		condition = v1.ConditionTrue
 
 		// Remove DesireCuration, CuratingJob, Status from curator resource
-		updateDoneClusterCurator(*client, curator)
+		updateDoneClusterCurator(*client, curator, clusterName)
 	}
 
 	// Used to signal end of job as well as end of init container
@@ -263,11 +263,9 @@ func curatorRun(config *rest.Config, client *clientv1.Client, clusterName string
 	klog.V(2).Info("Done!")
 }
 
-func updateDoneClusterCurator(client clientv1.Client, curator *clustercuratorv1.ClusterCurator) {
-	curator.Spec.DesiredCuration = ""
-	curator.Spec.CuratingJob = ""
-	curator.Status.Conditions = nil
-	err := client.Update(context.TODO(), curator)
+func updateDoneClusterCurator(client clientv1.Client, curator *clustercuratorv1.ClusterCurator, clusterName string) {
+	patch := []byte(`{"spec":{"curatorJob":"", "desiredCuration": null},"status": null}`)
+	err := client.Patch(context.Background(), curator, clientv1.RawPatch(types.MergePatchType, patch))
 	utils.CheckError(err)
 }
 

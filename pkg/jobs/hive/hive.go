@@ -194,37 +194,11 @@ func UpgradeCluster(client clientv1.Client, clusterName string, curator *cluster
 
 	desiredUpdate := curator.Spec.Upgrade.DesiredUpdate
 
-	managedClusterInfo := managedclusterinfov1beta1.ManagedClusterInfo{}
-	if err := client.Get(context.TODO(), types.NamespacedName{
-		Namespace: clusterName,
-		Name:      clusterName,
-	}, &managedClusterInfo); err != nil {
+	if err := validateUpgradeVersion(client, clusterName, curator); err != nil {
 		return err
 	}
 
-	klog.V(2).Info("kubevendor ", managedClusterInfo.Status.KubeVendor)
-
-	if managedClusterInfo.Status.KubeVendor != "OpenShift" {
-		return errors.New("Can not upgrade non openshift cluster")
-	}
-
-	if desiredUpdate == "" {
-		return errors.New("Provide valid upgrade version")
-	}
-
-	isValidVersion := false
-	if managedClusterInfo.Status.DistributionInfo.OCP.AvailableUpdates != nil {
-		for _, version := range managedClusterInfo.Status.DistributionInfo.OCP.AvailableUpdates {
-			if version == desiredUpdate {
-				isValidVersion = true
-			}
-		}
-	}
-	if !isValidVersion {
-		return errors.New("Provided version is not valid")
-	}
-
-	klog.V(2).Info("Create managedclusterview " + clusterName)
+	klog.V(2).Info("Check if managedclusterview exists " + clusterName)
 
 	managedclusterview := &managedclusterviewv1beta1.ManagedClusterView{
 		ObjectMeta: v1.ObjectMeta{
@@ -242,9 +216,18 @@ func UpgradeCluster(client clientv1.Client, clusterName string, curator *cluster
 		},
 	}
 
-	if err := client.Create(context.TODO(), managedclusterview); err != nil {
-		return err
+	mcview := managedclusterviewv1beta1.ManagedClusterView{}
+	if err := client.Get(context.TODO(), types.NamespacedName{
+		Namespace: clusterName,
+		Name:      clusterName,
+	}, &mcview); err != nil {
+
+		klog.V(2).Info("Create managedclusterview " + clusterName)
+		if err := client.Create(context.TODO(), managedclusterview); err != nil {
+			return err
+		}
 	}
+
 	resultmcview := managedclusterviewv1beta1.ManagedClusterView{}
 	for i := 1; i <= 5; i++ {
 		time.Sleep(utils.PauseFiveSeconds)
@@ -276,21 +259,17 @@ func UpgradeCluster(client clientv1.Client, clusterName string, curator *cluster
 	}
 
 	var desiredVersion interface{}
-	if status, ok := clusterVersion["status"]; ok {
-		cvstatus := status.(map[string]interface{})
-		if availableUpdates, ok := cvstatus["availableUpdates"]; ok {
-			if cvAvailableUpdates, ok := availableUpdates.([]interface{}); ok {
-				for _, version := range cvAvailableUpdates {
-					if version.(map[string]interface{})["version"] == desiredUpdate {
-						desiredVersion = version
-						break
-					}
-				}
+	if cvAvailableUpdates, ok := clusterVersion["status"].(map[string]interface{})["availableUpdates"].([]interface{}); ok {
+		for _, version := range cvAvailableUpdates {
+			if version.(map[string]interface{})["version"] == desiredUpdate {
+				desiredVersion = version
+				break
 			}
 		}
 	}
 
 	clusterVersion["spec"].(map[string]interface{})["desiredUpdate"] = desiredVersion
+
 	if curator.Spec.Upgrade.Channel != "" {
 		clusterVersion["spec"].(map[string]interface{})["channel"] = curator.Spec.Upgrade.Channel
 	}
@@ -388,25 +367,20 @@ func MonitorUpgradeStatus(client clientv1.Client, clusterName string, curator *c
 			utils.CheckError(err)
 		}
 
-		if status, ok := clusterVersion["status"]; ok {
-			cvstatus := status.(map[string]interface{})
-			if conditions, ok := cvstatus["conditions"]; ok {
-				if cvConditions, ok := conditions.([]interface{}); ok {
-					for _, condition := range cvConditions {
-						if condition.(map[string]interface{})["type"] == "Available" && condition.(map[string]interface{})["status"] == "True" {
-							if strings.Contains(condition.(map[string]interface{})["message"].(string), desiredUpdate) {
-								klog.V(2).Info("Upgrade succeeded ✓")
-								i = UpgradeAttempts
-								break
-							}
-						} else if i == (UpgradeAttempts - 1) {
-							klog.Warning(cvConditions)
-							timeoutErr = errors.New("Timed out waiting for monitor upgrade job")
-							break
-						} else if condition.(map[string]interface{})["type"] == "Progressing" && condition.(map[string]interface{})["status"] == "True" {
-							klog.V(2).Info(" Upgrade status " + condition.(map[string]interface{})["message"].(string))
-						}
+		if cvConditions, ok := clusterVersion["status"].(map[string]interface{})["conditions"].([]interface{}); ok {
+			for _, condition := range cvConditions {
+				if condition.(map[string]interface{})["type"] == "Available" && condition.(map[string]interface{})["status"] == "True" {
+					if strings.Contains(condition.(map[string]interface{})["message"].(string), desiredUpdate) {
+						klog.V(2).Info("Upgrade succeeded ✓")
+						i = UpgradeAttempts
+						break
 					}
+				} else if i == (UpgradeAttempts - 1) {
+					klog.Warning(cvConditions)
+					timeoutErr = errors.New("Timed out waiting for monitor upgrade job")
+					break
+				} else if condition.(map[string]interface{})["type"] == "Progressing" && condition.(map[string]interface{})["status"] == "True" {
+					klog.V(2).Info(" Upgrade status " + condition.(map[string]interface{})["message"].(string))
 				}
 			}
 		}
@@ -416,4 +390,41 @@ func MonitorUpgradeStatus(client clientv1.Client, clusterName string, curator *c
 		return err
 	}
 	return timeoutErr
+}
+
+func validateUpgradeVersion(client clientv1.Client, clusterName string, curator *clustercuratorv1.ClusterCurator) error {
+
+	desiredUpdate := curator.Spec.Upgrade.DesiredUpdate
+
+	managedClusterInfo := managedclusterinfov1beta1.ManagedClusterInfo{}
+	if err := client.Get(context.TODO(), types.NamespacedName{
+		Namespace: clusterName,
+		Name:      clusterName,
+	}, &managedClusterInfo); err != nil {
+		return err
+	}
+
+	klog.V(2).Info("kubevendor: ", managedClusterInfo.Status.KubeVendor)
+
+	if managedClusterInfo.Status.KubeVendor != "OpenShift" {
+		return errors.New("Can not upgrade non openshift cluster")
+	}
+
+	if desiredUpdate == "" {
+		return errors.New("Provide valid upgrade version")
+	}
+
+	isValidVersion := false
+	if managedClusterInfo.Status.DistributionInfo.OCP.AvailableUpdates != nil {
+		for _, version := range managedClusterInfo.Status.DistributionInfo.OCP.AvailableUpdates {
+			if version == desiredUpdate {
+				isValidVersion = true
+			}
+		}
+	}
+	if !isValidVersion {
+		return errors.New("Provided version is not valid")
+	}
+
+	return nil
 }
