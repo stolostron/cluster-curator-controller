@@ -20,6 +20,9 @@ import (
 
 	ajv1 "github.com/open-cluster-management/ansiblejob-go-lib/api/v1alpha1"
 	clustercuratorv1 "github.com/open-cluster-management/cluster-curator-controller/pkg/api/v1beta1"
+	managedclusteractionv1beta1 "github.com/open-cluster-management/multicloud-operators-foundation/pkg/apis/action/v1beta1"
+	managedclusterinfov1beta1 "github.com/open-cluster-management/multicloud-operators-foundation/pkg/apis/internal.open-cluster-management.io/v1beta1"
+	managedclusterviewv1beta1 "github.com/open-cluster-management/multicloud-operators-foundation/pkg/apis/view/v1beta1"
 	hivev1 "github.com/openshift/hive/pkg/apis/hive/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -32,6 +35,7 @@ import (
 const PauseTwoSeconds = 2 * time.Second
 const PauseTenSeconds = PauseTwoSeconds * 5
 const PauseFiveSeconds = PauseTenSeconds / 2
+const PauseSixtySeconds = 60 * time.Second
 const CurrentAnsibleJob = "active-ansible-job"
 const CurrentHiveJob = "hive-provisioning-job"
 const CurrentCuratorContainer = "curating-with-container"
@@ -39,6 +43,7 @@ const CurrentCuratorJob = "curatorJob"
 const DefaultImageURI = "registry.ci.openshift.org/open-cluster-management/cluster-curator-controller:latest"
 
 const JobHasFinished = "Job_has_finished"
+const JobFailed = "Job_failed"
 
 type PatchStringValue struct {
 	Op    string `json:"op"`
@@ -156,6 +161,9 @@ func GetClient() (clientv1.Client, error) {
 	CheckError(batchv1.AddToScheme(curatorScheme))
 	CheckError(ajv1.AddToScheme(curatorScheme))
 	CheckError(hivev1.AddToScheme(curatorScheme))
+	CheckError(managedclusteractionv1beta1.AddToScheme(curatorScheme))
+	CheckError(managedclusterviewv1beta1.AddToScheme(curatorScheme))
+	CheckError(managedclusterinfov1beta1.AddToScheme(curatorScheme))
 
 	return clientv1.New(config, clientv1.Options{Scheme: curatorScheme})
 }
@@ -208,11 +216,27 @@ func recordCuratedStatusCondition(
 
 	meta.SetStatusCondition(&curator.Status.Conditions, newCondition)
 
-	if err := client.Update(context.Background(), curator); err != nil {
+	if err := client.Update(context.TODO(), curator); err != nil {
 		return err
 	}
 	klog.V(4).Infof("newCondition: %v", newCondition)
 	return nil
+}
+
+func RecordFailedCuratorStatusCondition(
+	client clientv1.Client,
+	clusterName string,
+	containerName string,
+	conditionStatus v1.ConditionStatus,
+	message string) error {
+
+	return recordCuratedStatusCondition(
+		client,
+		clusterName,
+		containerName,
+		conditionStatus,
+		JobFailed,
+		message)
 }
 
 func GetClusterCurator(client clientv1.Client, clusterName string) (*clustercuratorv1.ClusterCurator, error) {

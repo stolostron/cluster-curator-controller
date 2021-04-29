@@ -140,11 +140,11 @@ For more details on job flow within our architecture see our [**swimlane chart**
   - Run the following command to see the logs
     ```bash
     # oc logs job/CURATOR_JOB_NAME TYPE_VALUE
-    oc logs job/curator-job-d9pwh prehook-ansiblejob
+    oc logs job/curator-job-d9pwh -c prehook-ansiblejob
 
-    oc logs job/curator-job-d9pwh activate-and-monitor
+    oc logs job/curator-job-d9pwh -c activate-and-monitor
 
-    oc logs job/curator-job-d9pwh posthook-ansiblejob
+    oc logs job/curator-job-d9pwh -c posthook-ansiblejob
     ```
   - Add a "-f" to the end if you want to tail the output
 

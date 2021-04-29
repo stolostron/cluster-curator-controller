@@ -33,10 +33,19 @@ func Job(client client.Client, curator *clustercuratorv1.ClusterCurator) error {
 		return errors.New("Missing JOB_TYPE environment parameter, use \"prehook\" or \"posthook\"")
 	}
 
-	var hooks clustercuratorv1.Hooks
+	//var hooks clustercuratorv1.Hooks
+	var prehook []clustercuratorv1.Hook
+	var posthook []clustercuratorv1.Hook
+	var towerauthsecret string
 	switch curator.Spec.DesiredCuration {
 	case "install":
-		hooks = curator.Spec.Install
+		prehook = curator.Spec.Install.Prehook
+		posthook = curator.Spec.Install.Posthook
+		towerauthsecret = curator.Spec.Install.TowerAuthSecret
+	case "upgrade":
+		prehook = curator.Spec.Upgrade.Prehook
+		posthook = curator.Spec.Upgrade.Posthook
+		towerauthsecret = curator.Spec.Upgrade.TowerAuthSecret
 		/*	case "scale":
 				hooks = curator.Spec.Scale
 			case "upgrade":
@@ -49,9 +58,9 @@ func Job(client client.Client, curator *clustercuratorv1.ClusterCurator) error {
 	}
 
 	// Extract the prehooks or posthooks
-	hooksToRun := hooks.Prehook
+	hooksToRun := prehook
 	if jobType == POSTHOOK {
-		hooksToRun = hooks.Posthook
+		hooksToRun = posthook
 	}
 
 	// Move on when clusterCurator is missing or job hook is missing
@@ -62,7 +71,7 @@ func Job(client client.Client, curator *clustercuratorv1.ClusterCurator) error {
 
 	for _, ttn := range hooksToRun {
 		klog.V(3).Info("Tower Job name: " + ttn.Name)
-		jobResource, err := RunAnsibleJob(client, curator, jobType, ttn, hooks.TowerAuthSecret)
+		jobResource, err := RunAnsibleJob(client, curator, jobType, ttn, towerauthsecret)
 		if err != nil {
 			return err
 		}
