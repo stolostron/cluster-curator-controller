@@ -55,7 +55,7 @@ func getRules() []rbacv1.PolicyRule {
 		rbacv1.PolicyRule{
 			APIGroups: []string{"action.open-cluster-management.io"},
 			Resources: []string{"managedclusteractions"},
-			Verbs:     []string{"get", "create", "update"},
+			Verbs:     []string{"get", "create", "update", "delete"},
 		},
 	}
 }
