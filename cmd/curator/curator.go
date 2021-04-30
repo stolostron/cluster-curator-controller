@@ -225,6 +225,8 @@ func curatorRun(config *rest.Config, client *clientv1.Client, clusterName string
 				jobChoice,
 				v1.ConditionTrue,
 				err.Error()))
+			klog.Error(err.Error())
+			panic(err)
 		}
 	}
 
@@ -236,6 +238,8 @@ func curatorRun(config *rest.Config, client *clientv1.Client, clusterName string
 				jobChoice,
 				v1.ConditionTrue,
 				err.Error()))
+			klog.Error(err.Error())
+			panic(err)
 		}
 	}
 
@@ -264,13 +268,13 @@ func curatorRun(config *rest.Config, client *clientv1.Client, clusterName string
 }
 
 func updateDoneClusterCurator(client clientv1.Client, curator *clustercuratorv1.ClusterCurator, clusterName string) {
-	patch := []byte(`{"spec":{"curatorJob":"", "desiredCuration": null},"status": null}`)
+	patch := []byte(`{"spec":{"curatorJob": null, "desiredCuration": null},"status": null}`)
 	err := client.Patch(context.Background(), curator, clientv1.RawPatch(types.MergePatchType, patch))
 	utils.CheckError(err)
 }
 
 func updateFailingClusterCurator(client clientv1.Client, curator *clustercuratorv1.ClusterCurator) {
-	patch := []byte(`{"spec":{"curatorJob":""}}`)
+	patch := []byte(`{"spec":{"curatorJob": null}}`)
 	err := client.Patch(context.Background(), curator, clientv1.RawPatch(types.MergePatchType, patch))
 	utils.CheckError(err)
 }

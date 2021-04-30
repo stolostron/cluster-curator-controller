@@ -412,7 +412,7 @@ func TestUpgradeClusterNoDesiredUpdate(t *testing.T) {
 		errors.New("Provide valid upgrade version"))
 }
 
-func TestUpgradeClusterNotValidVersion(t *testing.T) {
+func TestUpgradeClusterInValidVersion(t *testing.T) {
 
 	s := scheme.Scheme
 	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
@@ -455,7 +455,115 @@ func TestUpgradeClusterNotValidVersion(t *testing.T) {
 	}...)
 
 	assert.Equal(t, UpgradeCluster(client, ClusterName, clustercurator),
-		errors.New("Provided version is not valid"))
+		errors.New("Provided version is not valid"), "Invalid Version")
+}
+
+func TestUpgradeClusterInValidChannel(t *testing.T) {
+
+	s := scheme.Scheme
+	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
+	s.AddKnownTypes(managedclusterinfov1beta1.GroupVersion, &managedclusterinfov1beta1.ManagedClusterInfo{})
+
+	managedclusterinfo := &managedclusterinfov1beta1.ManagedClusterInfo{
+		TypeMeta: v1.TypeMeta{
+			APIVersion: managedclusterinfov1beta1.GroupVersion.String(),
+			Kind:       "ManagedClusterInfo",
+		},
+		ObjectMeta: v1.ObjectMeta{
+			Name:      ClusterName,
+			Namespace: ClusterName,
+		},
+		Status: managedclusterinfov1beta1.ClusterInfoStatus{
+			KubeVendor: managedclusterinfov1beta1.KubeVendorOpenShift,
+			DistributionInfo: managedclusterinfov1beta1.DistributionInfo{
+				OCP: managedclusterinfov1beta1.OCPDistributionInfo{
+					AvailableUpdates: []string{"4.5.14", "4.5.16", "4.5.17"},
+					VersionAvailableUpdates: []managedclusterinfov1beta1.OCPVersionRelease{
+						{
+							Version:  "4.5.14",
+							Channels: []string{"stable-4.6", "stable-4.7"},
+							URL:      "https://access.redhat.com/errata",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	clustercurator := &clustercuratorv1.ClusterCurator{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      ClusterName,
+			Namespace: ClusterName,
+		},
+		Spec: clustercuratorv1.ClusterCuratorSpec{
+			DesiredCuration: "upgrade",
+			Upgrade: clustercuratorv1.UpgradeHooks{
+				DesiredUpdate: "4.5.14",
+				Channel:       "stable-4.5",
+			},
+		},
+	}
+
+	client := clientfake.NewFakeClientWithScheme(s, []runtime.Object{
+		clustercurator, managedclusterinfo,
+	}...)
+
+	assert.Equal(t, UpgradeCluster(client, ClusterName, clustercurator),
+		errors.New("Provided channel is not valid"), "Invalid Channel")
+}
+
+func TestUpgradeClusterInValidUpstream(t *testing.T) {
+
+	s := scheme.Scheme
+	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
+	s.AddKnownTypes(managedclusterinfov1beta1.GroupVersion, &managedclusterinfov1beta1.ManagedClusterInfo{})
+
+	managedclusterinfo := &managedclusterinfov1beta1.ManagedClusterInfo{
+		TypeMeta: v1.TypeMeta{
+			APIVersion: managedclusterinfov1beta1.GroupVersion.String(),
+			Kind:       "ManagedClusterInfo",
+		},
+		ObjectMeta: v1.ObjectMeta{
+			Name:      ClusterName,
+			Namespace: ClusterName,
+		},
+		Status: managedclusterinfov1beta1.ClusterInfoStatus{
+			KubeVendor: managedclusterinfov1beta1.KubeVendorOpenShift,
+			DistributionInfo: managedclusterinfov1beta1.DistributionInfo{
+				OCP: managedclusterinfov1beta1.OCPDistributionInfo{
+					AvailableUpdates: []string{"4.5.14", "4.5.16", "4.5.17"},
+					VersionAvailableUpdates: []managedclusterinfov1beta1.OCPVersionRelease{
+						{
+							Version:  "4.5.14",
+							Channels: []string{"stable-4.6", "stable-4.7"},
+							URL:      "https://access.redhat.com/errata",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	clustercurator := &clustercuratorv1.ClusterCurator{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      ClusterName,
+			Namespace: ClusterName,
+		},
+		Spec: clustercuratorv1.ClusterCuratorSpec{
+			DesiredCuration: "upgrade",
+			Upgrade: clustercuratorv1.UpgradeHooks{
+				DesiredUpdate: "4.5.14",
+				Upstream:      "https://access.redhat.com",
+			},
+		},
+	}
+
+	client := clientfake.NewFakeClientWithScheme(s, []runtime.Object{
+		clustercurator, managedclusterinfo,
+	}...)
+
+	assert.Equal(t, UpgradeCluster(client, ClusterName, clustercurator),
+		errors.New("Provided upstream is not valid"), "Invalid Upstream")
 }
 
 func getManagedClusterView() *managedclusterviewv1beta1.ManagedClusterView {

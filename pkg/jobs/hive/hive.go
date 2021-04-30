@@ -377,6 +377,7 @@ func MonitorUpgradeStatus(client clientv1.Client, clusterName string, curator *c
 					}
 				} else if i == (UpgradeAttempts - 1) {
 					klog.Warning(cvConditions)
+					klog.V(2).Info("Timed out waiting for monitor upgrade job")
 					timeoutErr = errors.New("Timed out waiting for monitor upgrade job")
 					break
 				} else if condition.(map[string]interface{})["type"] == "Progressing" && condition.(map[string]interface{})["status"] == "True" {
@@ -389,12 +390,15 @@ func MonitorUpgradeStatus(client clientv1.Client, clusterName string, curator *c
 	if err := client.Delete(context.TODO(), &resultmcview); err != nil {
 		return err
 	}
+
 	return timeoutErr
 }
 
 func validateUpgradeVersion(client clientv1.Client, clusterName string, curator *clustercuratorv1.ClusterCurator) error {
 
 	desiredUpdate := curator.Spec.Upgrade.DesiredUpdate
+	channel := curator.Spec.Upgrade.Channel
+	upstream := curator.Spec.Upgrade.Upstream
 
 	managedClusterInfo := managedclusterinfov1beta1.ManagedClusterInfo{}
 	if err := client.Get(context.TODO(), types.NamespacedName{
@@ -424,6 +428,36 @@ func validateUpgradeVersion(client clientv1.Client, clusterName string, curator 
 	}
 	if !isValidVersion {
 		return errors.New("Provided version is not valid")
+	}
+
+	isValidChannel := false
+	if channel != "" {
+		for _, versionRelease := range managedClusterInfo.Status.DistributionInfo.OCP.VersionAvailableUpdates {
+			if versionRelease.Version == desiredUpdate {
+				for _, c := range versionRelease.Channels {
+					if c == channel {
+						isValidChannel = true
+						break
+					}
+				}
+			}
+		}
+	}
+	if channel != "" && !isValidChannel {
+		return errors.New("Provided channel is not valid")
+	}
+
+	isValidUpstream := false
+	if channel != "" {
+		for _, versionRelease := range managedClusterInfo.Status.DistributionInfo.OCP.VersionAvailableUpdates {
+			if versionRelease.Version == desiredUpdate && versionRelease.URL == upstream {
+				isValidUpstream = true
+				break
+			}
+		}
+	}
+	if upstream != "" && !isValidUpstream {
+		return errors.New("Provided upstream is not valid")
 	}
 
 	return nil
