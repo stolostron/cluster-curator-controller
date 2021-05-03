@@ -28,7 +28,26 @@ var s = scheme.Scheme
 // Validate that we are correctly building the job.batchv1 object
 func TestGetBatchJobImageSHA(t *testing.T) {
 
-	batchJobObj := getBatchJob(clusterName, imageURI, "install")
+	clusterCurator := clustercuratorv1.ClusterCurator{
+		ObjectMeta: v1.ObjectMeta{Name: clusterName, Namespace: clusterName},
+		Spec: clustercuratorv1.ClusterCuratorSpec{
+			ProviderCredentialPath: "default/provider-secret",
+			DesiredCuration:        "install",
+			Install: clustercuratorv1.Hooks{
+				Prehook: []clustercuratorv1.Hook{
+					{
+						Name: "prehook job",
+					},
+				},
+				Posthook: []clustercuratorv1.Hook{
+					{
+						Name: "posthook job",
+					},
+				},
+			},
+		},
+	}
+	batchJobObj := getBatchJob(clusterName, imageURI, clusterCurator)
 
 	t.Log("Test count initContainers in job")
 	foundInitContainers := len(batchJobObj.Spec.Template.Spec.InitContainers)
@@ -58,8 +77,16 @@ func TestGetBatchJobImageSHA(t *testing.T) {
 // Use the default URI
 func TestGetBatchJobImageDefault(t *testing.T) {
 
+	clusterCurator := clustercuratorv1.ClusterCurator{
+		ObjectMeta: v1.ObjectMeta{Name: clusterName, Namespace: clusterName},
+		Spec: clustercuratorv1.ClusterCuratorSpec{
+			ProviderCredentialPath: "default/provider-secret",
+			DesiredCuration:        "install",
+		},
+	}
+
 	t.Log("Create a batchJobObj with no sha256 or URI")
-	batchJobObj := getBatchJob(clusterName, imageURI, "install")
+	batchJobObj := getBatchJob(clusterName, imageURI, clusterCurator)
 
 	t.Logf("Check image is applied correclty %v", imageURI)
 	uri := imageURI
@@ -80,6 +107,13 @@ func TestCreateLauncher(t *testing.T) {
 		Spec: clustercuratorv1.ClusterCuratorSpec{
 			ProviderCredentialPath: "default/provider-secret",
 			DesiredCuration:        "install",
+			Install: clustercuratorv1.Hooks{
+				Prehook: []clustercuratorv1.Hook{
+					{
+						Name: "prehook job",
+					},
+				},
+			},
 		},
 	}
 
