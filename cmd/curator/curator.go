@@ -287,7 +287,7 @@ func updateDoneClusterCurator(client clientv1.Client, curator *clustercuratorv1.
 }
 
 func updateFailingClusterCurator(client clientv1.Client, curator *clustercuratorv1.ClusterCurator) {
-	patch := []byte(`{"spec":{"curatorJob": null}}`)
+	patch := []byte(`{"spec":{"curatorJob": null, "desiredCuration": null}}`)
 	err := client.Patch(context.Background(), curator, clientv1.RawPatch(types.MergePatchType, patch))
 	utils.CheckError(err)
 }
