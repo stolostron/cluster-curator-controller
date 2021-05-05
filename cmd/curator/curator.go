@@ -230,20 +230,7 @@ func curatorRun(config *rest.Config, client *clientv1.Client, clusterName string
 		}
 	}
 
-	if jobChoice == "prehook-ansiblejob" {
-		if err = ansible.Job(*client, curator); err != nil {
-			utils.CheckError(utils.RecordFailedCuratorStatusCondition(
-				*client,
-				clusterName,
-				jobChoice,
-				v1.ConditionTrue,
-				err.Error()))
-			klog.Error(err.Error())
-			panic(err)
-		}
-	}
-
-	if jobChoice == "posthook-ansiblejob" {
+	if jobChoice == "prehook-ansiblejob" || jobChoice == "posthook-ansiblejob" {
 		if err = ansible.Job(*client, curator); err != nil {
 			utils.CheckError(utils.RecordFailedCuratorStatusCondition(
 				*client,

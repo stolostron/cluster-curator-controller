@@ -431,6 +431,7 @@ func validateUpgradeVersion(client clientv1.Client, clusterName string, curator 
 	}
 
 	isValidChannel := false
+	isValidUpstream := false
 	if channel != "" {
 		for _, versionRelease := range managedClusterInfo.Status.DistributionInfo.OCP.VersionAvailableUpdates {
 			if versionRelease.Version == desiredUpdate {
@@ -440,6 +441,10 @@ func validateUpgradeVersion(client clientv1.Client, clusterName string, curator 
 						break
 					}
 				}
+				if upstream != "" && versionRelease.URL == upstream {
+					isValidUpstream = true
+					break
+				}
 			}
 		}
 	}
@@ -447,15 +452,6 @@ func validateUpgradeVersion(client clientv1.Client, clusterName string, curator 
 		return errors.New("Provided channel is not valid")
 	}
 
-	isValidUpstream := false
-	if channel != "" {
-		for _, versionRelease := range managedClusterInfo.Status.DistributionInfo.OCP.VersionAvailableUpdates {
-			if versionRelease.Version == desiredUpdate && versionRelease.URL == upstream {
-				isValidUpstream = true
-				break
-			}
-		}
-	}
 	if upstream != "" && !isValidUpstream {
 		return errors.New("Provided upstream is not valid")
 	}
