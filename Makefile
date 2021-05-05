@@ -16,7 +16,7 @@ export CGO_ENABLED  = 0
 export GO111MODULE := on
 export GOOS         = $(shell go env GOOS)
 export GOARCH       = $(ARCH_TYPE)
-export GOPACKAGES   = $(shell go list ./... | grep -v /vendor | grep -v /internal | grep -v /build | grep -v /test)
+export GOPACKAGES   = $(shell go list ./... | grep -v /vendor | grep -v /internal | grep -v /build | grep -v /test | grep -v /controllers)
 
 export PROJECT_DIR            = $(shell 'pwd')
 export BUILD_DIR              = $(PROJECT_DIR)/build
@@ -68,14 +68,6 @@ deps: init component/init
 ## Runs a set of required checks
 check: copyright-check
 
-.PHONY: test
-## Runs go unit tests
-test: component/test/unit
-
-.PHONY: build
-## Builds controller binary inside of an image
-build: component/build
-
 .PHONY: controller-gen
 # find or download controller-gen
 # download controller-gen if necessary
@@ -104,14 +96,6 @@ manifests: controller-gen
 generate: controller-gen
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
 
-.PHONY: build-coverage
-build-coverage:
-	$(SELF) component/build-coverage
-
-.PHONY: build-e2e
-build-e2e:
-	$(SELF) component/build-e2e
-
 .PHONY: copyright-check
 copyright-check:
 	./build/copyright-check.sh $(TRAVIS_BRANCH)
@@ -120,9 +104,6 @@ copyright-check:
 ## Clean build-harness and remove Go generated build and test files
 clean::
 	@rm -rf $(BUILD_DIR)/_output
-	@[ "$(BUILD_HARNESS_PATH)" == '/' ] || \
-	 [ "$(BUILD_HARNESS_PATH)" == '.' ] || \
-	   rm -rf $(BUILD_HARNESS_PATH)
 
 .PHONY: lint
 ## Runs linter against go files
@@ -130,8 +111,37 @@ lint:
 	@echo "Running linting tool ..."
 	@GOGC=25 golangci-lint run --timeout 5m
 
-.PHONY: helpz
-helpz:
-ifndef build-harness
-	$(eval MAKEFILE_LIST := Makefile build-harness/modules/go/Makefile)
-endif
+.PHONY: unit-tests
+## Runs go unit tests
+unit-tests:
+	@build/run-unit-tests.sh
+	#GOFLAGS="" go test -timeout 190s -v ./pkg/...
+	#GOFLAGS="" go test -timeout 60s -v -short ./cmd/...
+	#GOFLAGS="" go test -timeout 60s -v -short ./controllers/...
+
+.PHONY: push-curator
+push-curator: build-curator
+	docker push ${REPO_URL}/cluster-curator-controller:${VERSION}
+	docker tag ${REPO_URL}/cluster-curator-controller:${VERSION} ${REPO_URL}/cluster-curator-controller:latest
+	docker push ${REPO_URL}/cluster-curator-controller:latest
+	#./deploy/controller/process.sh
+
+.PHONY: compile-curator
+compile-curator:
+	go mod vendor
+	go mod tidy
+	GOFLAGS="" go build -o build/_output/curator ./cmd/curator/curator.go
+	GOFLAGS="" go build -o build/_output/manager ./cmd/manager/main.go
+
+.PHONY: build-curator
+build-curator: 
+	docker build -f Dockerfile.prow . -t ${REPO_URL}/cluster-curator-controller:${VERSION}
+
+.PHONY: scale-up-test
+scale-up-test:
+	go test -v -timeout 500s ./cmd/controller/controller_test.go -run TestCreateControllerScale
+
+.PHONY: scale-down-test
+scale-down-test:
+	go test -v -timeout 500s ./cmd/controller/controller_test.go -run TestDeleteManagedClusters
+

@@ -7,7 +7,7 @@ require (
 	github.com/open-cluster-management/ansiblejob-go-lib v0.1.12
 	github.com/open-cluster-management/api v0.0.0-20210409125704-06f2aec1a73f
 	github.com/open-cluster-management/library-go v0.0.0-20210208174614-f3ad264f145a
-	github.com/open-cluster-management/multicloud-operators-foundation v0.0.0-20210415053135-434684dc0274
+	github.com/open-cluster-management/multicloud-operators-foundation v0.0.0-20210428114325-2539d82c14cd
 	github.com/openshift/api v3.9.1-0.20191111211345-a27ff30ebf09+incompatible
 	//	github.com/openshift/api v3.9.1-0.20191111211345-a27ff30ebf09+incompatible
 	github.com/openshift/hive v1.0.19

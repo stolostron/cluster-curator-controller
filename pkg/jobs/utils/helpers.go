@@ -117,6 +117,7 @@ func RecordCuratorJobName(client clientv1.Client, clusterName string, curatorJob
 	}
 
 	cc.Spec.CuratingJob = curatorJobName
+	cc.Status = clustercuratorv1.ClusterCuratorStatus{}
 
 	return client.Update(context.Background(), cc)
 }

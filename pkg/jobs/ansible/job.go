@@ -275,7 +275,7 @@ func MonitorAnsibleJob(
 					client,
 					curator.Namespace,
 					"current-ansiblejob",
-					v1.ConditionFalse,
+					v1.ConditionTrue,
 					jobResource.GetName()))
 
 				break

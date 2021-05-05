@@ -90,6 +90,33 @@ func getUpgradeClusterCurator() *clustercuratorv1.ClusterCurator {
 	}
 }
 
+func getManagedClusterInfo() *managedclusterinfov1beta1.ManagedClusterInfo {
+	return &managedclusterinfov1beta1.ManagedClusterInfo{
+		TypeMeta: v1.TypeMeta{
+			APIVersion: managedclusterinfov1beta1.GroupVersion.String(),
+			Kind:       "ManagedClusterInfo",
+		},
+		ObjectMeta: v1.ObjectMeta{
+			Name:      ClusterName,
+			Namespace: ClusterName,
+		},
+		Status: managedclusterinfov1beta1.ClusterInfoStatus{
+			KubeVendor: managedclusterinfov1beta1.KubeVendorOpenShift,
+			DistributionInfo: managedclusterinfov1beta1.DistributionInfo{
+				OCP: managedclusterinfov1beta1.OCPDistributionInfo{
+					AvailableUpdates: []string{"4.5.14", "4.5.16", "4.5.17"},
+					VersionAvailableUpdates: []managedclusterinfov1beta1.OCPVersionRelease{
+						{
+							Version:  "4.5.14",
+							Channels: []string{"stable-4.6", "stable-4.7"},
+							URL:      "https://access.redhat.com/errata",
+						},
+					},
+				},
+			},
+		},
+	}
+}
 func TestActivateDeployNoCD(t *testing.T) {
 
 	hiveset := hivefake.NewSimpleClientset()
@@ -379,20 +406,6 @@ func TestUpgradeClusterNoDesiredUpdate(t *testing.T) {
 	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
 	s.AddKnownTypes(managedclusterinfov1beta1.GroupVersion, &managedclusterinfov1beta1.ManagedClusterInfo{})
 
-	managedclusterinfo := &managedclusterinfov1beta1.ManagedClusterInfo{
-		TypeMeta: v1.TypeMeta{
-			APIVersion: managedclusterinfov1beta1.GroupVersion.String(),
-			Kind:       "ManagedClusterInfo",
-		},
-		ObjectMeta: v1.ObjectMeta{
-			Name:      ClusterName,
-			Namespace: ClusterName,
-		},
-		Status: managedclusterinfov1beta1.ClusterInfoStatus{
-			KubeVendor: managedclusterinfov1beta1.KubeVendorOpenShift,
-		},
-	}
-
 	clustercurator := &clustercuratorv1.ClusterCurator{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      ClusterName,
@@ -405,37 +418,18 @@ func TestUpgradeClusterNoDesiredUpdate(t *testing.T) {
 	}
 
 	client := clientfake.NewFakeClientWithScheme(s, []runtime.Object{
-		clustercurator, managedclusterinfo,
+		clustercurator, getManagedClusterInfo(),
 	}...)
 
 	assert.Equal(t, UpgradeCluster(client, ClusterName, clustercurator),
 		errors.New("Provide valid upgrade version"))
 }
 
-func TestUpgradeClusterNotValidVersion(t *testing.T) {
+func TestUpgradeClusterInValidVersion(t *testing.T) {
 
 	s := scheme.Scheme
 	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
 	s.AddKnownTypes(managedclusterinfov1beta1.GroupVersion, &managedclusterinfov1beta1.ManagedClusterInfo{})
-
-	managedclusterinfo := &managedclusterinfov1beta1.ManagedClusterInfo{
-		TypeMeta: v1.TypeMeta{
-			APIVersion: managedclusterinfov1beta1.GroupVersion.String(),
-			Kind:       "ManagedClusterInfo",
-		},
-		ObjectMeta: v1.ObjectMeta{
-			Name:      ClusterName,
-			Namespace: ClusterName,
-		},
-		Status: managedclusterinfov1beta1.ClusterInfoStatus{
-			KubeVendor: managedclusterinfov1beta1.KubeVendorOpenShift,
-			DistributionInfo: managedclusterinfov1beta1.DistributionInfo{
-				OCP: managedclusterinfov1beta1.OCPDistributionInfo{
-					AvailableUpdates: []string{"4.5.14", "4.5.16", "4.5.17"},
-				},
-			},
-		},
-	}
 
 	clustercurator := &clustercuratorv1.ClusterCurator{
 		ObjectMeta: v1.ObjectMeta{
@@ -451,11 +445,67 @@ func TestUpgradeClusterNotValidVersion(t *testing.T) {
 	}
 
 	client := clientfake.NewFakeClientWithScheme(s, []runtime.Object{
-		clustercurator, managedclusterinfo,
+		clustercurator, getManagedClusterInfo(),
 	}...)
 
 	assert.Equal(t, UpgradeCluster(client, ClusterName, clustercurator),
-		errors.New("Provided version is not valid"))
+		errors.New("Provided version is not valid"), "Invalid Version")
+}
+
+func TestUpgradeClusterInValidChannel(t *testing.T) {
+
+	s := scheme.Scheme
+	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
+	s.AddKnownTypes(managedclusterinfov1beta1.GroupVersion, &managedclusterinfov1beta1.ManagedClusterInfo{})
+
+	clustercurator := &clustercuratorv1.ClusterCurator{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      ClusterName,
+			Namespace: ClusterName,
+		},
+		Spec: clustercuratorv1.ClusterCuratorSpec{
+			DesiredCuration: "upgrade",
+			Upgrade: clustercuratorv1.UpgradeHooks{
+				DesiredUpdate: "4.5.14",
+				Channel:       "stable-4.5",
+			},
+		},
+	}
+
+	client := clientfake.NewFakeClientWithScheme(s, []runtime.Object{
+		clustercurator, getManagedClusterInfo(),
+	}...)
+
+	assert.Equal(t, UpgradeCluster(client, ClusterName, clustercurator),
+		errors.New("Provided channel is not valid"), "Invalid Channel")
+}
+
+func TestUpgradeClusterInValidUpstream(t *testing.T) {
+
+	s := scheme.Scheme
+	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
+	s.AddKnownTypes(managedclusterinfov1beta1.GroupVersion, &managedclusterinfov1beta1.ManagedClusterInfo{})
+
+	clustercurator := &clustercuratorv1.ClusterCurator{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      ClusterName,
+			Namespace: ClusterName,
+		},
+		Spec: clustercuratorv1.ClusterCuratorSpec{
+			DesiredCuration: "upgrade",
+			Upgrade: clustercuratorv1.UpgradeHooks{
+				DesiredUpdate: "4.5.14",
+				Upstream:      "https://access.redhat.com",
+			},
+		},
+	}
+
+	client := clientfake.NewFakeClientWithScheme(s, []runtime.Object{
+		clustercurator, getManagedClusterInfo(),
+	}...)
+
+	assert.Equal(t, UpgradeCluster(client, ClusterName, clustercurator),
+		errors.New("Provided upstream is not valid"), "Invalid Upstream")
 }
 
 func getManagedClusterView() *managedclusterviewv1beta1.ManagedClusterView {
@@ -478,25 +528,6 @@ func TestUpgradeClusterMCVExists(t *testing.T) {
 	s.AddKnownTypes(managedclusterinfov1beta1.GroupVersion, &managedclusterinfov1beta1.ManagedClusterInfo{})
 	s.AddKnownTypes(managedclusteractionv1beta1.GroupVersion, &managedclusteractionv1beta1.ManagedClusterAction{})
 	s.AddKnownTypes(managedclusterviewv1beta1.GroupVersion, &managedclusterviewv1beta1.ManagedClusterView{})
-
-	managedclusterinfo := &managedclusterinfov1beta1.ManagedClusterInfo{
-		TypeMeta: v1.TypeMeta{
-			APIVersion: managedclusterinfov1beta1.GroupVersion.String(),
-			Kind:       "ManagedClusterInfo",
-		},
-		ObjectMeta: v1.ObjectMeta{
-			Name:      ClusterName,
-			Namespace: ClusterName,
-		},
-		Status: managedclusterinfov1beta1.ClusterInfoStatus{
-			KubeVendor: managedclusterinfov1beta1.KubeVendorOpenShift,
-			DistributionInfo: managedclusterinfov1beta1.DistributionInfo{
-				OCP: managedclusterinfov1beta1.OCPDistributionInfo{
-					AvailableUpdates: []string{"4.5.14", "4.5.16", "4.5.17"},
-				},
-			},
-		},
-	}
 
 	clustercurator := &clustercuratorv1.ClusterCurator{
 		ObjectMeta: v1.ObjectMeta{
@@ -528,7 +559,7 @@ func TestUpgradeClusterMCVExists(t *testing.T) {
 	}
 
 	client := clientfake.NewFakeClientWithScheme(s, []runtime.Object{
-		clustercurator, managedclusterinfo, managedclusterview,
+		clustercurator, getManagedClusterInfo(), managedclusterview,
 	}...)
 
 	assert.NotNil(t, UpgradeCluster(client, ClusterName, clustercurator), "err not nil when managedclusterview already exists")
@@ -541,25 +572,6 @@ func TestUpgradeCluster(t *testing.T) {
 	s.AddKnownTypes(managedclusterinfov1beta1.GroupVersion, &managedclusterinfov1beta1.ManagedClusterInfo{})
 	s.AddKnownTypes(managedclusteractionv1beta1.GroupVersion, &managedclusteractionv1beta1.ManagedClusterAction{})
 	s.AddKnownTypes(managedclusterviewv1beta1.GroupVersion, &managedclusterviewv1beta1.ManagedClusterView{})
-
-	managedclusterinfo := &managedclusterinfov1beta1.ManagedClusterInfo{
-		TypeMeta: v1.TypeMeta{
-			APIVersion: managedclusterinfov1beta1.GroupVersion.String(),
-			Kind:       "ManagedClusterInfo",
-		},
-		ObjectMeta: v1.ObjectMeta{
-			Name:      ClusterName,
-			Namespace: ClusterName,
-		},
-		Status: managedclusterinfov1beta1.ClusterInfoStatus{
-			KubeVendor: managedclusterinfov1beta1.KubeVendorOpenShift,
-			DistributionInfo: managedclusterinfov1beta1.DistributionInfo{
-				OCP: managedclusterinfov1beta1.OCPDistributionInfo{
-					AvailableUpdates: []string{"4.5.14", "4.5.16", "4.5.17"},
-				},
-			},
-		},
-	}
 
 	clustercurator := &clustercuratorv1.ClusterCurator{
 		ObjectMeta: v1.ObjectMeta{
@@ -603,7 +615,108 @@ func TestUpgradeCluster(t *testing.T) {
 	b, _ := json.Marshal(clusterversion)
 
 	client := clientfake.NewFakeClientWithScheme(s, []runtime.Object{
-		clustercurator, managedclusterinfo,
+		clustercurator, getManagedClusterInfo(),
+	}...)
+
+	go func() {
+		for i := 0; i < 10; i++ {
+			resultmcview := managedclusterviewv1beta1.ManagedClusterView{}
+			client.Get(context.TODO(), types.NamespacedName{
+				Namespace: ClusterName,
+				Name:      ClusterName,
+			}, &resultmcview)
+			resultmcview.Status.Result.Raw = b
+			client.Update(context.TODO(), &resultmcview)
+			updatedresultmcview := managedclusterviewv1beta1.ManagedClusterView{}
+			client.Get(context.TODO(), types.NamespacedName{
+				Namespace: ClusterName,
+				Name:      ClusterName,
+			}, &updatedresultmcview)
+			if updatedresultmcview.Status.Result.Raw != nil {
+				break
+			}
+		}
+	}()
+	go func() {
+		for i := 0; i < 10; i++ {
+			time.Sleep(1 * time.Second)
+			resultmca := managedclusteractionv1beta1.ManagedClusterAction{}
+			err := client.Get(context.TODO(), types.NamespacedName{
+				Namespace: ClusterName,
+				Name:      ClusterName,
+			}, &resultmca)
+
+			if err == nil {
+				patch := []byte(`{"status":{"conditions":[
+							{
+								"lastTransitionTime": "2021-04-28T16:19:38Z",
+								"message": " Resource action is done.",
+								"reason": "ActionDone",
+								"status": "True",
+								"type": "Completed"
+							}]}}`)
+				client.Patch(context.Background(), &resultmca, clientv1.RawPatch(types.MergePatchType, patch))
+				break
+			}
+		}
+	}()
+
+	assert.Nil(t, UpgradeCluster(client, ClusterName, clustercurator), "Upgrade started successfully")
+}
+
+func TestUpgradeClusterWithChannelUpstream(t *testing.T) {
+
+	s := scheme.Scheme
+	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
+	s.AddKnownTypes(managedclusterinfov1beta1.GroupVersion, &managedclusterinfov1beta1.ManagedClusterInfo{})
+	s.AddKnownTypes(managedclusteractionv1beta1.GroupVersion, &managedclusteractionv1beta1.ManagedClusterAction{})
+	s.AddKnownTypes(managedclusterviewv1beta1.GroupVersion, &managedclusterviewv1beta1.ManagedClusterView{})
+
+	clustercurator := &clustercuratorv1.ClusterCurator{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      ClusterName,
+			Namespace: ClusterName,
+		},
+		Spec: clustercuratorv1.ClusterCuratorSpec{
+			DesiredCuration: "upgrade",
+			Upgrade: clustercuratorv1.UpgradeHooks{
+				DesiredUpdate: "4.5.14",
+				Channel:       "stable-4.7",
+				Upstream:      "https://access.redhat.com/errata",
+			},
+		},
+	}
+
+	clusterversion := &clusterversionv1.ClusterVersion{
+		TypeMeta: v1.TypeMeta{
+			APIVersion: "config.openshift.io/v1",
+			Kind:       "ClusterVersion",
+		},
+		ObjectMeta: v1.ObjectMeta{
+			Name: "version",
+		},
+		Spec: clusterversionv1.ClusterVersionSpec{
+			Channel:   "stable-4.5",
+			ClusterID: "201ad26c-67d6-416a",
+			Upstream:  "https://api.openshift.com/api",
+		},
+		Status: clusterversionv1.ClusterVersionStatus{
+			AvailableUpdates: []clusterversionv1.Update{
+				{
+					Version: "4.5.14",
+					Image:   "quay.io/openshift-release",
+				},
+				{
+					Version: "4.5.15",
+					Image:   "quay.io/openshift-release",
+				},
+			},
+		},
+	}
+	b, _ := json.Marshal(clusterversion)
+
+	client := clientfake.NewFakeClientWithScheme(s, []runtime.Object{
+		clustercurator, getManagedClusterInfo(),
 	}...)
 
 	go func() {
