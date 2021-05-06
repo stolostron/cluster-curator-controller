@@ -804,6 +804,9 @@ func TestMonitorUpgradeStatusJobComplete(t *testing.T) {
 		ObjectMeta: v1.ObjectMeta{
 			Name:      ClusterName,
 			Namespace: ClusterName,
+			Labels: map[string]string{
+				MCVUpgradeLabel: ClusterName,
+			},
 		},
 		Spec: managedclusterviewv1beta1.ViewSpec{
 			Scope: managedclusterviewv1beta1.ViewScope{

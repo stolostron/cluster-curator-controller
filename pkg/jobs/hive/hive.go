@@ -36,6 +36,7 @@ type patchStringValue struct {
 
 const MonitorAttempts = 6
 const UpgradeAttempts = 60
+const MCVUpgradeLabel = "cluster-curator-upgrade"
 
 func ActivateDeploy(hiveset hiveclient.Interface, clusterName string) error {
 	klog.V(0).Info("* Initiate Provisioning")
@@ -204,6 +205,9 @@ func UpgradeCluster(client clientv1.Client, clusterName string, curator *cluster
 		ObjectMeta: v1.ObjectMeta{
 			Name:      clusterName,
 			Namespace: clusterName,
+			Labels: map[string]string{
+				MCVUpgradeLabel: clusterName,
+			},
 		},
 		Spec: managedclusterviewv1beta1.ViewSpec{
 			Scope: managedclusterviewv1beta1.ViewScope{
@@ -228,6 +232,7 @@ func UpgradeCluster(client clientv1.Client, clusterName string, curator *cluster
 		}
 	}
 
+	getErr := errors.New("Failed to get remote clusterversion")
 	resultmcview := managedclusterviewv1beta1.ManagedClusterView{}
 	for i := 1; i <= 5; i++ {
 		time.Sleep(utils.PauseFiveSeconds)
@@ -237,13 +242,21 @@ func UpgradeCluster(client clientv1.Client, clusterName string, curator *cluster
 		}, &resultmcview); err != nil {
 			if i == 5 {
 				klog.Warning(err)
-				return errors.New("Failed to get remote clusterversion")
+				return getErr
 			}
 			klog.Warning(err)
 			continue
 		}
-		if resultmcview.Status.Result.Raw != nil {
-			break
+		labels := resultmcview.ObjectMeta.GetLabels()
+		if len(labels) == 0 {
+			return getErr
+		}
+		if _, ok := labels[MCVUpgradeLabel]; ok {
+			if resultmcview.Status.Result.Raw != nil {
+				break
+			}
+		} else {
+			return getErr
 		}
 	}
 
@@ -255,7 +268,7 @@ func UpgradeCluster(client clientv1.Client, clusterName string, curator *cluster
 		err := json.Unmarshal(resultClusterVersion.Raw, &clusterVersion)
 		utils.CheckError(err)
 	} else {
-		return errors.New("Failed to get remote clusterversion")
+		return getErr
 	}
 
 	var desiredVersion interface{}
@@ -351,11 +364,20 @@ func MonitorUpgradeStatus(client clientv1.Client, clusterName string, curator *c
 	for i := 0; i < UpgradeAttempts; i++ {
 		time.Sleep(utils.PauseSixtySeconds)
 
+		getErr := errors.New("Failed to get managedclusterview")
 		if err := client.Get(context.TODO(), types.NamespacedName{
 			Namespace: clusterName,
 			Name:      clusterName,
 		}, &resultmcview); err != nil {
 			return err
+		}
+
+		labels := resultmcview.ObjectMeta.GetLabels()
+		if len(labels) == 0 {
+			return getErr
+		}
+		if _, ok := labels[MCVUpgradeLabel]; !ok {
+			return getErr
 		}
 
 		resultClusterVersion := resultmcview.Status.Result
