@@ -422,7 +422,7 @@ func TestUpgradeClusterNoDesiredUpdate(t *testing.T) {
 	}...)
 
 	assert.Equal(t, UpgradeCluster(client, ClusterName, clustercurator),
-		errors.New("Provide valid upgrade version"))
+		errors.New("Provide valid upgrade version or channel"))
 }
 
 func TestUpgradeClusterInValidVersion(t *testing.T) {
