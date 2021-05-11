@@ -422,7 +422,7 @@ func TestUpgradeClusterNoDesiredUpdate(t *testing.T) {
 	}...)
 
 	assert.Equal(t, UpgradeCluster(client, ClusterName, clustercurator),
-		errors.New("Provide valid upgrade version"))
+		errors.New("Provide valid upgrade version or channel or upstream"))
 }
 
 func TestUpgradeClusterInValidVersion(t *testing.T) {
@@ -478,34 +478,6 @@ func TestUpgradeClusterInValidChannel(t *testing.T) {
 
 	assert.Equal(t, UpgradeCluster(client, ClusterName, clustercurator),
 		errors.New("Provided channel is not valid"), "Invalid Channel")
-}
-
-func TestUpgradeClusterInValidUpstream(t *testing.T) {
-
-	s := scheme.Scheme
-	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
-	s.AddKnownTypes(managedclusterinfov1beta1.GroupVersion, &managedclusterinfov1beta1.ManagedClusterInfo{})
-
-	clustercurator := &clustercuratorv1.ClusterCurator{
-		ObjectMeta: v1.ObjectMeta{
-			Name:      ClusterName,
-			Namespace: ClusterName,
-		},
-		Spec: clustercuratorv1.ClusterCuratorSpec{
-			DesiredCuration: "upgrade",
-			Upgrade: clustercuratorv1.UpgradeHooks{
-				DesiredUpdate: "4.5.14",
-				Upstream:      "https://access.redhat.com",
-			},
-		},
-	}
-
-	client := clientfake.NewFakeClientWithScheme(s, []runtime.Object{
-		clustercurator, getManagedClusterInfo(),
-	}...)
-
-	assert.Equal(t, UpgradeCluster(client, ClusterName, clustercurator),
-		errors.New("Provided upstream is not valid"), "Invalid Upstream")
 }
 
 func getManagedClusterView() *managedclusterviewv1beta1.ManagedClusterView {

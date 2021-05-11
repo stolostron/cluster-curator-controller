@@ -271,17 +271,14 @@ func UpgradeCluster(client clientv1.Client, clusterName string, curator *cluster
 		return getErr
 	}
 
-	var desiredVersion interface{}
 	if cvAvailableUpdates, ok := clusterVersion["status"].(map[string]interface{})["availableUpdates"].([]interface{}); ok {
 		for _, version := range cvAvailableUpdates {
 			if version.(map[string]interface{})["version"] == desiredUpdate {
-				desiredVersion = version
+				clusterVersion["spec"].(map[string]interface{})["desiredUpdate"] = version
 				break
 			}
 		}
 	}
-
-	clusterVersion["spec"].(map[string]interface{})["desiredUpdate"] = desiredVersion
 
 	if curator.Spec.Upgrade.Channel != "" {
 		clusterVersion["spec"].(map[string]interface{})["channel"] = curator.Spec.Upgrade.Channel
@@ -358,9 +355,12 @@ func UpgradeCluster(client clientv1.Client, clusterName string, curator *cluster
 
 func MonitorUpgradeStatus(client clientv1.Client, clusterName string, curator *clustercuratorv1.ClusterCurator) error {
 	desiredUpdate := curator.Spec.Upgrade.DesiredUpdate
+	channel := curator.Spec.Upgrade.Channel
+	upstream := curator.Spec.Upgrade.Upstream
 	resultmcview := managedclusterviewv1beta1.ManagedClusterView{}
 
 	var timeoutErr error
+	isChannelUpstreamUpdate := false
 	for i := 0; i < UpgradeAttempts; i++ {
 		time.Sleep(utils.PauseSixtySeconds)
 
@@ -388,25 +388,42 @@ func MonitorUpgradeStatus(client clientv1.Client, clusterName string, curator *c
 			err := json.Unmarshal(resultClusterVersion.Raw, &clusterVersion)
 			utils.CheckError(err)
 		}
-
-		if cvConditions, ok := clusterVersion["status"].(map[string]interface{})["conditions"].([]interface{}); ok {
-			for _, condition := range cvConditions {
-				if condition.(map[string]interface{})["type"] == "Available" && condition.(map[string]interface{})["status"] == "True" {
-					if strings.Contains(condition.(map[string]interface{})["message"].(string), desiredUpdate) {
-						klog.V(2).Info("Upgrade succeeded ✓")
-						i = UpgradeAttempts
+		if desiredUpdate != "" {
+			if cvConditions, ok := clusterVersion["status"].(map[string]interface{})["conditions"].([]interface{}); ok {
+				for _, condition := range cvConditions {
+					if condition.(map[string]interface{})["type"] == "Available" && condition.(map[string]interface{})["status"] == "True" {
+						if strings.Contains(condition.(map[string]interface{})["message"].(string), desiredUpdate) {
+							klog.V(2).Info("Upgrade succeeded ✓")
+							i = UpgradeAttempts
+							break
+						}
+					} else if i == (UpgradeAttempts - 1) {
+						klog.Warning(cvConditions)
+						klog.V(2).Info("Timed out waiting for monitor upgrade job")
+						timeoutErr = errors.New("Timed out waiting for monitor upgrade job")
 						break
+					} else if condition.(map[string]interface{})["type"] == "Progressing" && condition.(map[string]interface{})["status"] == "True" {
+						klog.V(2).Info(" Upgrade status " + condition.(map[string]interface{})["message"].(string))
 					}
-				} else if i == (UpgradeAttempts - 1) {
-					klog.Warning(cvConditions)
-					klog.V(2).Info("Timed out waiting for monitor upgrade job")
-					timeoutErr = errors.New("Timed out waiting for monitor upgrade job")
-					break
-				} else if condition.(map[string]interface{})["type"] == "Progressing" && condition.(map[string]interface{})["status"] == "True" {
-					klog.V(2).Info(" Upgrade status " + condition.(map[string]interface{})["message"].(string))
 				}
 			}
 		}
+		if desiredUpdate == "" && channel != "" {
+			if clusterVersion["spec"].(map[string]interface{})["channel"] == channel {
+				klog.V(2).Info("Updated channel successfully ✓")
+				isChannelUpstreamUpdate = true
+			}
+		}
+		if desiredUpdate == "" && upstream != "" {
+			if clusterVersion["spec"].(map[string]interface{})["upstream"] == upstream {
+				klog.V(2).Info("Updated upstream successfully ✓")
+				isChannelUpstreamUpdate = true
+			}
+		}
+		if isChannelUpstreamUpdate {
+			break
+		}
+
 	}
 
 	if err := client.Delete(context.TODO(), &resultmcview); err != nil {
@@ -436,35 +453,29 @@ func validateUpgradeVersion(client clientv1.Client, clusterName string, curator 
 		return errors.New("Can not upgrade non openshift cluster")
 	}
 
-	if desiredUpdate == "" {
-		return errors.New("Provide valid upgrade version")
+	if desiredUpdate == "" && channel == "" && upstream == "" {
+		return errors.New("Provide valid upgrade version or channel or upstream")
 	}
 
 	isValidVersion := false
-	if managedClusterInfo.Status.DistributionInfo.OCP.AvailableUpdates != nil {
+	if desiredUpdate != "" && managedClusterInfo.Status.DistributionInfo.OCP.AvailableUpdates != nil {
 		for _, version := range managedClusterInfo.Status.DistributionInfo.OCP.AvailableUpdates {
 			if version == desiredUpdate {
 				isValidVersion = true
 			}
 		}
 	}
-	if !isValidVersion {
+	if desiredUpdate != "" && !isValidVersion {
 		return errors.New("Provided version is not valid")
 	}
 
 	isValidChannel := false
-	isValidUpstream := false
-	if channel != "" {
+
+	if channel != "" && managedClusterInfo.Status.DistributionInfo.OCP.AvailableUpdates != nil {
 		for _, versionRelease := range managedClusterInfo.Status.DistributionInfo.OCP.VersionAvailableUpdates {
-			if versionRelease.Version == desiredUpdate {
-				for _, c := range versionRelease.Channels {
-					if c == channel {
-						isValidChannel = true
-						break
-					}
-				}
-				if upstream != "" && versionRelease.URL == upstream {
-					isValidUpstream = true
+			for _, c := range versionRelease.Channels {
+				if c == channel {
+					isValidChannel = true
 					break
 				}
 			}
@@ -472,10 +483,6 @@ func validateUpgradeVersion(client clientv1.Client, clusterName string, curator 
 	}
 	if channel != "" && !isValidChannel {
 		return errors.New("Provided channel is not valid")
-	}
-
-	if upstream != "" && !isValidUpstream {
-		return errors.New("Provided upstream is not valid")
 	}
 
 	return nil
