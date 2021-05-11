@@ -356,10 +356,11 @@ func UpgradeCluster(client clientv1.Client, clusterName string, curator *cluster
 func MonitorUpgradeStatus(client clientv1.Client, clusterName string, curator *clustercuratorv1.ClusterCurator) error {
 	desiredUpdate := curator.Spec.Upgrade.DesiredUpdate
 	channel := curator.Spec.Upgrade.Channel
+	upstream := curator.Spec.Upgrade.Upstream
 	resultmcview := managedclusterviewv1beta1.ManagedClusterView{}
 
 	var timeoutErr error
-
+	isChannelUpstreamUpdate := false
 	for i := 0; i < UpgradeAttempts; i++ {
 		time.Sleep(utils.PauseSixtySeconds)
 
@@ -410,9 +411,19 @@ func MonitorUpgradeStatus(client clientv1.Client, clusterName string, curator *c
 		if desiredUpdate == "" && channel != "" {
 			if clusterVersion["spec"].(map[string]interface{})["channel"] == channel {
 				klog.V(2).Info("Updated channel successfully ✓")
-				break
+				isChannelUpstreamUpdate = true
 			}
 		}
+		if desiredUpdate == "" && upstream != "" {
+			if clusterVersion["spec"].(map[string]interface{})["upstream"] == upstream {
+				klog.V(2).Info("Updated upstream successfully ✓")
+				isChannelUpstreamUpdate = true
+			}
+		}
+		if isChannelUpstreamUpdate {
+			break
+		}
+
 	}
 
 	if err := client.Delete(context.TODO(), &resultmcview); err != nil {
@@ -442,8 +453,8 @@ func validateUpgradeVersion(client clientv1.Client, clusterName string, curator 
 		return errors.New("Can not upgrade non openshift cluster")
 	}
 
-	if desiredUpdate == "" && channel == "" {
-		return errors.New("Provide valid upgrade version or channel")
+	if desiredUpdate == "" && channel == "" && upstream == "" {
+		return errors.New("Provide valid upgrade version or channel or upstream")
 	}
 
 	isValidVersion := false
@@ -459,7 +470,7 @@ func validateUpgradeVersion(client clientv1.Client, clusterName string, curator 
 	}
 
 	isValidChannel := false
-	isValidUpstream := false
+
 	if channel != "" && managedClusterInfo.Status.DistributionInfo.OCP.AvailableUpdates != nil {
 		for _, versionRelease := range managedClusterInfo.Status.DistributionInfo.OCP.VersionAvailableUpdates {
 			for _, c := range versionRelease.Channels {
@@ -468,20 +479,10 @@ func validateUpgradeVersion(client clientv1.Client, clusterName string, curator 
 					break
 				}
 			}
-			if versionRelease.Version == desiredUpdate {
-				if upstream != "" && versionRelease.URL == upstream {
-					isValidUpstream = true
-					break
-				}
-			}
 		}
 	}
 	if channel != "" && !isValidChannel {
 		return errors.New("Provided channel is not valid")
-	}
-
-	if upstream != "" && !isValidUpstream {
-		return errors.New("Provided upstream is not valid")
 	}
 
 	return nil
