@@ -105,6 +105,11 @@ func getManagedClusterInfo() *managedclusterinfov1beta1.ManagedClusterInfo {
 			DistributionInfo: managedclusterinfov1beta1.DistributionInfo{
 				OCP: managedclusterinfov1beta1.OCPDistributionInfo{
 					AvailableUpdates: []string{"4.5.14", "4.5.16", "4.5.17"},
+					Desired: managedclusterinfov1beta1.OCPVersionRelease{
+						Version:  "4.5.14",
+						Channels: []string{"stable-4.6", "stable-4.7"},
+						URL:      "https://access.redhat.com/errata",
+					},
 					VersionAvailableUpdates: []managedclusterinfov1beta1.OCPVersionRelease{
 						{
 							Version:  "4.5.14",
