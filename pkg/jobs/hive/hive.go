@@ -15,7 +15,7 @@ import (
 	managedclusteractionv1beta1 "github.com/open-cluster-management/multicloud-operators-foundation/pkg/apis/action/v1beta1"
 	managedclusterinfov1beta1 "github.com/open-cluster-management/multicloud-operators-foundation/pkg/apis/internal.open-cluster-management.io/v1beta1"
 	managedclusterviewv1beta1 "github.com/open-cluster-management/multicloud-operators-foundation/pkg/apis/view/v1beta1"
-	hivev1 "github.com/openshift/hive/pkg/apis/hive/v1"
+	hivev1 "github.com/openshift/hive/apis/hive/v1"
 	hiveclient "github.com/openshift/hive/pkg/client/clientset/versioned"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -472,8 +472,8 @@ func validateUpgradeVersion(client clientv1.Client, clusterName string, curator 
 	isValidChannel := false
 
 	if channel != "" && managedClusterInfo.Status.DistributionInfo.OCP.AvailableUpdates != nil {
-		for _, versionRelease := range managedClusterInfo.Status.DistributionInfo.OCP.VersionAvailableUpdates {
-			for _, c := range versionRelease.Channels {
+		if managedClusterInfo.Status.DistributionInfo.OCP.Desired.Channels != nil {
+			for _, c := range managedClusterInfo.Status.DistributionInfo.OCP.Desired.Channels {
 				if c == channel {
 					isValidChannel = true
 					break
