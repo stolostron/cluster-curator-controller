@@ -14,7 +14,7 @@ import (
 	managedclusterinfov1beta1 "github.com/open-cluster-management/multicloud-operators-foundation/pkg/apis/internal.open-cluster-management.io/v1beta1"
 	managedclusterviewv1beta1 "github.com/open-cluster-management/multicloud-operators-foundation/pkg/apis/view/v1beta1"
 	clusterversionv1 "github.com/openshift/api/config/v1"
-	hivev1 "github.com/openshift/hive/pkg/apis/hive/v1"
+	hivev1 "github.com/openshift/hive/apis/hive/v1"
 	hivefake "github.com/openshift/hive/pkg/client/clientset/versioned/fake"
 	"github.com/stretchr/testify/assert"
 	batchv1 "k8s.io/api/batch/v1"
@@ -105,6 +105,11 @@ func getManagedClusterInfo() *managedclusterinfov1beta1.ManagedClusterInfo {
 			DistributionInfo: managedclusterinfov1beta1.DistributionInfo{
 				OCP: managedclusterinfov1beta1.OCPDistributionInfo{
 					AvailableUpdates: []string{"4.5.14", "4.5.16", "4.5.17"},
+					Desired: managedclusterinfov1beta1.OCPVersionRelease{
+						Version:  "4.5.14",
+						Channels: []string{"stable-4.6", "stable-4.7"},
+						URL:      "https://access.redhat.com/errata",
+					},
 					VersionAvailableUpdates: []managedclusterinfov1beta1.OCPVersionRelease{
 						{
 							Version:  "4.5.14",

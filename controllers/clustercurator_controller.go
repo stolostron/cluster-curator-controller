@@ -32,8 +32,8 @@ type ClusterCuratorReconciler struct {
 // +kubebuilder:rbac:groups=cluster.open-cluster-management.io.cluster.open-cluster-management.io,resources=clustercurators,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=cluster.open-cluster-management.io.cluster.open-cluster-management.io,resources=clustercurators/status,verbs=get;update;patch
 
-func (r *ClusterCuratorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	ctx := context.Background()
+func (r *ClusterCuratorReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	//ctx := context.Background()
 	log := r.Log.WithValues("clustercurator", req.NamespacedName)
 
 	var curator clustercuratorv1.ClusterCurator
