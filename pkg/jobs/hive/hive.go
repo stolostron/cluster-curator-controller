@@ -362,7 +362,6 @@ func MonitorUpgradeStatus(client clientv1.Client, clusterName string, curator *c
 	var timeoutErr error
 	isChannelUpstreamUpdate := false
 	for i := 0; i < UpgradeAttempts; i++ {
-		time.Sleep(utils.PauseSixtySeconds)
 
 		getErr := errors.New("Failed to get managedclusterview")
 		if err := client.Get(context.TODO(), types.NamespacedName{
@@ -404,6 +403,14 @@ func MonitorUpgradeStatus(client clientv1.Client, clusterName string, curator *c
 						break
 					} else if condition.(map[string]interface{})["type"] == "Progressing" && condition.(map[string]interface{})["status"] == "True" {
 						klog.V(2).Info(" Upgrade status " + condition.(map[string]interface{})["message"].(string))
+						// update curator status to show upgrade %
+						strMessage := "Upgrade status - " + condition.(map[string]interface{})["message"].(string)
+						utils.CheckError(utils.RecordCurrentStatusCondition(
+							client,
+							clusterName,
+							"monitor-upgrade",
+							v1.ConditionFalse,
+							strMessage))
 					}
 				}
 			}
@@ -423,7 +430,7 @@ func MonitorUpgradeStatus(client clientv1.Client, clusterName string, curator *c
 		if isChannelUpstreamUpdate {
 			break
 		}
-
+		time.Sleep(utils.PauseSixtySeconds)
 	}
 
 	if err := client.Delete(context.TODO(), &resultmcview); err != nil {
