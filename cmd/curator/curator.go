@@ -171,10 +171,9 @@ func curatorRun(config *rest.Config, client *clientv1.Client, clusterName string
 			klog.Error(err.Error())
 			panic(err)
 		}
-		jobChoice = "monitor"
 	}
 
-	if jobChoice == "monitor" {
+	if jobChoice == "monitor" || jobChoice == "activate-and-monitor" {
 		if err := hive.MonitorDeployStatus(config, clusterName); err != nil {
 			utils.CheckError(utils.RecordFailedCuratorStatusCondition(
 				*client,
