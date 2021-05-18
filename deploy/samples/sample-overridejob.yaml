@@ -58,5 +58,5 @@ spec:
         image: quay.io/jpacker/clustercurator-job:latest
         imagePullPolicy: Always
         #command: ['echo','Done! create'] # Use this to preserve the conditions
-        command: ['./curator','DoneDoneDone']
+        command: ['./curator','done']
       restartPolicy: Never
