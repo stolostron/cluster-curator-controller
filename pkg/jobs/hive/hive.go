@@ -478,13 +478,11 @@ func validateUpgradeVersion(client clientv1.Client, clusterName string, curator 
 
 	isValidChannel := false
 
-	if channel != "" && managedClusterInfo.Status.DistributionInfo.OCP.AvailableUpdates != nil {
-		if managedClusterInfo.Status.DistributionInfo.OCP.Desired.Channels != nil {
-			for _, c := range managedClusterInfo.Status.DistributionInfo.OCP.Desired.Channels {
-				if c == channel {
-					isValidChannel = true
-					break
-				}
+	if channel != "" && managedClusterInfo.Status.DistributionInfo.OCP.Desired.Channels != nil {
+		for _, c := range managedClusterInfo.Status.DistributionInfo.OCP.Desired.Channels {
+			if c == channel {
+				isValidChannel = true
+				break
 			}
 		}
 	}
