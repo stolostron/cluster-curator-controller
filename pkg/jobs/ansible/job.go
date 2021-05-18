@@ -239,6 +239,7 @@ func MonitorAnsibleJob(
 		jobResource.GetName()))
 
 	// Monitor the AnsibeJob resource
+	foundUrlOnce := false
 	for {
 
 		err := client.Get(context.Background(), types.NamespacedName{
@@ -263,6 +264,19 @@ func MonitorAnsibleJob(
 
 		jos := jobResource.Object["status"]
 		if jos.(map[string]interface{})["ansibleJobResult"] != nil {
+
+			jobStatusUrl := jos.(map[string]interface{})["ansibleJobResult"].(map[string]interface{})["url"]
+			klog.V(2).Infof("Found result url %v", jobStatusUrl)
+
+			if !foundUrlOnce && jobStatusUrl != nil {
+				utils.CheckError(utils.RecordAnsibleJobStatusUrlCondition(
+					client,
+					curator.Namespace,
+					jobResource.GetName(),
+					v1.ConditionTrue,
+					jobStatusUrl.(string)))
+				foundUrlOnce = true
+			}
 
 			jobStatus := jos.(map[string]interface{})["ansibleJobResult"].(map[string]interface{})["status"]
 			klog.V(2).Infof("Found result status %v", jobStatus)

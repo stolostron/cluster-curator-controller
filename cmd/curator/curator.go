@@ -63,11 +63,12 @@ func curatorRun(config *rest.Config, client *clientv1.Client, clusterName string
 	var err error
 	var cmdErrorMsg = errors.New("Invalid Parameter: \"" + os.Args[1] +
 		"\"\nCommand: ./curator [monitor-import|monitor|activate-and-monitor|applycloudprovider-aws|" +
-		"applycloudprovider-gcp|applycloudprovider-azure|upgrade-cluster|monitor-upgrade|done]")
+		"applycloudprovider-gcp|applycloudprovider-azure|upgrade-cluster|monitor-upgrade|" +
+		"prehook-ansiblejob|pothook-ansiblejob|done]")
 
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
-		case "applycloudprovider-aws", "applycloudprovider-ansible", "monitor-import", "monitor", "ansiblejob",
+		case "applycloudprovider-aws", "applycloudprovider-ansible", "monitor-import", "monitor",
 			"applycloudprovider-gcp", "applycloudprovider-azure", "activate-and-monitor", "upgrade-cluster", "monitor-upgrade",
 			"SKIP_ALL_TESTING", "prehook-ansiblejob", "posthook-ansiblejob", "done":
 		default:
