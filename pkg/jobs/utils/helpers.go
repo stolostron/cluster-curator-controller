@@ -195,6 +195,22 @@ func RecordCurrentStatusCondition(
 		message)
 }
 
+func RecordAnsibleJobStatusUrlCondition(
+	client clientv1.Client,
+	clusterName string,
+	containerName string,
+	conditionStatus v1.ConditionStatus,
+	url string) error {
+
+	return recordCuratedStatusCondition(
+		client,
+		clusterName,
+		containerName,
+		conditionStatus,
+		"ansiblejob_url",
+		url)
+}
+
 func recordCuratedStatusCondition(
 	client clientv1.Client,
 	clusterName string,

@@ -29,24 +29,27 @@ spec:
       - name: applycloudprovider-ansible
         image: quay.io/jpacker/clustercurator-job:latest
         command: ['./curator','applycloudprovider-ansible']
+      #########################################
+      ## Used as part of standard curation   ##
+      #########################################
       - name: prehook-ansiblejob
         image: quay.io/jpacker/clustercurator-job:latest
-        command: ['./curator','ansiblejob']
+        command: ['./curator','prehook-ansiblejob']
         env:
           - name:  "JOB_TYPE"
             value: "prehook"
       - name: activate-and-monitor
         image: quay.io/jpacker/clustercurator-job:latest
         command: ['./curator','activate-and-monitor']
-      - name: monitor
-        image: quay.io/jpacker/clustercurator-job:latest
-        command: ['./curator','monitor']
+      - name: monitor                                       # Not part of standard curation
+        image: quay.io/jpacker/clustercurator-job:latest    #
+        command: ['./curator','monitor']                    #
       - name: monitor-import
         image: quay.io/jpacker/clustercurator-job:latest
         command: ['./curator','monitor-import']
       - name: posthook-ansiblejob
         image: quay.io/jpacker/clustercurator-job:latest
-        command: ['./curator','ansiblejob']
+        command: ['./curator','posthook-ansiblejob']
         env:
           - name:  "JOB_TYPE"
             value: "posthook"
@@ -54,5 +57,6 @@ spec:
       - name: complete
         image: quay.io/jpacker/clustercurator-job:latest
         imagePullPolicy: Always
-        command: ['echo','Done! create']
+        #command: ['echo','Done! create'] # Use this to preserve the conditions
+        command: ['./curator','done']
       restartPolicy: Never
