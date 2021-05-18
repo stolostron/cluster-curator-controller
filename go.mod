@@ -12,7 +12,6 @@ require (
 	github.com/openshift/hive v1.1.3
 	github.com/openshift/hive/apis v0.0.0
 	//	github.com/openshift/api v3.9.1-0.20191111211345-a27ff30ebf09+incompatible
-	//github.com/openshift/hive v1.1.3
 	github.com/stretchr/testify v1.6.1
 	golang.org/x/tools v0.1.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0
