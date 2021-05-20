@@ -35,7 +35,7 @@ type patchStringValue struct {
 }
 
 const MonitorAttempts = 6
-const UpgradeAttempts = 60
+const UpgradeAttempts = 120
 const MCVUpgradeLabel = "cluster-curator-upgrade"
 
 func ActivateDeploy(hiveset hiveclient.Interface, clusterName string) error {
