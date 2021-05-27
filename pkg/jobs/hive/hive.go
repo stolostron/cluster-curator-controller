@@ -78,12 +78,12 @@ func MonitorDeployStatus(config *rest.Config, clusterName string) error {
 	if err = utils.LogError(err); err != nil {
 		return err
 	}
-	return monitorDeployStatus(client, hiveset, clusterName, 4) // 4min timeout for Hive job to start
+	return monitorDeployStatus(client, hiveset, clusterName, ThreeMinuteMonitorTimeout)
 }
 
 func monitorDeployStatus(client clientv1.Client, hiveset hiveclient.Interface, clusterName string, monitorAttempts int) error {
 
-	klog.V(0).Info("Waiting up to " + strconv.Itoa(ThreeMinuteMonitorTimeout*5) + "s for Hive Provisioning job")
+	klog.V(0).Info("Waiting up to " + strconv.Itoa(monitorAttempts*5) + "s for Hive Provisioning job")
 	jobName := ""
 
 	for i := 1; i <= monitorAttempts; i++ {

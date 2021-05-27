@@ -241,7 +241,7 @@ func TestMonitorDeployStatusCondition(t *testing.T) {
 
 	hiveset := hivefake.NewSimpleClientset(cd)
 
-	assert.NotNil(t, monitorDeployStatus(nil, hiveset, ClusterName, 1), "err is not nil, when cluster provisioning has a condition")
+	assert.NotNil(t, monitorDeployStatus(nil, hiveset, ClusterName, testTimeout), "err is not nil, when cluster provisioning has a condition")
 }
 
 func TestMonitorDeployNoJobTimeout(t *testing.T) {
