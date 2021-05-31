@@ -34,9 +34,9 @@ type patchStringValue struct {
 	Value int32  `json:"value"`
 }
 
-const MonitorAttempts = 6
 const UpgradeAttempts = 120
 const MCVUpgradeLabel = "cluster-curator-upgrade"
+const ThreeMinuteMonitorTimeout = 36
 
 func ActivateDeploy(hiveset hiveclient.Interface, clusterName string) error {
 	klog.V(0).Info("* Initiate Provisioning")
@@ -78,15 +78,15 @@ func MonitorDeployStatus(config *rest.Config, clusterName string) error {
 	if err = utils.LogError(err); err != nil {
 		return err
 	}
-	return monitorDeployStatus(client, hiveset, clusterName)
+	return monitorDeployStatus(client, hiveset, clusterName, ThreeMinuteMonitorTimeout)
 }
 
-func monitorDeployStatus(client clientv1.Client, hiveset hiveclient.Interface, clusterName string) error {
+func monitorDeployStatus(client clientv1.Client, hiveset hiveclient.Interface, clusterName string, monitorAttempts int) error {
 
-	klog.V(0).Info("Waiting up to 30s for Hive Provisioning job")
+	klog.V(0).Info("Waiting up to " + strconv.Itoa(monitorAttempts*5) + "s for Hive Provisioning job")
 	jobName := ""
 
-	for i := 1; i <= MonitorAttempts; i++ { // 30s wait
+	for i := 1; i <= monitorAttempts; i++ {
 
 		// Refresh the clusterDeployment resource
 		cluster, err := hiveset.HiveV1().ClusterDeployments(clusterName).Get(
@@ -170,7 +170,7 @@ func monitorDeployStatus(client clientv1.Client, hiveset hiveclient.Interface, c
 			// Detect that we've failed
 		} else {
 
-			klog.V(0).Infof("Attempt: "+strconv.Itoa(i)+"/%v, pause %v", MonitorAttempts, utils.PauseFiveSeconds)
+			klog.V(0).Infof("Attempt: "+strconv.Itoa(i)+"/%v, pause %v", monitorAttempts, utils.PauseFiveSeconds)
 			time.Sleep(utils.PauseFiveSeconds)
 
 			for _, condition := range cluster.Status.Conditions {
@@ -180,7 +180,7 @@ func monitorDeployStatus(client clientv1.Client, hiveset hiveclient.Interface, c
 					return errors.New("Failure detected")
 				}
 			}
-			if i == MonitorAttempts {
+			if i == monitorAttempts {
 				klog.Warning(cluster.Status.Conditions)
 				return errors.New("Timed out waiting for job")
 			}

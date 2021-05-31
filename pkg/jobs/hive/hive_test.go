@@ -28,6 +28,7 @@ import (
 )
 
 const ClusterName = "my-cluster"
+const testTimeout = 6
 
 func getClusterCurator() *clustercuratorv1.ClusterCurator {
 	return &clustercuratorv1.ClusterCurator{
@@ -224,7 +225,7 @@ func TestMonitorDeployStatusNoClusterDeployment(t *testing.T) {
 
 	hiveset := hivefake.NewSimpleClientset()
 
-	assert.NotNil(t, monitorDeployStatus(nil, hiveset, ClusterName), "err is not nil, when cluster provisioning has a condition")
+	assert.NotNil(t, monitorDeployStatus(nil, hiveset, ClusterName, testTimeout), "err is not nil, when cluster provisioning has a condition")
 }
 
 func TestMonitorDeployStatusCondition(t *testing.T) {
@@ -240,7 +241,7 @@ func TestMonitorDeployStatusCondition(t *testing.T) {
 
 	hiveset := hivefake.NewSimpleClientset(cd)
 
-	assert.NotNil(t, monitorDeployStatus(nil, hiveset, ClusterName), "err is not nil, when cluster provisioning has a condition")
+	assert.NotNil(t, monitorDeployStatus(nil, hiveset, ClusterName, testTimeout), "err is not nil, when cluster provisioning has a condition")
 }
 
 func TestMonitorDeployNoJobTimeout(t *testing.T) {
@@ -249,7 +250,7 @@ func TestMonitorDeployNoJobTimeout(t *testing.T) {
 
 	hiveset := hivefake.NewSimpleClientset(cd)
 
-	assert.NotNil(t, monitorDeployStatus(nil, hiveset, ClusterName), "err is not nil, when cluster provisioning has no job created")
+	assert.NotNil(t, monitorDeployStatus(nil, hiveset, ClusterName, 2), "err is not nil, when cluster provisioning has no job created")
 }
 func TestMonitorDeployStatusJobFailed(t *testing.T) {
 
@@ -270,7 +271,7 @@ func TestMonitorDeployStatusJobFailed(t *testing.T) {
 
 	client := clientfake.NewFakeClientWithScheme(s, cc, job)
 
-	assert.NotNil(t, monitorDeployStatus(client, hiveset, ClusterName), "err is not nil, when cluster provisioning has a condition")
+	assert.NotNil(t, monitorDeployStatus(client, hiveset, ClusterName, testTimeout), "err is not nil, when cluster provisioning has a condition")
 }
 
 func TestMonitorDeployStatusJobCompletedWithSuccess(t *testing.T) {
@@ -303,7 +304,7 @@ func TestMonitorDeployStatusJobCompletedWithSuccess(t *testing.T) {
 	}()
 
 	assert.Equal(t, len(cc.Status.Conditions), 0, "Should be emtpy")
-	assert.Nil(t, monitorDeployStatus(client, hiveset, ClusterName), "err is nil, when cluster provisioning is successful")
+	assert.Nil(t, monitorDeployStatus(client, hiveset, ClusterName, testTimeout), "err is nil, when cluster provisioning is successful")
 
 	err := client.Get(context.Background(), types.NamespacedName{Namespace: ClusterName, Name: ClusterName}, cc)
 	t.Log(err)
@@ -344,7 +345,7 @@ func TestMonitorDeployStatusJobComplete(t *testing.T) {
 		hiveset.HiveV1().ClusterDeployments(ClusterName).Update(context.TODO(), cd, v1.UpdateOptions{})
 	}()
 
-	assert.Nil(t, monitorDeployStatus(client, hiveset, ClusterName), "err is not nil, when cluster provisioning is successful")
+	assert.Nil(t, monitorDeployStatus(client, hiveset, ClusterName, testTimeout), "err is not nil, when cluster provisioning is successful")
 }
 
 func TestMonitorDeployStatusJobDelayedComplete(t *testing.T) {
@@ -374,7 +375,7 @@ func TestMonitorDeployStatusJobDelayedComplete(t *testing.T) {
 		hiveset.HiveV1().ClusterDeployments(ClusterName).Update(context.TODO(), cd, v1.UpdateOptions{})
 	}()
 
-	assert.Nil(t, monitorDeployStatus(client, hiveset, ClusterName), "err is not nil, when cluster provisioning is successful")
+	assert.Nil(t, monitorDeployStatus(client, hiveset, ClusterName, testTimeout), "err is not nil, when cluster provisioning is successful")
 }
 
 func TestUpgradeClusterNonOpenshift(t *testing.T) {
