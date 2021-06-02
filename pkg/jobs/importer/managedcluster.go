@@ -5,6 +5,7 @@ package importer
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	managedclusterclient "github.com/open-cluster-management/api/client/cluster/clientset/versioned"
@@ -102,4 +103,35 @@ func MonitorMCInfoImport(mcset dynamic.Interface, clusterName string) error {
 		time.Sleep(utils.PauseTwoSeconds)
 	}
 	return errors.New("Time out waiting for cluster to import")
+}
+
+func DetachCluster(mcset dynamic.Interface, clusterName string) error {
+
+	var mcGVR = schema.GroupVersionResource{
+		Group: "cluster.open-cluster-management.io", Version: "v1", Resource: "managedclusters"}
+
+	klog.V(0).Info("=> Detaching ManagedCluster \"" + clusterName)
+
+	_, err := mcset.Resource(mcGVR).Get(context.TODO(), clusterName, v1.GetOptions{})
+
+	if err != nil {
+		if strings.Contains(err.Error(), " not found") {
+			klog.Warning("Did not find managed cluster " + clusterName)
+			return nil
+		} else {
+			return err
+		}
+	}
+
+	err = mcset.Resource(mcGVR).Delete(
+		context.Background(),
+		clusterName,
+		v1.DeleteOptions{})
+
+	if err != nil {
+		return err
+	}
+
+	klog.V(0).Info("Managed cluster resource delete initiated for " + clusterName + ", will not wait")
+	return nil
 }

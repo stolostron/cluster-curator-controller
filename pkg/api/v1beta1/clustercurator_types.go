@@ -15,7 +15,7 @@ type ClusterCuratorSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// This is the desired curation that will occur
-	// +kubebuilder:validation:Enum={install,scale,upgrade,destroy}
+	// +kubebuilder:validation:Enum={install,scale,upgrade,destroy,delete-cluster-namespace}
 	DesiredCuration string `json:"desiredCuration,omitempty"`
 
 	// Points to the Cloud Provider or Ansible Provider secret, format: namespace/secretName

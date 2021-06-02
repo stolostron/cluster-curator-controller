@@ -69,7 +69,7 @@ func ActivateDeploy(hiveset hiveclient.Interface, clusterName string) error {
 	return nil
 }
 
-func MonitorDeployStatus(config *rest.Config, clusterName string) error {
+func MonitorClusterStatus(config *rest.Config, clusterName string, jobType string) error {
 	hiveset, err := hiveclient.NewForConfig(config)
 	if err = utils.LogError(err); err != nil {
 		return err
@@ -78,13 +78,34 @@ func MonitorDeployStatus(config *rest.Config, clusterName string) error {
 	if err = utils.LogError(err); err != nil {
 		return err
 	}
-	return monitorDeployStatus(client, hiveset, clusterName)
+	return monitorClusterStatus(client, hiveset, clusterName, jobType)
 }
 
-func monitorDeployStatus(client clientv1.Client, hiveset hiveclient.Interface, clusterName string) error {
+func DestroyClusterDeployment(hiveset hiveclient.Interface, clusterName string) error {
+	klog.V(0).Infof("Deleting Cluster Deployment for %v\n", clusterName)
 
-	klog.V(0).Info("Waiting up to 30s for Hive Provisioning job")
+	cluster, err := hiveset.HiveV1().ClusterDeployments(clusterName).Get(
+		context.TODO(), clusterName, v1.GetOptions{})
+
+	if err != nil {
+		klog.Warning("Could not retreive cluster " + clusterName + " may have already been deleted")
+		return nil
+	}
+
+	err = hiveset.HiveV1().ClusterDeployments(clusterName).Delete(context.Background(), cluster.Name, v1.DeleteOptions{})
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func monitorClusterStatus(client clientv1.Client, hiveset hiveclient.Interface, clusterName string, jobType string) error {
+
+	klog.V(0).Info("Waiting up to 3min for Hive " + jobType + "ing job")
 	jobName := ""
+	var cluster *hivev1.ClusterDeployment
 
 	for i := 1; i <= MonitorAttempts; i++ { // 30s wait
 
@@ -93,10 +114,16 @@ func monitorDeployStatus(client clientv1.Client, hiveset hiveclient.Interface, c
 			context.TODO(), clusterName, v1.GetOptions{})
 
 		if err = utils.LogError(err); err != nil {
+
+			// If the cluster deployment is already gone
+			if jobType == utils.Destroying {
+				klog.Warning("No cluster deployment for " + clusterName + " was found")
+				return nil
+			}
 			return err
 		}
 
-		if cluster.Status.WebConsoleURL != "" {
+		if jobType == utils.Installing && cluster.Status.WebConsoleURL != "" {
 			klog.V(2).Info("Provisioning succeeded ✓")
 
 			if jobName != "" {
@@ -108,22 +135,29 @@ func monitorDeployStatus(client clientv1.Client, hiveset hiveclient.Interface, c
 					jobName))
 			}
 
-			break
-		} else if cluster.Status.ProvisionRef != nil &&
-			cluster.Status.ProvisionRef.Name != "" {
+			return nil
+
+		} else if (cluster.Status.ProvisionRef != nil &&
+			cluster.Status.ProvisionRef.Name != "") || jobType == utils.Destroying {
 
 			klog.V(2).Info("Found ClusterDeployment status details ✓")
-			jobName = cluster.Status.ProvisionRef.Name + "-provision"
+
+			if jobType == utils.Destroying {
+				jobName = clusterName + "-" + utils.Destroying
+			} else {
+				jobName = cluster.Status.ProvisionRef.Name + "-provision"
+			}
+
 			jobPath := clusterName + "/" + jobName
 
-			klog.V(2).Info("Checking for provisioning job " + jobPath)
+			klog.V(2).Info("Checking for " + jobType + "ing job " + jobPath)
 			newJob := &batchv1.Job{}
 			err := client.Get(context.Background(), types.NamespacedName{Namespace: clusterName, Name: jobName}, newJob)
 
-			// If the job is missing follow the main loop 5min Pause
+			// If the job is missing, follow the main loop
 			if err != nil && strings.Contains(err.Error(), " not found") {
 				klog.Warningf("Could not retrieve job: %v", err)
-				time.Sleep(utils.PauseTenSeconds) //10s
+				time.Sleep(utils.PauseFiveSeconds) //10s
 				continue
 			}
 
@@ -135,12 +169,12 @@ func monitorDeployStatus(client clientv1.Client, hiveset hiveclient.Interface, c
 			elapsedTime := 0
 
 			// Wait while the job is running
-			klog.V(0).Info("Wait for the provisioning job in Hive to complete")
+			klog.V(0).Info("Wait for the " + jobType + "ing job from Hive to complete")
 
 			utils.CheckError(utils.RecordCurrentStatusCondition(
 				client,
 				clusterName,
-				"hive-provisioning-job",
+				"hive-"+jobType+"ing-job",
 				v1.ConditionFalse,
 				jobName))
 
@@ -153,20 +187,39 @@ func monitorDeployStatus(client clientv1.Client, hiveset hiveclient.Interface, c
 
 				// Reset the job, so we make sure we're getting clean data (not cached)
 				newJob = &batchv1.Job{}
-				utils.CheckError(client.Get(
+				err = client.Get(
 					context.Background(),
 					types.NamespacedName{Namespace: clusterName, Name: jobName},
-					newJob))
+					newJob)
+
+				if jobType == utils.Destroying && err != nil && strings.Contains(err.Error(), " not found") {
+					break
+				}
+
+				utils.CheckError(err)
+			}
+
+			// When Destroying, by this point the job finished
+			if jobType == utils.Destroying {
+				klog.V(0).Info("Uninstall job complete")
+				utils.CheckError(utils.RecordCurrentStatusCondition(
+					client,
+					clusterName,
+					"hive-"+jobType+"ing-job",
+					v1.ConditionTrue,
+					jobName))
+				return nil
 			}
 
 			// If succeeded = 0 then we did not finish
 			if newJob.Status.Succeeded == 0 {
 				cluster, err = hiveset.HiveV1().ClusterDeployments(clusterName).Get(context.TODO(), clusterName, v1.GetOptions{})
 				klog.Warning(cluster.Status.Conditions)
-				return errors.New("Provisioning job \"" + jobPath + "\" failed")
+				return errors.New(jobType + "ing job \"" + jobPath + "\" failed")
 			}
 
-			klog.V(0).Info("The provisioning job in Hive completed ✓")
+			klog.V(0).Info("The " + jobType + "ing job from Hive completed ✓")
+
 			// Detect that we've failed
 		} else {
 
@@ -180,13 +233,12 @@ func monitorDeployStatus(client clientv1.Client, hiveset hiveclient.Interface, c
 					return errors.New("Failure detected")
 				}
 			}
-			if i == MonitorAttempts {
-				klog.Warning(cluster.Status.Conditions)
-				return errors.New("Timed out waiting for job")
-			}
 		}
 	}
-	return nil
+	if cluster != nil {
+		klog.Warning(cluster.Status.Conditions)
+	}
+	return errors.New("Timed out waiting for job")
 }
 
 func UpgradeCluster(client clientv1.Client, clusterName string, curator *clustercuratorv1.ClusterCurator) error {

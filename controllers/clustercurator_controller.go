@@ -20,6 +20,8 @@ import (
 	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/utils"
 )
 
+const DeleteNamespace = "delete-cluster-namespace"
+
 // ClusterCuratorReconciler reconciles a ClusterCurator object
 type ClusterCuratorReconciler struct {
 	client.Client
@@ -40,6 +42,16 @@ func (r *ClusterCuratorReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	if err := r.Get(ctx, req.NamespacedName, &curator); err != nil {
 		log.V(2).Info("Resource deleted")
 		return ctrl.Result{}, nil
+	}
+
+	if curator.Spec.DesiredCuration == DeleteNamespace {
+		log.V(0).Info("Deleting namespace " + curator.Namespace)
+		err := utils.DeleteNamespace(curator.Namespace)
+
+		if err != nil {
+			log.V(0).Info(" Deleted namespace ✓ " + curator.Namespace)
+		}
+		return ctrl.Result{}, err
 	}
 
 	log.V(3).Info("Reconcile: %v, DesiredCuration: %v, Previous CuratingJob: %v",
@@ -82,6 +94,9 @@ func newClusterCuratorPredicate() predicate.Predicate {
 			if okNew && okOld {
 				if !reflect.DeepEqual(newClusterCurator.Status, oldClusterCurator.Status) {
 					return false
+				}
+				if newClusterCurator.Spec.DesiredCuration == DeleteNamespace {
+					return true
 				}
 				if newClusterCurator.Spec.DesiredCuration != oldClusterCurator.Spec.DesiredCuration && newClusterCurator.Spec.DesiredCuration == "" {
 					return false

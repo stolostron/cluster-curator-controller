@@ -45,6 +45,9 @@ const DefaultImageURI = "registry.ci.openshift.org/open-cluster-management/clust
 const JobHasFinished = "Job_has_finished"
 const JobFailed = "Job_failed"
 
+const Installing = "provision"
+const Destroying = "uninstall"
+
 type PatchStringValue struct {
 	Op    string `json:"op"`
 	Path  string `json:"path"`
@@ -267,4 +270,25 @@ func GetClusterCurator(client clientv1.Client, clusterName string) (*clustercura
 	klog.V(4).Infof("ClusterCurator: %v", curator)
 
 	return curator, nil
+}
+
+func DeleteNamespace(clusterName string) error {
+	client, _ := GetKubeset()
+
+	pods, err := client.CoreV1().Pods(clusterName).List(context.Background(), v1.ListOptions{})
+
+	if err != nil {
+		return err
+	}
+
+	for _, pod := range pods.Items {
+		if pod.Status.Phase != "" && pod.Status.Phase == "Running" {
+			if !strings.Contains(pod.Name, clusterName+"-uninstall") {
+				return errors.New("There was a running pod: " + pod.Name + ", in the cluster namespace " + clusterName)
+			}
+		}
+	}
+
+	//Delete the namespace
+	return client.CoreV1().Namespaces().Delete(context.Background(), clusterName, v1.DeleteOptions{})
 }
