@@ -34,9 +34,9 @@ type patchStringValue struct {
 	Value int32  `json:"value"`
 }
 
-const MonitorAttempts = 6
 const UpgradeAttempts = 120
 const MCVUpgradeLabel = "cluster-curator-upgrade"
+const ThreeMinuteMonitorTimeout = 36
 
 func ActivateDeploy(hiveset hiveclient.Interface, clusterName string) error {
 	klog.V(0).Info("* Initiate Provisioning")
@@ -78,7 +78,7 @@ func MonitorClusterStatus(config *rest.Config, clusterName string, jobType strin
 	if err = utils.LogError(err); err != nil {
 		return err
 	}
-	return monitorClusterStatus(client, hiveset, clusterName, jobType)
+	return monitorClusterStatus(client, hiveset, clusterName, jobType, ThreeMinuteMonitorTimeout)
 }
 
 func DestroyClusterDeployment(hiveset hiveclient.Interface, clusterName string) error {
@@ -101,13 +101,13 @@ func DestroyClusterDeployment(hiveset hiveclient.Interface, clusterName string) 
 	return nil
 }
 
-func monitorClusterStatus(client clientv1.Client, hiveset hiveclient.Interface, clusterName string, jobType string) error {
+func monitorClusterStatus(client clientv1.Client, hiveset hiveclient.Interface, clusterName string, jobType string, monitorAttempts int) error {
 
-	klog.V(0).Info("Waiting up to 3min for Hive " + jobType + "ing job")
+	klog.V(0).Info("Waiting up to " + strconv.Itoa(monitorAttempts*5) + "s for Hive Provisioning job")
 	jobName := ""
 	var cluster *hivev1.ClusterDeployment
 
-	for i := 1; i <= MonitorAttempts; i++ { // 30s wait
+	for i := 1; i <= monitorAttempts; i++ {
 
 		// Refresh the clusterDeployment resource
 		cluster, err := hiveset.HiveV1().ClusterDeployments(clusterName).Get(
@@ -223,7 +223,7 @@ func monitorClusterStatus(client clientv1.Client, hiveset hiveclient.Interface, 
 			// Detect that we've failed
 		} else {
 
-			klog.V(0).Infof("Attempt: "+strconv.Itoa(i)+"/%v, pause %v", MonitorAttempts, utils.PauseFiveSeconds)
+			klog.V(0).Infof("Attempt: "+strconv.Itoa(i)+"/%v, pause %v", monitorAttempts, utils.PauseFiveSeconds)
 			time.Sleep(utils.PauseFiveSeconds)
 
 			for _, condition := range cluster.Status.Conditions {
