@@ -46,7 +46,7 @@ func (r *ClusterCuratorReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	if curator.Spec.DesiredCuration == DeleteNamespace {
 		log.V(0).Info("Deleting namespace " + curator.Namespace)
-		err := utils.DeleteNamespace(curator.Namespace)
+		err := utils.DeleteClusterNamespace(r.Kubeset, curator.Namespace)
 
 		if err != nil {
 			log.V(0).Info(" Deleted namespace ✓ " + curator.Namespace)

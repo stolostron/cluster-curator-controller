@@ -272,12 +272,11 @@ func GetClusterCurator(client clientv1.Client, clusterName string) (*clustercura
 	return curator, nil
 }
 
-func DeleteNamespace(clusterName string) error {
-	client, _ := GetKubeset()
+func DeleteClusterNamespace(client kubernetes.Interface, clusterName string) error {
 
 	pods, err := client.CoreV1().Pods(clusterName).List(context.Background(), v1.ListOptions{})
 
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), " not found") {
 		return err
 	}
 
