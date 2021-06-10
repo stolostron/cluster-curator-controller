@@ -17,6 +17,7 @@ import (
 	managedclusterviewv1beta1 "github.com/open-cluster-management/multicloud-operators-foundation/pkg/apis/view/v1beta1"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 	hiveclient "github.com/openshift/hive/pkg/client/clientset/versioned"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
@@ -87,9 +88,11 @@ func DestroyClusterDeployment(hiveset hiveclient.Interface, clusterName string) 
 	cluster, err := hiveset.HiveV1().ClusterDeployments(clusterName).Get(
 		context.TODO(), clusterName, v1.GetOptions{})
 
-	if err != nil {
+	if err != nil && k8serrors.IsNotFound(err) {
 		klog.Warning("Could not retreive cluster " + clusterName + " may have already been deleted")
 		return nil
+	} else if err != nil {
+		return err
 	}
 
 	err = hiveset.HiveV1().ClusterDeployments(clusterName).Delete(context.Background(), cluster.Name, v1.DeleteOptions{})
@@ -116,7 +119,7 @@ func monitorClusterStatus(client clientv1.Client, hiveset hiveclient.Interface, 
 		if err = utils.LogError(err); err != nil {
 
 			// If the cluster deployment is already gone
-			if jobType == utils.Destroying {
+			if jobType == utils.Destroying && k8serrors.IsNotFound(err) {
 				klog.Warning("No cluster deployment for " + clusterName + " was found")
 				return nil
 			}
@@ -155,7 +158,7 @@ func monitorClusterStatus(client clientv1.Client, hiveset hiveclient.Interface, 
 			err := client.Get(context.Background(), types.NamespacedName{Namespace: clusterName, Name: jobName}, newJob)
 
 			// If the job is missing, follow the main loop
-			if err != nil && strings.Contains(err.Error(), " not found") {
+			if err != nil && k8serrors.IsNotFound(err) {
 				klog.Warningf("Could not retrieve job: %v", err)
 				time.Sleep(utils.PauseFiveSeconds) //10s
 				continue
@@ -192,7 +195,7 @@ func monitorClusterStatus(client clientv1.Client, hiveset hiveclient.Interface, 
 					types.NamespacedName{Namespace: clusterName, Name: jobName},
 					newJob)
 
-				if jobType == utils.Destroying && err != nil && strings.Contains(err.Error(), " not found") {
+				if jobType == utils.Destroying && err != nil && k8serrors.IsNotFound(err) {
 					break
 				}
 

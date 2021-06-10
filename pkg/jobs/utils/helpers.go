@@ -24,6 +24,7 @@ import (
 	managedclusterinfov1beta1 "github.com/open-cluster-management/multicloud-operators-foundation/pkg/apis/internal.open-cluster-management.io/v1beta1"
 	managedclusterviewv1beta1 "github.com/open-cluster-management/multicloud-operators-foundation/pkg/apis/view/v1beta1"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -276,7 +277,7 @@ func DeleteClusterNamespace(client kubernetes.Interface, clusterName string) err
 
 	pods, err := client.CoreV1().Pods(clusterName).List(context.Background(), v1.ListOptions{})
 
-	if err != nil && !strings.Contains(err.Error(), " not found") {
+	if err != nil && !k8serrors.IsNotFound(err) {
 		return err
 	}
 

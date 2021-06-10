@@ -5,12 +5,12 @@ package importer
 import (
 	"context"
 	"errors"
-	"strings"
 	"time"
 
 	managedclusterclient "github.com/open-cluster-management/api/client/cluster/clientset/versioned"
 	managedclusterv1 "github.com/open-cluster-management/api/cluster/v1"
 	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/utils"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
@@ -115,7 +115,7 @@ func DetachCluster(mcset dynamic.Interface, clusterName string) error {
 	_, err := mcset.Resource(mcGVR).Get(context.TODO(), clusterName, v1.GetOptions{})
 
 	if err != nil {
-		if strings.Contains(err.Error(), " not found") {
+		if k8serrors.IsNotFound(err) {
 			klog.Warning("Did not find managed cluster " + clusterName)
 			return nil
 		} else {
