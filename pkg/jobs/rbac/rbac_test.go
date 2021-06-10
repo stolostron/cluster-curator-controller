@@ -25,7 +25,7 @@ func getRules() []rbacv1.PolicyRule {
 		rbacv1.PolicyRule{
 			APIGroups: []string{"hive.openshift.io"},
 			Resources: []string{"clusterdeployments"},
-			Verbs:     []string{"patch"},
+			Verbs:     []string{"patch", "delete"},
 		},
 		rbacv1.PolicyRule{
 			APIGroups: []string{"batch", "hive.openshift.io", "tower.ansible.com"},

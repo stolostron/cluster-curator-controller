@@ -70,7 +70,8 @@ func curatorRun(config *rest.Config, client *clientv1.Client, clusterName string
 		switch os.Args[1] {
 		case "applycloudprovider-aws", "applycloudprovider-ansible", "monitor-import", "monitor",
 			"applycloudprovider-gcp", "applycloudprovider-azure", "activate-and-monitor", "upgrade-cluster", "monitor-upgrade",
-			"SKIP_ALL_TESTING", "prehook-ansiblejob", "posthook-ansiblejob", "done":
+			"SKIP_ALL_TESTING", "prehook-ansiblejob", "posthook-ansiblejob", "done", "destroy-cluster",
+			"monitor-destroy", "detach-nowait", "delete-cluster-namespace":
 		default:
 			utils.CheckError(cmdErrorMsg)
 		}
@@ -175,7 +176,7 @@ func curatorRun(config *rest.Config, client *clientv1.Client, clusterName string
 	}
 
 	if jobChoice == "monitor" || jobChoice == "activate-and-monitor" {
-		if err := hive.MonitorDeployStatus(config, clusterName); err != nil {
+		if err := hive.MonitorClusterStatus(config, clusterName, utils.Installing); err != nil {
 			utils.CheckError(utils.RecordFailedCuratorStatusCondition(
 				*client,
 				clusterName,
@@ -204,6 +205,51 @@ func curatorRun(config *rest.Config, client *clientv1.Client, clusterName string
 		}
 	}
 
+	if jobChoice == "destroy-cluster" {
+		hiveset, err := hiveclient.NewForConfig(config)
+		utils.CheckError(err)
+
+		if err = hive.DestroyClusterDeployment(hiveset, clusterName); err != nil {
+			utils.CheckError(utils.RecordFailedCuratorStatusCondition(
+				*client,
+				clusterName,
+				jobChoice,
+				v1.ConditionTrue,
+				err.Error()))
+			klog.Error(err.Error())
+			panic(err)
+		}
+	}
+
+	if jobChoice == "monitor-destroy" {
+		if err := hive.MonitorClusterStatus(config, clusterName, utils.Destroying); err != nil {
+			utils.CheckError(utils.RecordFailedCuratorStatusCondition(
+				*client,
+				clusterName,
+				jobChoice,
+				v1.ConditionTrue,
+				err.Error()))
+			klog.Error(err.Error())
+			panic(err)
+		}
+	}
+
+	if jobChoice == "detach-nowait" {
+		dynclient, err := utils.GetDynset(nil)
+		utils.CheckError(err)
+
+		if err = importer.DetachCluster(dynclient, clusterName); err != nil {
+			utils.CheckError(utils.RecordFailedCuratorStatusCondition(
+				*client,
+				clusterName,
+				jobChoice,
+				v1.ConditionTrue,
+				err.Error()))
+			klog.Error(err.Error())
+			panic(err)
+		}
+	}
+
 	if jobChoice == "upgrade-cluster" {
 		if err = hive.UpgradeCluster(*client, clusterName, curator); err != nil {
 			utils.CheckError(utils.RecordFailedCuratorStatusCondition(
@@ -219,6 +265,20 @@ func curatorRun(config *rest.Config, client *clientv1.Client, clusterName string
 
 	if jobChoice == "monitor-upgrade" {
 		if err = hive.MonitorUpgradeStatus(*client, clusterName, curator); err != nil {
+			utils.CheckError(utils.RecordFailedCuratorStatusCondition(
+				*client,
+				clusterName,
+				jobChoice,
+				v1.ConditionTrue,
+				err.Error()))
+			klog.Error(err.Error())
+			panic(err)
+		}
+	}
+
+	if jobChoice == "delete-cluster-namespace" {
+
+		if err := updateDeleteClusternamespace(*client, curator); err != nil {
 			utils.CheckError(utils.RecordFailedCuratorStatusCondition(
 				*client,
 				clusterName,
@@ -277,4 +337,9 @@ func updateFailingClusterCurator(client clientv1.Client, curator *clustercurator
 	patch := []byte(`{"spec":{"curatorJob": null, "desiredCuration": null}}`)
 	err := client.Patch(context.Background(), curator, clientv1.RawPatch(types.MergePatchType, patch))
 	utils.CheckError(err)
+}
+
+func updateDeleteClusternamespace(client clientv1.Client, curator *clustercuratorv1.ClusterCurator) error {
+	patch := []byte(`{"spec":{"curatorJob": null, "desiredCuration": "delete-cluster-namespace"}}`)
+	return client.Patch(context.Background(), curator, clientv1.RawPatch(types.MergePatchType, patch))
 }

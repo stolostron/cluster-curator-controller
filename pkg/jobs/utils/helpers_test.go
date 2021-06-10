@@ -8,9 +8,11 @@ import (
 
 	clustercuratorv1 "github.com/open-cluster-management/cluster-curator-controller/pkg/api/v1beta1"
 	"github.com/stretchr/testify/assert"
+	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	dynfake "k8s.io/client-go/dynamic/fake"
+	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/kubernetes/scheme"
 	clientfake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
@@ -236,4 +238,70 @@ func TestRecordCuratorJobNameInvalidCurator(t *testing.T) {
 	assert.NotNil(t, err, "err nil, when Job name written to ClusterCurator.Spec.curatorJob")
 	t.Logf("Detected Errror: %v", err.Error())
 
+}
+
+func getClusterNamespace() *corev1.Namespace {
+	return &corev1.Namespace{
+		ObjectMeta: v1.ObjectMeta{
+			Name: ClusterName,
+		},
+	}
+}
+
+func TestDeleteNamespaceNoPods(t *testing.T) {
+
+	kubeset := fake.NewSimpleClientset(getClusterNamespace())
+
+	assert.Nil(t, DeleteClusterNamespace(kubeset, ClusterName))
+
+	_, err := kubeset.CoreV1().Namespaces().Get(context.Background(), ClusterName, v1.GetOptions{})
+	assert.Contains(t, err.Error(), " not found")
+
+}
+
+func TestDeleteNamespaceNoNamespace(t *testing.T) {
+
+	kubeset := fake.NewSimpleClientset()
+
+	assert.Contains(t, DeleteClusterNamespace(kubeset, ClusterName).Error(), " not found")
+}
+
+func getPod(podName string, podPhase corev1.PodPhase) *corev1.Pod {
+	return &corev1.Pod{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      podName,
+			Namespace: ClusterName,
+		},
+		Status: corev1.PodStatus{
+			Phase: podPhase,
+		},
+	}
+}
+
+func TestDeleteNamespacePodsRunning(t *testing.T) {
+
+	kubeset := fake.NewSimpleClientset(
+		getClusterNamespace(),
+		getPod("pod1", corev1.PodRunning),
+		getPod(ClusterName+"-uninstall", corev1.PodRunning),
+		getPod("pod2", corev1.PodSucceeded))
+
+	assert.NotNil(t, DeleteClusterNamespace(kubeset, ClusterName), "not nil, when namespace can not be deleted")
+
+	_, err := kubeset.CoreV1().Namespaces().Get(context.Background(), ClusterName, v1.GetOptions{})
+	assert.Nil(t, err, "nil when namespace was found")
+}
+
+func TestDeleteNamespacePodsSuceeded(t *testing.T) {
+
+	kubeset := fake.NewSimpleClientset(
+		getClusterNamespace(),
+		getPod("pod1", corev1.PodSucceeded),
+		getPod(ClusterName+"-uninstall", corev1.PodRunning),
+		getPod("pod2", corev1.PodSucceeded))
+
+	assert.Nil(t, DeleteClusterNamespace(kubeset, ClusterName), "nil, when namespace can be deleted")
+
+	_, err := kubeset.CoreV1().Namespaces().Get(context.Background(), ClusterName, v1.GetOptions{})
+	assert.Contains(t, err.Error(), " not found")
 }

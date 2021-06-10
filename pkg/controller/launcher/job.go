@@ -28,6 +28,10 @@ const ActivateAndMonitor = "activate-and-monitor"
 const UpgradeCluster = "upgrade-cluster"
 const MonUpgrade = "monitor-upgrade"
 
+const DeleteClusterDeployment = "destroy-cluster"
+const MonitorDestroy = "monitor-destroy"
+const DeleteClusterNamespace = "delete-cluster-namespace"
+
 type Launcher struct {
 	client         client.Client
 	kubeset        kubernetes.Interface
@@ -177,17 +181,78 @@ func getBatchJob(clusterName string, imageURI string, curator clustercuratorv1.C
 				},
 			},
 		}
+	case "destroy":
+		if curator.Spec.Destroy.Prehook != nil {
+			isPrehook = true
+		}
+		if curator.Spec.Destroy.Posthook != nil {
+			isPosthook = true
+		}
+		newJob = &batchv1.Job{
+			ObjectMeta: v1.ObjectMeta{
+				GenerateName: "curator-job-",
+				Namespace:    clusterName,
+				Labels: map[string]string{
+					"open-cluster-management": "curator-job",
+				},
+				Annotations: map[string]string{
+					DeleteClusterDeployment: "Initiates uninstall of cluster",
+					MonitorDestroy:          "Monitor uninstall of cluster",
+					DeleteClusterNamespace:  "Delete the cluster Namespace when complete",
+					DoneDoneDone:            "Cluster Curator job has completed",
+				},
+			},
+			Spec: batchv1.JobSpec{
+				BackoffLimit:            new(int32),
+				TTLSecondsAfterFinished: &ttlf,
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						ServiceAccountName: "cluster-installer",
+						RestartPolicy:      corev1.RestartPolicyNever,
+						InitContainers: []corev1.Container{
+							corev1.Container{
+								Name:            DeleteClusterDeployment,
+								Image:           imageURI,
+								Command:         append([]string{CurCmd, DeleteClusterDeployment}),
+								ImagePullPolicy: corev1.PullIfNotPresent,
+								Resources:       resourceSettings,
+							},
+							corev1.Container{
+								Name:            MonitorDestroy,
+								Image:           imageURI,
+								Command:         append([]string{CurCmd, MonitorDestroy}),
+								ImagePullPolicy: corev1.PullIfNotPresent,
+								Resources:       resourceSettings,
+							},
+							corev1.Container{
+								Name:            DeleteClusterNamespace,
+								Image:           imageURI,
+								Command:         append([]string{CurCmd, DeleteClusterNamespace}),
+								ImagePullPolicy: corev1.PullIfNotPresent,
+								Resources:       resourceSettings,
+							},
+						},
+						Containers: []corev1.Container{
+							corev1.Container{
+								Name:    DoneDoneDone,
+								Image:   imageURI,
+								Command: append([]string{CurCmd, DoneDoneDone}),
+							},
+						},
+					},
+				},
+			},
+		}
 	}
-
 	if isPrehook {
 		annotations := newJob.GetAnnotations()
-		annotations[PreAJob] = "Running pre-provisioning AnsibleJob"
+		annotations[PreAJob] = "Running pre-" + desiredCuration + " AnsibleJob"
 		initContainers := []corev1.Container{
 			corev1.Container{
 				Name:            PreAJob,
 				Image:           imageURI,
 				Command:         append([]string{CurCmd, PreAJob}),
-				ImagePullPolicy: corev1.PullAlways,
+				ImagePullPolicy: corev1.PullIfNotPresent,
 				Env: []corev1.EnvVar{
 					corev1.EnvVar{
 						Name:  "JOB_TYPE",
@@ -205,13 +270,13 @@ func getBatchJob(clusterName string, imageURI string, curator clustercuratorv1.C
 	}
 	if isPosthook {
 		annotations := newJob.GetAnnotations()
-		annotations[PostAJob] = "Running post-provisioning AnsibleJob"
+		annotations[PostAJob] = "Running post-" + desiredCuration + " AnsibleJob"
 
 		newJob.Spec.Template.Spec.InitContainers = append(newJob.Spec.Template.Spec.InitContainers, corev1.Container{
 			Name:            PostAJob,
 			Image:           imageURI,
 			Command:         append([]string{CurCmd, PostAJob}),
-			ImagePullPolicy: corev1.PullAlways,
+			ImagePullPolicy: corev1.PullIfNotPresent,
 			Env: []corev1.EnvVar{
 				corev1.EnvVar{
 					Name:  "JOB_TYPE",

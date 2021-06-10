@@ -46,12 +46,14 @@ func Job(client client.Client, curator *clustercuratorv1.ClusterCurator) error {
 		prehook = curator.Spec.Upgrade.Prehook
 		posthook = curator.Spec.Upgrade.Posthook
 		towerauthsecret = curator.Spec.Upgrade.TowerAuthSecret
+	case "destroy":
+		prehook = curator.Spec.Destroy.Prehook
+		posthook = curator.Spec.Destroy.Posthook
+		towerauthsecret = curator.Spec.Destroy.TowerAuthSecret
 		/*	case "scale":
 				hooks = curator.Spec.Scale
 			case "upgrade":
 				hooks = curator.Spec.Upgrade
-			case "Destroy":
-				hooks = curator.Spec.Destroy
 		*/
 	default:
 		return errors.New("The Spec.DesiredCuration value is not supported: " + curator.Spec.DesiredCuration)
@@ -198,16 +200,17 @@ func RunAnsibleJob(
 
 	cd, err := getClusterDeployment(client, namespace)
 	if err != nil {
-		return nil, err
+		klog.Warning("Did not find clusterDeployment")
+	} else {
+		ansibleJob.Object["spec"].(map[string]interface{})["extra_vars"].(map[string]interface{})["cluster_deployment"] = cd["spec"]
 	}
 
 	mp, err := getMachinePool(client, namespace)
 	if err != nil {
-		return nil, err
+		klog.Warning("Did not find machinePool")
+	} else {
+		ansibleJob.Object["spec"].(map[string]interface{})["extra_vars"].(map[string]interface{})["machine_pool"] = mp["spec"]
 	}
-
-	ansibleJob.Object["spec"].(map[string]interface{})["extra_vars"].(map[string]interface{})["cluster_deployment"] = cd["spec"]
-	ansibleJob.Object["spec"].(map[string]interface{})["extra_vars"].(map[string]interface{})["machine_pool"] = mp["spec"]
 
 	klog.V(0).Info("Creating AnsibleJob " + ansibleJob.GetName() + " in namespace " + namespace)
 	klog.V(4).Infof("ansibleJob: %v", ansibleJob)

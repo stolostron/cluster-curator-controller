@@ -42,6 +42,7 @@ spec:
                 - scale
                 - upgrade
                 - destroy
+                - delete-cluster-namespace
                 type: string
               destroy:
                 description: During an destroy curation run these **Pre hook ONLY**

@@ -24,6 +24,7 @@ import (
 	managedclusterinfov1beta1 "github.com/open-cluster-management/multicloud-operators-foundation/pkg/apis/internal.open-cluster-management.io/v1beta1"
 	managedclusterviewv1beta1 "github.com/open-cluster-management/multicloud-operators-foundation/pkg/apis/view/v1beta1"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -44,6 +45,9 @@ const DefaultImageURI = "registry.ci.openshift.org/open-cluster-management/clust
 
 const JobHasFinished = "Job_has_finished"
 const JobFailed = "Job_failed"
+
+const Installing = "provision"
+const Destroying = "uninstall"
 
 type PatchStringValue struct {
 	Op    string `json:"op"`
@@ -267,4 +271,24 @@ func GetClusterCurator(client clientv1.Client, clusterName string) (*clustercura
 	klog.V(4).Infof("ClusterCurator: %v", curator)
 
 	return curator, nil
+}
+
+func DeleteClusterNamespace(client kubernetes.Interface, clusterName string) error {
+
+	pods, err := client.CoreV1().Pods(clusterName).List(context.Background(), v1.ListOptions{})
+
+	if err != nil && !k8serrors.IsNotFound(err) {
+		return err
+	}
+
+	for _, pod := range pods.Items {
+		if pod.Status.Phase != "" && pod.Status.Phase == "Running" {
+			if !strings.Contains(pod.Name, clusterName+"-uninstall") {
+				return errors.New("There was a running pod: " + pod.Name + ", in the cluster namespace " + clusterName)
+			}
+		}
+	}
+
+	//Delete the namespace
+	return client.CoreV1().Namespaces().Delete(context.Background(), clusterName, v1.DeleteOptions{})
 }

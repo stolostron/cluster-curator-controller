@@ -10,6 +10,7 @@ import (
 	managedclusterclient "github.com/open-cluster-management/api/client/cluster/clientset/versioned"
 	managedclusterv1 "github.com/open-cluster-management/api/cluster/v1"
 	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/utils"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
@@ -102,4 +103,35 @@ func MonitorMCInfoImport(mcset dynamic.Interface, clusterName string) error {
 		time.Sleep(utils.PauseTwoSeconds)
 	}
 	return errors.New("Time out waiting for cluster to import")
+}
+
+func DetachCluster(mcset dynamic.Interface, clusterName string) error {
+
+	var mcGVR = schema.GroupVersionResource{
+		Group: "cluster.open-cluster-management.io", Version: "v1", Resource: "managedclusters"}
+
+	klog.V(0).Info("=> Detaching ManagedCluster \"" + clusterName)
+
+	_, err := mcset.Resource(mcGVR).Get(context.TODO(), clusterName, v1.GetOptions{})
+
+	if err != nil {
+		if k8serrors.IsNotFound(err) {
+			klog.Warning("Did not find managed cluster " + clusterName)
+			return nil
+		} else {
+			return err
+		}
+	}
+
+	err = mcset.Resource(mcGVR).Delete(
+		context.Background(),
+		clusterName,
+		v1.DeleteOptions{})
+
+	if err != nil {
+		return err
+	}
+
+	klog.V(0).Info("Managed cluster resource delete initiated for " + clusterName + ", will not wait")
+	return nil
 }
