@@ -17,7 +17,7 @@ import (
 
 const clusterInstaller = "cluster-installer"
 
-func getRole() *rbacv1.Role {
+func getRole(clusterName string) *rbacv1.Role {
 	curatorRole := &rbacv1.Role{
 		ObjectMeta: v1.ObjectMeta{Name: "curator"},
 		Rules: []rbacv1.PolicyRule{
@@ -60,6 +60,13 @@ func getRole() *rbacv1.Role {
 				APIGroups: []string{"action.open-cluster-management.io"},
 				Resources: []string{"managedclusteractions"},
 				Verbs:     []string{"get", "create", "update", "delete"},
+			},
+			//To read the install-config secret
+			rbacv1.PolicyRule{
+				APIGroups:     []string{""},
+				Resources:     []string{"secrets"},
+				Verbs:         []string{"get"},
+				ResourceNames: []string{clusterName + "-install-config"},
 			},
 		},
 	}
@@ -142,7 +149,7 @@ func ApplyRBAC(kubeset kubernetes.Interface, namespace string) error {
 	klog.V(2).Info("Check if Role curator exists")
 	if _, err := kubeset.RbacV1().Roles(namespace).Get(context.TODO(), "curator", v1.GetOptions{}); err != nil {
 		klog.V(2).Info(" Creating Role curator")
-		_, err = kubeset.RbacV1().Roles(namespace).Create(context.TODO(), getRole(), v1.CreateOptions{})
+		_, err = kubeset.RbacV1().Roles(namespace).Create(context.TODO(), getRole(namespace), v1.CreateOptions{})
 		if err != nil {
 			return err
 		}

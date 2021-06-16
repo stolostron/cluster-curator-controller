@@ -15,7 +15,7 @@ import (
 
 const ClusterName = "my-cluster"
 
-func getRules() []rbacv1.PolicyRule {
+func getRules(clusterName string) []rbacv1.PolicyRule {
 	return []rbacv1.PolicyRule{
 		rbacv1.PolicyRule{
 			APIGroups: []string{"tower.ansible.com", ""},
@@ -57,11 +57,18 @@ func getRules() []rbacv1.PolicyRule {
 			Resources: []string{"managedclusteractions"},
 			Verbs:     []string{"get", "create", "update", "delete"},
 		},
+		//To read the install-config secret
+		rbacv1.PolicyRule{
+			APIGroups:     []string{""},
+			Resources:     []string{"secrets"},
+			Verbs:         []string{"get"},
+			ResourceNames: []string{clusterName + "-install-config"},
+		},
 	}
 }
 
 func getCombinedCIRules() []rbacv1.PolicyRule {
-	return append(getRules(),
+	return append(getRules(ClusterName),
 		[]rbacv1.PolicyRule{
 			rbacv1.PolicyRule{
 				APIGroups: []string{"tower.ansible.com"},
@@ -121,7 +128,7 @@ func TestApplyRbac(t *testing.T) {
 	role, err := kubeset.RbacV1().Roles(ClusterName).Get(context.TODO(), "curator", v1.GetOptions{})
 
 	assert.Nil(t, err, "err nil, when Role exists")
-	assert.ElementsMatch(t, getRules(), role.Rules, "The rules should match")
+	assert.ElementsMatch(t, getRules(ClusterName), role.Rules, "The rules should match")
 
 	t.Log("Validate RoleBinding")
 	roleBinding, err := kubeset.RbacV1().RoleBindings(ClusterName).
@@ -144,8 +151,8 @@ func TestExtendClusterInstallerRole(t *testing.T) {
 
 	kubeset := fake.NewSimpleClientset()
 
-	testRole := getRole()
-	testRole.Rules = getRules()
+	testRole := getRole(ClusterName)
+	testRole.Rules = getRules(ClusterName)
 	testRole.Name = clusterInstaller
 
 	// Delay 5s so that we can see the ExtendClusterInstallerRole wait
@@ -168,7 +175,7 @@ func TestExtendClusterInstallerRoleTimeout(t *testing.T) {
 
 	kubeset := fake.NewSimpleClientset()
 
-	testRole := getRole()
+	testRole := getRole(ClusterName)
 	testRole.Name = clusterInstaller
 
 	err := ExtendClusterInstallerRole(kubeset, ClusterName)

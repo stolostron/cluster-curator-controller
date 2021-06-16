@@ -13,6 +13,7 @@ import (
 	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/utils"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 	"github.com/stretchr/testify/assert"
+	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -85,6 +86,60 @@ func genMachinePool() *hivev1.MachinePool {
 		ObjectMeta: v1.ObjectMeta{
 			Name:      ClusterName + MPSUFFIX,
 			Namespace: ClusterName,
+		},
+	}
+}
+
+func genInstallConfigSecret() *corev1.Secret {
+	installConfigString := `
+apiVersion: v1
+metadata:
+  name: my-cluster
+baseDomain: my.domain.com
+controlPlane:
+    hyperthreading: Enabled
+    name: master
+    platform:
+        aws:
+            rootVolume:
+                iops: 100
+                size: 100
+                type: gp2
+            type: m5.xlarge
+        replicas: 3
+compute:
+- hyperthreading: Enabled
+  name: worker
+  platform:
+      aws:
+          rootVolume:
+              iops: 100
+              size: 100
+              type: gp2
+          type: m5.xlarge
+      replicas: 3
+networking:
+    clusterNetwork:
+    - cidr: 10.128.0.0/14
+    hostPrefix: 23
+    machineCIDR: 10.0.0.0/16
+    networkType: OVNKubernetes
+    serviceNetwork:
+    - 172.30.0.0/16
+platform:
+    aws:
+        region: us-east-1
+pullSecret: \"\" # skip, hive will inject based on it's secrets
+sshKey: |-
+    secret_value`
+
+	return &corev1.Secret{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      ClusterName + "-install-config",
+			Namespace: ClusterName,
+		},
+		Data: map[string][]byte{
+			"install-config.yaml": []byte(installConfigString),
 		},
 	}
 }
@@ -191,9 +246,10 @@ func TestJob(t *testing.T) {
 	s.AddKnownTypes(ajv1.SchemeBuilder.GroupVersion, &ajv1.AnsibleJob{})
 	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
 	s.AddKnownTypes(hivev1.SchemeBuilder.GroupVersion, &hivev1.ClusterDeployment{}, &hivev1.MachinePool{})
-	client := clientfake.NewFakeClientWithScheme(s, getClusterCurator(), genClusterDeployment(), genMachinePool())
+	s.AddKnownTypes(corev1.SchemeGroupVersion, &corev1.Secret{})
+	client := clientfake.NewFakeClientWithScheme(s, getClusterCurator(), genClusterDeployment(), genInstallConfigSecret(), genMachinePool())
+	t.Logf("client has been initialized")
 
-	// buildAnsibleJob("successful", AnsibleJobTemplateName),
 	go func() {
 		time.Sleep(utils.PauseFiveSeconds)
 

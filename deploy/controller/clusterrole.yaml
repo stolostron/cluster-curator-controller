@@ -24,7 +24,7 @@ rules:
   verbs: ["patch","delete"]
 
 - apiGroups: ["internal.open-cluster-management.io",""]
-  resources: ["managedclusterinfos","pods"]
+  resources: ["managedclusterinfos","pods","secrets"]
   verbs: ["get"]
 
 # Specific to the controller only

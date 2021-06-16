@@ -6,12 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/open-cluster-management/library-go/pkg/config"
 	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -169,6 +171,7 @@ func GetClient() (clientv1.Client, error) {
 	CheckError(managedclusteractionv1beta1.AddToScheme(curatorScheme))
 	CheckError(managedclusterviewv1beta1.AddToScheme(curatorScheme))
 	CheckError(managedclusterinfov1beta1.AddToScheme(curatorScheme))
+	CheckError(corev1.AddToScheme(curatorScheme))
 
 	return clientv1.New(config, clientv1.Options{Scheme: curatorScheme})
 }
@@ -291,4 +294,50 @@ func DeleteClusterNamespace(client kubernetes.Interface, clusterName string) err
 
 	//Delete the namespace
 	return client.CoreV1().Namespaces().Delete(context.Background(), clusterName, v1.DeleteOptions{})
+}
+
+// Because Unmarshal for map[string]interface{}, uses map[interface{}]interface{} above the root leaf, runtime client does not support it.
+func ConvertMap(m interface{}) interface{} {
+	if m == nil {
+		klog.Warning("No yaml found")
+		return ""
+	}
+
+	switch m.(type) {
+	case []interface{}:
+		var ret interface{}
+		ret = []interface{}{}
+
+		for i := 0; i < len(m.([]interface{})); i++ {
+			ret = append(ret.([]interface{}), ConvertMap(m.([]interface{})[i]))
+		}
+		return ret
+
+	case map[interface{}]interface{}:
+		ret := map[string]interface{}{}
+		for key, value := range m.(map[interface{}]interface{}) {
+			klog.V(4).Infof("key: %v", key.(string))
+			switch value.(type) {
+
+			case map[interface{}]interface{}:
+
+				ret[key.(string)] = ConvertMap(value.(map[interface{}]interface{}))
+
+			case []interface{}:
+
+				ret[key.(string)] = []interface{}{}
+
+				for i := 0; i < len(value.([]interface{})); i++ {
+
+					ret[key.(string)] = append(ret[key.(string)].([]interface{}), ConvertMap(value.([]interface{})[i].(interface{})))
+				}
+
+			default:
+				ret[key.(string)] = fmt.Sprintf("%v", value)
+			}
+		}
+		return ret
+	default:
+		return fmt.Sprintf("%v", m)
+	}
 }

@@ -11,6 +11,9 @@ import (
 	clustercuratorv1 "github.com/open-cluster-management/cluster-curator-controller/pkg/api/v1beta1"
 	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/utils"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
+	"gopkg.in/yaml.v2"
+	corev1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -23,6 +26,7 @@ import (
 const PREHOOK = "prehook"
 const POSTHOOK = "posthook"
 const MPSUFFIX = "-worker"
+const ICSUFFIX = "-install-config"
 
 var ansibleJobGVR = schema.GroupVersionResource{
 	Group: "tower.ansible.com", Version: "v1alpha1", Resource: "ansiblejobs"}
@@ -171,6 +175,36 @@ func getMachinePool(client client.Client, clusterName string) (map[string]interf
 	return runtime.DefaultUnstructuredConverter.ToUnstructured(&mp)
 }
 
+// Extract the control, compute and networking keys from the install config. This skips sensitive values
+func getInstallConfig(client client.Client, clusterName string) (map[string]interface{}, error) {
+	ic := corev1.Secret{}
+
+	if err := client.Get(context.Background(), types.NamespacedName{
+		Namespace: clusterName,
+		Name:      clusterName + ICSUFFIX,
+	}, &ic); err != nil {
+		return nil, err
+	}
+
+	unmarshalled := map[string]interface{}{}
+	err := yaml.Unmarshal(ic.Data["install-config.yaml"], &unmarshalled)
+	if err != nil {
+		return nil, err
+	}
+
+	// Instead of deleting keys from unmarshal, copy only the keys we want
+	// Use ConvertMap as unmarshal uses map[interface{]}]interface{} instead
+	// of map[string]interface{}
+	subset := map[string]interface{}{}
+	subset["networking"] = utils.ConvertMap(unmarshalled["networking"])
+	subset["compute"] = utils.ConvertMap(unmarshalled["compute"])
+	subset["controlPlane"] = utils.ConvertMap(unmarshalled["controlPlane"])
+
+	klog.V(4).Infof("install-config: %v", subset)
+
+	return subset, nil
+}
+
 /* RunAnsibleJob - Run a basic AnsbileJob kind to trigger an Ansible Teamplte Job playbook
  *  config           # kubeconfig
  *  namespace        # The cluster's namespace
@@ -200,16 +234,24 @@ func RunAnsibleJob(
 
 	cd, err := getClusterDeployment(client, namespace)
 	if err != nil {
-		klog.Warning("Did not find clusterDeployment")
+		if k8serrors.IsNotFound(err) {
+			klog.Warning("Did not find clusterDeployment")
+		} else {
+			return nil, err
+		}
 	} else {
 		ansibleJob.Object["spec"].(map[string]interface{})["extra_vars"].(map[string]interface{})["cluster_deployment"] = cd["spec"]
 	}
 
-	mp, err := getMachinePool(client, namespace)
+	mp, err := getInstallConfig(client, namespace)
 	if err != nil {
-		klog.Warning("Did not find machinePool")
+		if k8serrors.IsNotFound(err) {
+			klog.Warning("Did not find install-config")
+		} else {
+			return nil, err
+		}
 	} else {
-		ansibleJob.Object["spec"].(map[string]interface{})["extra_vars"].(map[string]interface{})["machine_pool"] = mp["spec"]
+		ansibleJob.Object["spec"].(map[string]interface{})["extra_vars"].(map[string]interface{})["install_config"] = mp
 	}
 
 	klog.V(0).Info("Creating AnsibleJob " + ansibleJob.GetName() + " in namespace " + namespace)
