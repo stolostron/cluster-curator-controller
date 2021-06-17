@@ -199,10 +199,42 @@ func getInstallConfig(client client.Client, clusterName string) (map[string]inte
 	subset["networking"] = utils.ConvertMap(unmarshalled["networking"])
 	subset["compute"] = utils.ConvertMap(unmarshalled["compute"])
 	subset["controlPlane"] = utils.ConvertMap(unmarshalled["controlPlane"])
+	subset["platform"] = parsePlatform(unmarshalled["platform"])
 
 	klog.V(4).Infof("install-config: %v", subset)
 
 	return subset, nil
+}
+
+func parsePlatform(m interface{}) interface{} {
+	newMap := utils.ConvertMap(m).(map[string]interface{})
+	ret := map[string]interface{}{}
+
+	for platformType, _ := range newMap {
+
+		klog.V(4).Infof("platformType: %v", platformType)
+
+		if platformType == "vsphere" {
+			ret[platformType] = map[string]interface{}{}
+
+			for key, value := range newMap[platformType].(map[string]interface{}) {
+
+				// Makes it easy to read and skip additional keys
+				switch key {
+
+				// vmware
+				case "vCenter", "datacenter", "defaultDatastore", "cluster", "apiVIP",
+					"ingressVIP", "network":
+
+					klog.V(4).Infof("key: value %v: %v", key, value)
+					ret[platformType].(map[string]interface{})[key] = value
+				}
+			}
+		} else if platformType != "bma" {
+			ret[platformType] = newMap[platformType]
+		}
+	}
+	return ret
 }
 
 /* RunAnsibleJob - Run a basic AnsbileJob kind to trigger an Ansible Teamplte Job playbook

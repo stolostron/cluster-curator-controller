@@ -90,6 +90,7 @@ func genMachinePool() *hivev1.MachinePool {
 	}
 }
 
+// The platform section is a mixture of three, this is just for testing pruposes
 func genInstallConfigSecret() *corev1.Secret {
 	installConfigString := `
 apiVersion: v1
@@ -129,6 +130,21 @@ networking:
 platform:
     aws:
         region: us-east-1
+    openstack:
+        externalNetwork: my-network
+        lbFloatingIP: 2.2.2.2
+        ingressFloatingIP: 2.2.2.3
+        cloud: openstack
+    vsphere:
+        vCenter: "https://my-vcenter/"
+        username: DO_NOT_SHOW
+        password: SHOULD_NOT_SEE
+        datacenter: my-datacenter
+        defaultDatastore: my-datastore
+        cluster: my-cluster
+        apiVIP: 0.0.0.0
+        ingressVIP: 1.1.1.1
+        network: my-network	
 pullSecret: \"\" # skip, hive will inject based on it's secrets
 sshKey: |-
     secret_value`
@@ -407,11 +423,64 @@ func TestRunAnsibleJob(t *testing.T) {
 	s.AddKnownTypes(ajv1.SchemeBuilder.GroupVersion, &ajv1.AnsibleJob{})
 	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
 	s.AddKnownTypes(hivev1.SchemeBuilder.GroupVersion, &hivev1.ClusterDeployment{}, &hivev1.MachinePool{})
-	client := clientfake.NewFakeClientWithScheme(s, cc, genClusterDeployment(), genMachinePool())
+	s.AddKnownTypes(corev1.SchemeGroupVersion, &corev1.Secret{})
+	client := clientfake.NewFakeClientWithScheme(s, cc, genClusterDeployment(), genMachinePool(), genInstallConfigSecret())
 
 	aJob, err := RunAnsibleJob(client, cc, POSTHOOK, cc.Spec.Install.Posthook[0], "toweraccess")
 	assert.Nil(t, err, "err is nil when job is started")
 	t.Logf("Fake ansibleJob launched with name: %v", aJob.GetName())
+}
+
+func TestAnsibleJobExtraVars(t *testing.T) {
+
+	cc := getClusterCurator()
+
+	t.Logf("Test %v", POSTHOOK)
+	os.Setenv(EnvJobType, POSTHOOK)
+
+	s.AddKnownTypes(ajv1.SchemeBuilder.GroupVersion, &ajv1.AnsibleJob{})
+	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
+	s.AddKnownTypes(hivev1.SchemeBuilder.GroupVersion, &hivev1.ClusterDeployment{}, &hivev1.MachinePool{})
+	s.AddKnownTypes(corev1.SchemeGroupVersion, &corev1.Secret{})
+	client := clientfake.NewFakeClientWithScheme(s, cc, genClusterDeployment(), genMachinePool(), genInstallConfigSecret())
+
+	aJob, err := RunAnsibleJob(client, cc, POSTHOOK, cc.Spec.Install.Posthook[0], "toweraccess")
+	assert.Nil(t, err, "err is nil when job is started")
+	t.Logf("Fake ansibleJob launched with name: %v", aJob.GetName())
+
+	extraVars := aJob.Object["spec"].(map[string]interface{})["extra_vars"].(map[string]interface{})
+	assert.NotNil(t, extraVars, "not nil, extra_vars")
+	t.Logf("extraVars: %v", extraVars)
+
+	//Test all the expected keys
+	assert.NotNil(t, extraVars["cluster_deployment"], "nil when cluster_deployment missing")
+	assert.NotNil(t, extraVars["install_config"], "nil when install_config missing")
+
+	// Look at the platform values
+	platform := extraVars["install_config"].(map[string]interface{})["platform"].(map[string]interface{})
+
+	assert.NotNil(t, platform["openstack"], "nil if vsphere is missing")
+	assert.NotNil(t, platform["vsphere"], "nil if openstack is missing")
+	assert.NotNil(t, platform["aws"], "nil if aws is missing")
+
+	// openstack
+	openstack := platform["openstack"].(map[string]interface{})
+	assert.NotNil(t, openstack["externalNetwork"], "nil if missing externalNetwork")
+	assert.NotNil(t, openstack["lbFloatingIP"], "nil if missing lbFloatingIP")
+	assert.NotNil(t, openstack["ingressFloatingIP"], "nil if missing ingressFloatingIP")
+	assert.NotNil(t, openstack["cloud"], "nil if missing cloud")
+
+	// vsphere
+	vsphere := platform["vsphere"].(map[string]interface{})
+	assert.NotNil(t, vsphere["vCenter"], "nil if missing vCenter")
+	assert.NotNil(t, vsphere["datacenter"], "nil if missing datacenter")
+	assert.NotNil(t, vsphere["defaultDatastore"], "nil if missing defaultDatastore")
+	assert.NotNil(t, vsphere["cluster"], "nil if missing cluster")
+	assert.NotNil(t, vsphere["apiVIP"], "nil if missing apiVIP")
+	assert.NotNil(t, vsphere["ingressVIP"], "nil if missing ingressVIP")
+	assert.NotNil(t, vsphere["network"], "nil if missing network")
+	assert.Nil(t, vsphere["password"], "should be nil as we don't want to include this")
+	assert.Nil(t, vsphere["username"], "should be nil as we don't want to include this")
 }
 
 /*
