@@ -214,19 +214,13 @@ func parsePlatform(m interface{}) interface{} {
 
 		klog.V(4).Infof("platformType: %v", platformType)
 
-		if platformType == "openstack" || platformType == "vsphere" {
+		if platformType == "vsphere" {
 			ret[platformType] = map[string]interface{}{}
 
 			for key, value := range newMap[platformType].(map[string]interface{}) {
 
-				//Split up the cases for readability
+				// Makes it easy to read and skip additional keys
 				switch key {
-
-				//Openstack
-				case "externalNetwork", "lbFloatingIP", "ingressFloatingIP":
-
-					klog.V(4).Infof("key: value %v: %v", key, value)
-					ret[platformType].(map[string]interface{})[key] = value
 
 				// vmware
 				case "vCenter", "datacenter", "defaultDatastore", "cluster", "apiVIP",

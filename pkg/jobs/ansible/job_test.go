@@ -468,7 +468,7 @@ func TestAnsibleJobExtraVars(t *testing.T) {
 	assert.NotNil(t, openstack["externalNetwork"], "nil if missing externalNetwork")
 	assert.NotNil(t, openstack["lbFloatingIP"], "nil if missing lbFloatingIP")
 	assert.NotNil(t, openstack["ingressFloatingIP"], "nil if missing ingressFloatingIP")
-	assert.Nil(t, openstack["cloud"], "should be nil as we don't want to include this")
+	assert.NotNil(t, openstack["cloud"], "nil if missing cloud")
 
 	// vsphere
 	vsphere := platform["vsphere"].(map[string]interface{})
