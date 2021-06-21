@@ -144,7 +144,50 @@ platform:
         cluster: my-cluster
         apiVIP: 0.0.0.0
         ingressVIP: 1.1.1.1
-        network: my-network	
+        network: my-network
+    baremetal:
+        libvirtURI: qemu+ssh://root@hypervisor.ocp4-edge-bm-h15-0.qe.lab.redhat.com/system
+        provisioningNetworkCIDR: 1.1.1.1./20
+        provisioningNetworkInterface: enp1s0
+        provisioningBridge: provisioning
+        externalBridge: baremetal
+        apiVIP:
+        ingressVIP:
+        bootstrapOSImage: >-
+          http://registry.ocp4-edge-bm-h15-0.qe.lab.redhat.com:8080/images/rhcos-46.82.202011260640-0-qemu.x86_64.qcow2.gz?sha256=99928ff40c2d8e3aa358d9bd453102e3d1b5e9694fb5d54febc56e275f35da51
+        clusterOSImage: >-
+          http://registry.ocp4-edge-bm-h15-0.qe.lab.redhat.com:8080/images/rhcos-46.82.202011260640-0-openstack.x86_64.qcow2.gz?sha256=2bd648e09f086973accd8ac1e355ce0fcd7dfcc16bc9708c938801fcf10e219e
+        hosts:
+          - name: 'bm4'
+            namespace: 'default'
+            role: master
+            bmc:
+              address: 'example.com:80'
+              disableCertificateVerification: true
+              username: # injected by server
+              password: # injected by server
+            bootMACAddress: 00:90:7F:12:DE:7A
+            hardwareProfile: default
+          - name: 'bm5'
+            namespace: 'default'
+            role: master
+            bmc:
+              address: 'example.com:80'
+              disableCertificateVerification: true
+              username: # injected by server
+              password: # injected by server
+            bootMACAddress: 00:90:7F:12:DE:7B
+            hardwareProfile: default
+          - name: 'bm6'
+            namespace: 'default'
+            role: master
+            bmc:
+              address: 'example.com:80'
+              disableCertificateVerification: true
+              username: # injected by server
+              password: # injected by server
+            bootMACAddress: 00:90:7F:12:DE:7C
+            hardwareProfile: default
 pullSecret: \"\" # skip, hive will inject based on it's secrets
 sshKey: |-
     secret_value`
@@ -481,6 +524,19 @@ func TestAnsibleJobExtraVars(t *testing.T) {
 	assert.NotNil(t, vsphere["network"], "nil if missing network")
 	assert.Nil(t, vsphere["password"], "should be nil as we don't want to include this")
 	assert.Nil(t, vsphere["username"], "should be nil as we don't want to include this")
+
+	// basemetal
+	baremetal := platform["baremetal"].(map[string]interface{})
+	assert.Nil(t, baremetal["hosts"].([]interface{})[0].(map[string]interface{})["bmc"].(map[string]interface{})["username"], "should be nil as we don't want to include this")
+	assert.Nil(t, baremetal["hosts"].([]interface{})[0].(map[string]interface{})["bmc"].(map[string]interface{})["password"], "should be nil as we don't want to include this")
+	assert.NotNil(t, baremetal["hosts"].([]interface{})[0].(map[string]interface{})["bmc"].(map[string]interface{})["address"], "should not be nil as we don't want to include this")
+	assert.Nil(t, baremetal["hosts"].([]interface{})[1].(map[string]interface{})["bmc"].(map[string]interface{})["username"], "should be nil as we don't want to include this")
+	assert.Nil(t, baremetal["hosts"].([]interface{})[1].(map[string]interface{})["bmc"].(map[string]interface{})["password"], "should be nil as we don't want to include this")
+	assert.NotNil(t, baremetal["hosts"].([]interface{})[1].(map[string]interface{})["bmc"].(map[string]interface{})["address"], "should not be nil as we don't want to include this")
+	assert.Nil(t, baremetal["hosts"].([]interface{})[2].(map[string]interface{})["bmc"].(map[string]interface{})["username"], "should be nil as we don't want to include this")
+	assert.Nil(t, baremetal["hosts"].([]interface{})[2].(map[string]interface{})["bmc"].(map[string]interface{})["password"], "should be nil as we don't want to include this")
+	assert.NotNil(t, baremetal["hosts"].([]interface{})[2].(map[string]interface{})["bmc"].(map[string]interface{})["address"], "should not be nil as we don't want to include this")
+
 }
 
 /*

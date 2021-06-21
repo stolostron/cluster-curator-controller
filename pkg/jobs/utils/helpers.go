@@ -333,7 +333,11 @@ func ConvertMap(m interface{}) interface{} {
 				}
 
 			default:
-				ret[key.(string)] = fmt.Sprintf("%v", value)
+
+				// Drop sensitive keys
+				if key.(string) != "username" && key.(string) != "password" {
+					ret[key.(string)] = fmt.Sprintf("%v", value)
+				}
 			}
 		}
 		return ret

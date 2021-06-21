@@ -199,14 +199,16 @@ func getInstallConfig(client client.Client, clusterName string) (map[string]inte
 	subset["networking"] = utils.ConvertMap(unmarshalled["networking"])
 	subset["compute"] = utils.ConvertMap(unmarshalled["compute"])
 	subset["controlPlane"] = utils.ConvertMap(unmarshalled["controlPlane"])
-	subset["platform"] = parsePlatform(unmarshalled["platform"])
+	subset["platform"] = utils.ConvertMap(unmarshalled["platform"]).(map[string]interface{})
 
 	klog.V(4).Infof("install-config: %v", subset)
 
 	return subset, nil
 }
 
+// Not currently used, represents an OPT-IN approach
 func parsePlatform(m interface{}) interface{} {
+
 	newMap := utils.ConvertMap(m).(map[string]interface{})
 	ret := map[string]interface{}{}
 
@@ -230,7 +232,23 @@ func parsePlatform(m interface{}) interface{} {
 					ret[platformType].(map[string]interface{})[key] = value
 				}
 			}
-		} else if platformType != "bma" {
+		} else if platformType == "baremetal" {
+			ret[platformType] = map[string]interface{}{}
+
+			for key, value := range newMap[platformType].(map[string]interface{}) {
+
+				// Makes it easy to read and skip additional keys
+				switch key {
+
+				// vmware
+				case "libvirtURI", "provisioningNetworkCIDR", "provisioningNetworkInterface", "provisioningBridge", "externalBridge",
+					"apiVIP", "ingressVIP", "bootstrapOSImage", "clusterOSImage":
+
+					klog.V(4).Infof("key: value %v: %v", key, value)
+					ret[platformType].(map[string]interface{})[key] = value
+				}
+			}
+		} else {
 			ret[platformType] = newMap[platformType]
 		}
 	}
