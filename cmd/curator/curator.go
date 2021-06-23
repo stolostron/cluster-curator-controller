@@ -309,7 +309,7 @@ func curatorRun(config *rest.Config, client *clientv1.Client, clusterName string
 
 	if jobChoice == "done" {
 		jobChoice = CuratorJob
-		msg = curator.Spec.CuratingJob
+		msg = curator.Spec.CuratingJob + " DesiredCuration: " + curator.Spec.DesiredCuration
 		condition = v1.ConditionTrue
 
 		// Remove DesireCuration, CuratingJob, Status from curator resource
