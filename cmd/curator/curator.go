@@ -95,7 +95,7 @@ func curatorRun(config *rest.Config, client *clientv1.Client, clusterName string
 			clusterName,
 			CuratorJob,
 			v1.ConditionFalse,
-			curator.Spec.CuratingJob))
+			curator.Spec.CuratingJob+"DesiredCuration: "+curator.Spec.DesiredCuration))
 
 		// Special case
 		if jobChoice != launcher.DoneDoneDone {
@@ -111,7 +111,7 @@ func curatorRun(config *rest.Config, client *clientv1.Client, clusterName string
 		// This makes sure we set the curator-job condition to false when there is a failure
 		defer func() {
 			if r := recover(); r != nil {
-				message := curator.Spec.CuratingJob + " failed - " + fmt.Sprintf("%v", r)
+				message := curator.Spec.CuratingJob + "DesiredCuration: " + curator.Spec.DesiredCuration + " Failed - " + fmt.Sprintf("%v", r)
 				utils.CheckError(utils.RecordFailedCuratorStatusCondition(
 					*client,
 					clusterName,
