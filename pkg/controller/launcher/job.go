@@ -134,6 +134,10 @@ func getBatchJob(clusterName string, imageURI string, curator clustercuratorv1.C
 		if curator.Spec.Upgrade.Posthook != nil {
 			isPosthook = true
 		}
+		if curator.Spec.Upgrade.DesiredUpdate == "" {
+			isPrehook = false
+			isPosthook = false
+		}
 		newJob = &batchv1.Job{
 			ObjectMeta: v1.ObjectMeta{
 				GenerateName: "curator-job-",
