@@ -167,4 +167,3 @@ For more details on job flow within our architecture see our [**swimlane chart**
 
 - The `cloudprovider-secret-controller` is part of the `open-cluster-management` community. For more information, visit: [open-cluster-management.io](https://open-cluster-management.io).
 
-
