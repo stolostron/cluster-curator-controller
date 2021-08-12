@@ -84,7 +84,7 @@ func TestCuratorRunNoClusterCurator(t *testing.T) {
 
 	os.Args[1] = "SKIP_ALL_TESTING"
 
-	curatorRun(nil, &client, ClusterName)
+	curatorRun(nil, client, ClusterName)
 }
 
 func TestCuratorRunClusterCurator(t *testing.T) {
@@ -96,7 +96,7 @@ func TestCuratorRunClusterCurator(t *testing.T) {
 
 	os.Args[1] = "SKIP_ALL_TESTING"
 
-	assert.NotPanics(t, func() { curatorRun(nil, &client, ClusterName) }, "no panic when ClusterCurator found and skip test")
+	assert.NotPanics(t, func() { curatorRun(nil, client, ClusterName) }, "no panic when ClusterCurator found and skip test")
 }
 
 func TestCuratorRunNoProviderCredentialPath(t *testing.T) {
@@ -118,7 +118,7 @@ func TestCuratorRunNoProviderCredentialPath(t *testing.T) {
 
 	os.Args[1] = "applycloudprovider-ansible"
 
-	curatorRun(nil, &client, ClusterName)
+	curatorRun(nil, client, ClusterName)
 }
 
 func TestCuratorRunProviderCredentialPathEnv(t *testing.T) {
@@ -138,5 +138,5 @@ func TestCuratorRunProviderCredentialPathEnv(t *testing.T) {
 
 	os.Args[1] = "applycloudprovider-ansible"
 
-	curatorRun(nil, &client, ClusterName)
+	curatorRun(nil, client, ClusterName)
 }

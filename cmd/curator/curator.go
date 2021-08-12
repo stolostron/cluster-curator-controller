@@ -55,10 +55,10 @@ func main() {
 	client, err := utils.GetClient()
 	utils.CheckError(err)
 
-	curatorRun(config, &client, clusterName)
+	curatorRun(config, client, clusterName)
 }
 
-func curatorRun(config *rest.Config, client *clientv1.Client, clusterName string) {
+func curatorRun(config *rest.Config, client clientv1.Client, clusterName string) {
 
 	var err error
 	var cmdErrorMsg = errors.New("Invalid Parameter: \"" + os.Args[1] +
@@ -84,14 +84,14 @@ func curatorRun(config *rest.Config, client *clientv1.Client, clusterName string
 	providerCredentialPath := os.Getenv("PROVIDER_CREDENTIAL_PATH")
 
 	// Gets the Cluster Configuration overrides
-	curator, err := utils.GetClusterCurator(*client, clusterName)
+	curator, err := utils.GetClusterCurator(client, clusterName)
 
 	// Allow an override with the PROVIDER_CREDENTIAL_PATH
 	if err == nil {
 		klog.V(2).Info("Found clusterCurator resource \"" + curator.Namespace + "\" ✓")
 
 		utils.CheckError(utils.RecordCurrentStatusCondition(
-			*client,
+			client,
 			clusterName,
 			CuratorJob,
 			v1.ConditionFalse,
@@ -100,7 +100,7 @@ func curatorRun(config *rest.Config, client *clientv1.Client, clusterName string
 		// Special case
 		if jobChoice != launcher.DoneDoneDone {
 			utils.CheckError(utils.RecordCurrentStatusCondition(
-				*client,
+				client,
 				clusterName,
 				jobChoice,
 				v1.ConditionFalse,
@@ -113,13 +113,13 @@ func curatorRun(config *rest.Config, client *clientv1.Client, clusterName string
 			if r := recover(); r != nil {
 				message := curator.Spec.CuratingJob + " DesiredCuration: " + curator.Spec.DesiredCuration + " Failed - " + fmt.Sprintf("%v", r)
 				utils.CheckError(utils.RecordFailedCuratorStatusCondition(
-					*client,
+					client,
 					clusterName,
 					CuratorJob,
 					v1.ConditionTrue,
 					message))
 				// Remove curatingJob and desiredCuration from curator resource for failed job
-				updateFailingClusterCurator(*client, curator)
+				updateFailingClusterCurator(client, curator)
 				panic(r)
 			}
 		}()
@@ -165,7 +165,7 @@ func curatorRun(config *rest.Config, client *clientv1.Client, clusterName string
 
 		if err = hive.ActivateDeploy(hiveset, clusterName); err != nil {
 			utils.CheckError(utils.RecordFailedCuratorStatusCondition(
-				*client,
+				client,
 				clusterName,
 				jobChoice,
 				v1.ConditionTrue,
@@ -178,7 +178,7 @@ func curatorRun(config *rest.Config, client *clientv1.Client, clusterName string
 	if jobChoice == "monitor" || jobChoice == "activate-and-monitor" {
 		if err := hive.MonitorClusterStatus(config, clusterName, utils.Installing); err != nil {
 			utils.CheckError(utils.RecordFailedCuratorStatusCondition(
-				*client,
+				client,
 				clusterName,
 				jobChoice,
 				v1.ConditionTrue,
@@ -195,7 +195,7 @@ func curatorRun(config *rest.Config, client *clientv1.Client, clusterName string
 
 		if err = importer.MonitorMCInfoImport(dynclient, clusterName); err != nil {
 			utils.CheckError(utils.RecordFailedCuratorStatusCondition(
-				*client,
+				client,
 				clusterName,
 				jobChoice,
 				v1.ConditionTrue,
@@ -211,7 +211,7 @@ func curatorRun(config *rest.Config, client *clientv1.Client, clusterName string
 
 		if err = hive.DestroyClusterDeployment(hiveset, clusterName); err != nil {
 			utils.CheckError(utils.RecordFailedCuratorStatusCondition(
-				*client,
+				client,
 				clusterName,
 				jobChoice,
 				v1.ConditionTrue,
@@ -224,7 +224,7 @@ func curatorRun(config *rest.Config, client *clientv1.Client, clusterName string
 	if jobChoice == "monitor-destroy" {
 		if err := hive.MonitorClusterStatus(config, clusterName, utils.Destroying); err != nil {
 			utils.CheckError(utils.RecordFailedCuratorStatusCondition(
-				*client,
+				client,
 				clusterName,
 				jobChoice,
 				v1.ConditionTrue,
@@ -240,7 +240,7 @@ func curatorRun(config *rest.Config, client *clientv1.Client, clusterName string
 
 		if err = importer.DetachCluster(dynclient, clusterName); err != nil {
 			utils.CheckError(utils.RecordFailedCuratorStatusCondition(
-				*client,
+				client,
 				clusterName,
 				jobChoice,
 				v1.ConditionTrue,
@@ -251,9 +251,9 @@ func curatorRun(config *rest.Config, client *clientv1.Client, clusterName string
 	}
 
 	if jobChoice == "upgrade-cluster" {
-		if err = hive.UpgradeCluster(*client, clusterName, curator); err != nil {
+		if err = hive.UpgradeCluster(client, clusterName, curator); err != nil {
 			utils.CheckError(utils.RecordFailedCuratorStatusCondition(
-				*client,
+				client,
 				clusterName,
 				jobChoice,
 				v1.ConditionTrue,
@@ -264,9 +264,9 @@ func curatorRun(config *rest.Config, client *clientv1.Client, clusterName string
 	}
 
 	if jobChoice == "monitor-upgrade" {
-		if err = hive.MonitorUpgradeStatus(*client, clusterName, curator); err != nil {
+		if err = hive.MonitorUpgradeStatus(client, clusterName, curator); err != nil {
 			utils.CheckError(utils.RecordFailedCuratorStatusCondition(
-				*client,
+				client,
 				clusterName,
 				jobChoice,
 				v1.ConditionTrue,
@@ -278,9 +278,9 @@ func curatorRun(config *rest.Config, client *clientv1.Client, clusterName string
 
 	if jobChoice == "delete-cluster-namespace" {
 
-		if err := updateDeleteClusternamespace(*client, curator); err != nil {
+		if err := updateDeleteClusternamespace(client, curator); err != nil {
 			utils.CheckError(utils.RecordFailedCuratorStatusCondition(
-				*client,
+				client,
 				clusterName,
 				jobChoice,
 				v1.ConditionTrue,
@@ -291,9 +291,9 @@ func curatorRun(config *rest.Config, client *clientv1.Client, clusterName string
 	}
 
 	if jobChoice == "prehook-ansiblejob" || jobChoice == "posthook-ansiblejob" {
-		if err = ansible.Job(*client, curator); err != nil {
+		if err = ansible.Job(client, curator); err != nil {
 			utils.CheckError(utils.RecordFailedCuratorStatusCondition(
-				*client,
+				client,
 				clusterName,
 				jobChoice,
 				v1.ConditionTrue,
@@ -313,12 +313,12 @@ func curatorRun(config *rest.Config, client *clientv1.Client, clusterName string
 		condition = v1.ConditionTrue
 
 		// Remove DesireCuration, CuratingJob, Status from curator resource
-		updateDoneClusterCurator(*client, curator, clusterName)
+		updateDoneClusterCurator(client, curator, clusterName)
 	}
 
 	// Used to signal end of job as well as end of init container
 	utils.CheckError(utils.RecordCurrentStatusCondition(
-		*client,
+		client,
 		clusterName,
 		jobChoice,
 		condition,
