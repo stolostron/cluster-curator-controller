@@ -99,7 +99,7 @@ metadata:
 baseDomain: my.domain.com
 controlPlane:
     hyperthreading: Enabled
-    name: master
+    name: control-plane
     platform:
         aws:
             rootVolume:
@@ -160,7 +160,7 @@ platform:
         hosts:
           - name: 'bm4'
             namespace: 'default'
-            role: master
+            role: management
             bmc:
               address: 'example.com:80'
               disableCertificateVerification: true
@@ -170,7 +170,7 @@ platform:
             hardwareProfile: default
           - name: 'bm5'
             namespace: 'default'
-            role: master
+            role: management
             bmc:
               address: 'example.com:80'
               disableCertificateVerification: true
@@ -180,7 +180,7 @@ platform:
             hardwareProfile: default
           - name: 'bm6'
             namespace: 'default'
-            role: master
+            role: management
             bmc:
               address: 'example.com:80'
               disableCertificateVerification: true
