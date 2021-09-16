@@ -9,7 +9,7 @@ require (
 	github.com/open-cluster-management/library-go v0.0.0-20210208174614-f3ad264f145a
 	github.com/open-cluster-management/multicloud-operators-foundation v0.0.0-20210517144120-9a2433a70bb6
 	github.com/openshift/api v3.9.1-0.20191111211345-a27ff30ebf09+incompatible
-	github.com/openshift/hive v1.1.12
+	github.com/openshift/hive v1.1.16
 	github.com/openshift/hive/apis v0.0.0
 	//	github.com/openshift/api v3.9.1-0.20191111211345-a27ff30ebf09+incompatible
 	github.com/stretchr/testify v1.7.0
@@ -36,7 +36,7 @@ replace (
 	github.com/kubevirt/terraform-provider-kubevirt => github.com/nirarg/terraform-provider-kubevirt v0.0.0-20201222125919-101cee051ed3
 	github.com/metal3-io/baremetal-operator => github.com/openshift/baremetal-operator v0.0.0-20200715132148-0f91f62a41fe
 	github.com/metal3-io/cluster-api-provider-baremetal => github.com/openshift/cluster-api-provider-baremetal v0.0.0-20190821174549-a2a477909c1d
-	github.com/openshift/hive/apis => github.com/openshift/hive/apis v0.0.0-20210802140536-4d8d83dcd464
+	github.com/openshift/hive/apis => github.com/openshift/hive/apis v0.0.0-20210812165704-3dc3c3c7ca4b
 	github.com/terraform-providers/terraform-provider-aws => github.com/openshift/terraform-provider-aws v1.60.1-0.20200630224953-76d1fb4e5699
 	github.com/terraform-providers/terraform-provider-azurerm => github.com/openshift/terraform-provider-azurerm v1.40.1-0.20200707062554-97ea089cc12a
 	github.com/terraform-providers/terraform-provider-ignition/v2 => github.com/community-terraform-providers/terraform-provider-ignition/v2 v2.1.0
