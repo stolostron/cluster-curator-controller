@@ -14,8 +14,6 @@ export VCS_REF     = $(if $(shell git status --porcelain),$(GIT_COMMIT)-$(BUILD_
 
 export CGO_ENABLED  = 0
 export GO111MODULE := on
-export GOOS         = $(shell go env GOOS)
-export GOARCH       = $(ARCH_TYPE)
 export GOPACKAGES   = $(shell go list ./... | grep -v /vendor | grep -v /internal | grep -v /build | grep -v /test | grep -v /controllers)
 
 export PROJECT_DIR            = $(shell 'pwd')
