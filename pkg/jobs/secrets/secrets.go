@@ -9,7 +9,7 @@ import (
 	"gopkg.in/yaml.v3"
 	"k8s.io/klog/v2"
 
-	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/utils"
+	"github.com/stolostron/cluster-curator-controller/pkg/jobs/utils"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"

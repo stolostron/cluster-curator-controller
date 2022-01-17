@@ -6,7 +6,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/utils"
+	"github.com/stolostron/cluster-curator-controller/pkg/jobs/utils"
 	"k8s.io/klog/v2"
 
 	corev1 "k8s.io/api/core/v1"

@@ -1,5 +1,5 @@
 domain: cluster.open-cluster-management.io
-repo: github.com/open-cluster-management/cluster-curator-controller
+repo: github.com/stolostron/cluster-curator-controller
 resources:
 - group: cluster.open-cluster-management.io
   kind: ClusterCurator

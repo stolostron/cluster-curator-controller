@@ -8,9 +8,9 @@ import (
 	"os"
 	"time"
 
-	clustercuratorv1 "github.com/open-cluster-management/cluster-curator-controller/pkg/api/v1beta1"
-	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/utils"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
+	clustercuratorv1 "github.com/stolostron/cluster-curator-controller/pkg/api/v1beta1"
+	"github.com/stolostron/cluster-curator-controller/pkg/jobs/utils"
 	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
