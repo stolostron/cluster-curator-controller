@@ -161,10 +161,3 @@ For more details on job flow within our architecture see our [**swimlane chart**
   ```
 
 - Check the [Security guide](SECURITY.md) if you need to report a security issue.
-
-
-## References
-
-- The `cloudprovider-secret-controller` is part of the `open-cluster-management` community. For more information, visit: [open-cluster-management.io](https://open-cluster-management.io).
-
-

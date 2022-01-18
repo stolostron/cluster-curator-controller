@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	clustercuratorv1 "github.com/open-cluster-management/cluster-curator-controller/pkg/api/v1beta1"
-	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/utils"
+	clustercuratorv1 "github.com/stolostron/cluster-curator-controller/pkg/api/v1beta1"
+	"github.com/stolostron/cluster-curator-controller/pkg/jobs/utils"
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
