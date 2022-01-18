@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/open-cluster-management/cluster-curator-controller/pkg/jobs/utils"
+	"github.com/stolostron/cluster-curator-controller/pkg/jobs/utils"
 	"github.com/stretchr/testify/assert"
 	rbacv1 "k8s.io/api/rbac/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
