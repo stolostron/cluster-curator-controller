@@ -18,14 +18,14 @@ spec:
       - command:
         - "./manager"
         - "-enable-leader-election"
-        image: registry.ci.openshift.org/open-cluster-management/2.3:cluster-curator-controller
+        image: registry.ci.openshift.org/stolostron/2.3:cluster-curator-controller
         env:
         - name: POD_NAME
           valueFrom:
             fieldRef:
               fieldPath: metadata.name
         - name: IMAGE_URI
-          value: registry.ci.openshift.org/open-cluster-management/2.3:cluster-curator-controller
+          value: registry.ci.openshift.org/stolostron/2.3:cluster-curator-controller
         imagePullPolicy: Always
         name: cluster-curator-controller
         resources:
