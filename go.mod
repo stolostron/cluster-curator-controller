@@ -9,7 +9,7 @@ require (
 	github.com/openshift/hive v1.1.16
 	github.com/openshift/hive/apis v0.0.0
 	github.com/stolostron/library-go v0.0.0-20220112062416-536980fdb526
-	github.com/stolostron/multicloud-operators-foundation v1.0.0-2021-10-26-20-16-14.0.20220110023249-172fb944faa9
+	github.com/stolostron/multicloud-operators-foundation v1.0.0-2021-10-26-20-16-14.0.20220119065659-cc30cffdf570
 	//	github.com/openshift/api v3.9.1-0.20191111211345-a27ff30ebf09+incompatible
 	github.com/stretchr/testify v1.7.0
 	gopkg.in/yaml.v2 v2.4.0
