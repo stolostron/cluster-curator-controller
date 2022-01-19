@@ -19,7 +19,7 @@ require (
 	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/klog v1.0.0
 	k8s.io/klog/v2 v2.9.0
-	open-cluster-management.io/api v0.5.0
+	open-cluster-management.io/api v0.5.1-0.20220114083559-8d7cc32bed7b
 	sigs.k8s.io/controller-runtime v0.9.7
 )
 
@@ -76,6 +76,7 @@ replace (
 	github.com/googleapis/gnostic => github.com/googleapis/gnostic v0.4.1 // ensure compatible between controller-runtime and kube-openapi
 	github.com/open-cluster-management/ansiblejob-go-lib => github.com/stolostron/ansiblejob-go-lib v0.1.12
 	golang.org/x/crypto => golang.org/x/crypto v0.0.0-20211202192323-5770296d904e // CVE-2021-43565
+	open-cluster-management.io/api => open-cluster-management.io/api v0.5.1-0.20220114083559-8d7cc32bed7b
 )
 
 replace (
