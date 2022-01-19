@@ -9,7 +9,7 @@ require (
 	github.com/openshift/hive v1.1.16
 	github.com/openshift/hive/apis v0.0.0
 	github.com/stolostron/library-go v0.0.0-20220112062416-536980fdb526
-	github.com/stolostron/multicloud-operators-foundation v1.0.0-2021-10-26-20-16-14.0.20220110023249-172fb944faa9
+	github.com/stolostron/multicloud-operators-foundation v1.0.0-2021-10-26-20-16-14.0.20220119065659-cc30cffdf570
 	//	github.com/openshift/api v3.9.1-0.20191111211345-a27ff30ebf09+incompatible
 	github.com/stretchr/testify v1.7.0
 	gopkg.in/yaml.v2 v2.4.0
@@ -19,7 +19,7 @@ require (
 	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/klog v1.0.0
 	k8s.io/klog/v2 v2.9.0
-	open-cluster-management.io/api v0.5.0
+	open-cluster-management.io/api v0.5.1-0.20220114083559-8d7cc32bed7b
 	sigs.k8s.io/controller-runtime v0.9.7
 )
 
@@ -76,6 +76,7 @@ replace (
 	github.com/googleapis/gnostic => github.com/googleapis/gnostic v0.4.1 // ensure compatible between controller-runtime and kube-openapi
 	github.com/open-cluster-management/ansiblejob-go-lib => github.com/stolostron/ansiblejob-go-lib v0.1.12
 	golang.org/x/crypto => golang.org/x/crypto v0.0.0-20211202192323-5770296d904e // CVE-2021-43565
+	open-cluster-management.io/api => open-cluster-management.io/api v0.5.1-0.20220114083559-8d7cc32bed7b
 )
 
 replace (
