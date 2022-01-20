@@ -7,14 +7,14 @@ import (
 	"errors"
 	"time"
 
-	managedclusterclient "github.com/open-cluster-management/api/client/cluster/clientset/versioned"
-	managedclusterv1 "github.com/open-cluster-management/api/cluster/v1"
 	"github.com/stolostron/cluster-curator-controller/pkg/jobs/utils"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/klog/v2"
+	managedclusterclient "open-cluster-management.io/api/client/cluster/clientset/versioned"
+	managedclusterv1 "open-cluster-management.io/api/cluster/v1"
 )
 
 func MonitorImport(mcset managedclusterclient.Interface, clusterName string) error {

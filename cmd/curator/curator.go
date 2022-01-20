@@ -12,7 +12,6 @@ import (
 
 	"k8s.io/klog/v2"
 
-	"github.com/open-cluster-management/library-go/pkg/config"
 	hiveclient "github.com/openshift/hive/pkg/client/clientset/versioned"
 	clustercuratorv1 "github.com/stolostron/cluster-curator-controller/pkg/api/v1beta1"
 	"github.com/stolostron/cluster-curator-controller/pkg/controller/launcher"
@@ -21,6 +20,7 @@ import (
 	"github.com/stolostron/cluster-curator-controller/pkg/jobs/importer"
 	"github.com/stolostron/cluster-curator-controller/pkg/jobs/secrets"
 	"github.com/stolostron/cluster-curator-controller/pkg/jobs/utils"
+	"github.com/stolostron/library-go/pkg/config"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
