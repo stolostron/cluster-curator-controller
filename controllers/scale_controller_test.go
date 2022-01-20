@@ -1,4 +1,3 @@
-//go:build !skip
 // +build !skip
 
 // Copyright Contributors to the Open Cluster Management project.
@@ -10,13 +9,13 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/stolostron/library-go/pkg/config"
+	managedclusterclient "github.com/open-cluster-management/api/client/cluster/clientset/versioned"
+	managedclusterv1 "github.com/open-cluster-management/api/cluster/v1"
+	"github.com/open-cluster-management/library-go/pkg/config"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	managedclusterclient "open-cluster-management.io/api/client/cluster/clientset/versioned"
-	managedclusterv1 "open-cluster-management.io/api/cluster/v1"
 )
 
 func getManagedClusterTemplate(clusterName string) *managedclusterv1.ManagedCluster {
