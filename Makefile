@@ -126,8 +126,8 @@ push-curator: build-curator
 
 .PHONY: compile-curator
 compile-curator:
+	go mod tidy -compat=1.17
 	go mod vendor
-	go mod tidy
 	GOFLAGS="" go build -o build/_output/curator ./cmd/curator/curator.go
 	GOFLAGS="" go build -o build/_output/manager ./cmd/manager/main.go
 
