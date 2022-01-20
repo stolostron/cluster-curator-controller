@@ -8,6 +8,7 @@ import (
 	"time"
 
 	ajv1 "github.com/open-cluster-management/ansiblejob-go-lib/api/v1alpha1"
+	"github.com/open-cluster-management/api/client/cluster/clientset/versioned/scheme"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 	clustercuratorv1 "github.com/stolostron/cluster-curator-controller/pkg/api/v1beta1"
 	"github.com/stolostron/cluster-curator-controller/pkg/jobs/utils"
@@ -17,7 +18,6 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"open-cluster-management.io/api/client/cluster/clientset/versioned/scheme"
 	clientfake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 

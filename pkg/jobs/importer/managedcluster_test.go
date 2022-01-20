@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/open-cluster-management/api/client/cluster/clientset/versioned/fake"
+	managedclusterv1 "github.com/open-cluster-management/api/cluster/v1"
 	"github.com/stolostron/cluster-curator-controller/pkg/jobs/utils"
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -13,8 +15,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	dynfake "k8s.io/client-go/dynamic/fake"
-	"open-cluster-management.io/api/client/cluster/clientset/versioned/fake"
-	managedclusterv1 "open-cluster-management.io/api/cluster/v1"
 )
 
 const ClusterName = "my-cluster"
