@@ -79,25 +79,40 @@ replace (
 	open-cluster-management.io/api => open-cluster-management.io/api v0.5.1-0.20220114083559-8d7cc32bed7b
 )
 
+//(hive dependency) from ocp installer
 replace (
-	github.com/Azure/go-autorest/autorest/adal => github.com/Azure/go-autorest/autorest/adal v0.8.2
-	github.com/Azure/go-autorest/autorest/azure/cli => github.com/Azure/go-autorest/autorest/azure/cli v0.3.1
-	github.com/Azure/go-autorest/autorest/date => github.com/Azure/go-autorest/autorest/date v0.2.0
-	github.com/Azure/go-autorest/autorest/validation => github.com/Azure/go-autorest/autorest/validation v0.2.1-0.20191028180845-3492b2aff503
-	github.com/apparentlymart/go-cidr => github.com/apparentlymart/go-cidr v1.0.1
-	github.com/go-openapi/spec => github.com/go-openapi/spec v0.19.0
-	github.com/hashicorp/go-plugin => github.com/hashicorp/go-plugin v1.2.2
+	github.com/IBM-Cloud/terraform-provider-ibm => github.com/openshift/terraform-provider-ibm v1.26.2-openshift-2
 	github.com/kubevirt/terraform-provider-kubevirt => github.com/nirarg/terraform-provider-kubevirt v0.0.0-20201222125919-101cee051ed3
-	github.com/metal3-io/baremetal-operator => github.com/openshift/baremetal-operator v0.0.0-20200715132148-0f91f62a41fe
-	github.com/metal3-io/cluster-api-provider-baremetal => github.com/openshift/cluster-api-provider-baremetal v0.0.0-20190821174549-a2a477909c1d
-	github.com/openshift/hive/apis => github.com/openshift/hive/apis v0.0.0-20220210162524-665b268161d8
-	github.com/terraform-providers/terraform-provider-aws => github.com/openshift/terraform-provider-aws v1.60.1-0.20200630224953-76d1fb4e5699
-	github.com/terraform-providers/terraform-provider-azurerm => github.com/openshift/terraform-provider-azurerm v1.40.1-0.20200707062554-97ea089cc12a
+	github.com/metal3-io/baremetal-operator => github.com/openshift/baremetal-operator v0.0.0-20211201170610-92ffa60c683d
+	github.com/metal3-io/baremetal-operator/apis => github.com/openshift/baremetal-operator/apis v0.0.0-20211201170610-92ffa60c683d
+	github.com/metal3-io/baremetal-operator/pkg/hardwareutils => github.com/openshift/baremetal-operator/pkg/hardwareutils v0.0.0-20211201170610-92ffa60c683d
+	github.com/terraform-providers/terraform-provider-aws => github.com/openshift/terraform-provider-aws v1.60.1-0.20211215220004-24df6d73af46
+	github.com/terraform-providers/terraform-provider-azurerm => github.com/openshift/terraform-provider-azurerm v1.44.1-0.20210224232508-7509319df0f4
+	github.com/terraform-providers/terraform-provider-azurestack => github.com/openshift/terraform-provider-azurestack v0.10.0-openshift
 	github.com/terraform-providers/terraform-provider-ignition/v2 => github.com/community-terraform-providers/terraform-provider-ignition/v2 v2.1.0
+	sigs.k8s.io/cluster-api-provider-aws => github.com/openshift/cluster-api-provider-aws v0.2.1-0.20210121023454-5ffc5f422a80
+	sigs.k8s.io/cluster-api-provider-azure => github.com/openshift/cluster-api-provider-azure v0.1.0-alpha.3.0.20210626224711-5d94c794092f
+	sigs.k8s.io/cluster-api-provider-openstack => github.com/openshift/cluster-api-provider-openstack v0.0.0-20211111204942-611d320170af
+)
+
+//(hive dependency) from installer as part of https://github.com/openshift/installer/pull/4350
+// Prevent the following modules from upgrading version as result of terraform-provider-kubernetes module
+// The following modules need to be locked to compile correctly with terraform-provider-azure and terraform-provider-google
+replace (
+	github.com/IBM/vpc-go-sdk => github.com/IBM/vpc-go-sdk v0.7.0
+	github.com/apparentlymart/go-cidr => github.com/apparentlymart/go-cidr v1.0.1
+	github.com/go-openapi/errors => github.com/go-openapi/errors v0.19.2
+	github.com/go-openapi/spec => github.com/go-openapi/spec v0.19.4
+	github.com/go-openapi/validate => github.com/go-openapi/validate v0.19.8
+	github.com/hashicorp/go-plugin => github.com/hashicorp/go-plugin v1.2.2
 	github.com/ulikunitz/xz => github.com/ulikunitz/xz v0.5.7
 	google.golang.org/api => google.golang.org/api v0.25.0
 	google.golang.org/genproto => google.golang.org/genproto v0.0.0-20200526211855-cb27e3aa2013
-	google.golang.org/grpc => google.golang.org/grpc v1.29.1
+	google.golang.org/grpc => google.golang.org/grpc v1.33.0
+)
+
+replace (
+	github.com/openshift/hive/apis => github.com/openshift/hive/apis v0.0.0-20220210162524-665b268161d8
 	k8s.io/api => k8s.io/api v0.23.3
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.23.3
 	k8s.io/apimachinery => k8s.io/apimachinery v0.23.3
@@ -120,7 +135,4 @@ replace (
 	k8s.io/metrics => k8s.io/metrics v0.23.3
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.23.3
 	kubevirt.io/client-go => kubevirt.io/client-go v0.29.0
-	sigs.k8s.io/cluster-api-provider-aws => github.com/openshift/cluster-api-provider-aws v0.2.1-0.20201022175424-d30c7a274820
-	sigs.k8s.io/cluster-api-provider-azure => github.com/openshift/cluster-api-provider-azure v0.1.0-alpha.3.0.20201016155852-4090a6970205
-	sigs.k8s.io/cluster-api-provider-openstack => github.com/openshift/cluster-api-provider-openstack v0.0.0-20201116051540-155384b859c5
 )
