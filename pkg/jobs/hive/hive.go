@@ -414,24 +414,25 @@ func MonitorUpgradeStatus(client clientv1.Client, clusterName string, curator *c
 	upstream := curator.Spec.Upgrade.Upstream
 	resultmcview := managedclusterviewv1beta1.ManagedClusterView{}
 
-	var timeoutErr error
+	var getErr, timeoutErr error
 	isChannelUpstreamUpdate := false
 	for i := 0; i < UpgradeAttempts; i++ {
 
-		getErr := errors.New("Failed to get managedclusterview")
-		if err := client.Get(context.TODO(), types.NamespacedName{
+		if getErr = client.Get(context.TODO(), types.NamespacedName{
 			Namespace: clusterName,
 			Name:      clusterName,
-		}, &resultmcview); err != nil {
-			return err
+		}, &resultmcview); getErr != nil {
+			// sleep and keep on retrying
+			time.Sleep(utils.PauseSixtySeconds)
+			continue
 		}
 
 		labels := resultmcview.ObjectMeta.GetLabels()
 		if len(labels) == 0 {
-			return getErr
+			return errors.New("Failed to get managedclusterview")
 		}
 		if _, ok := labels[MCVUpgradeLabel]; !ok {
-			return getErr
+			return errors.New("Failed to get managedclusterview")
 		}
 
 		resultClusterVersion := resultmcview.Status.Result
@@ -490,6 +491,10 @@ func MonitorUpgradeStatus(client clientv1.Client, clusterName string, curator *c
 
 	if err := client.Delete(context.TODO(), &resultmcview); err != nil {
 		return err
+	}
+
+	if getErr != nil {
+		return getErr
 	}
 
 	return timeoutErr
