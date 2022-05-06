@@ -87,6 +87,7 @@ replace (
 	github.com/Azure/go-autorest/autorest/validation => github.com/Azure/go-autorest/autorest/validation v0.2.1-0.20191028180845-3492b2aff503
 	github.com/apparentlymart/go-cidr => github.com/apparentlymart/go-cidr v1.0.1
 	github.com/go-openapi/spec => github.com/go-openapi/spec v0.19.0
+	github.com/hashicorp/go-getter => github.com/hashicorp/go-getter v1.5.2 // CVE-2022-29810
 	github.com/hashicorp/go-plugin => github.com/hashicorp/go-plugin v1.2.2
 	github.com/kubevirt/terraform-provider-kubevirt => github.com/nirarg/terraform-provider-kubevirt v0.0.0-20201222125919-101cee051ed3
 	github.com/metal3-io/baremetal-operator => github.com/openshift/baremetal-operator v0.0.0-20200715132148-0f91f62a41fe
