@@ -539,6 +539,28 @@ func TestAnsibleJobExtraVars(t *testing.T) {
 
 }
 
+func TestRunAnsibleJobWithInventory(t *testing.T) {
+
+	cc := getClusterCurator()
+	cc.Annotations = map[string]string{
+		"ansible.curator.open-cluster-management.io/inventory": "my-cluster01",
+	}
+
+	t.Logf("Test %v", POSTHOOK)
+	os.Setenv(EnvJobType, POSTHOOK)
+
+	s.AddKnownTypes(ajv1.SchemeBuilder.GroupVersion, &ajv1.AnsibleJob{})
+	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
+	s.AddKnownTypes(hivev1.SchemeBuilder.GroupVersion, &hivev1.ClusterDeployment{}, &hivev1.MachinePool{})
+	s.AddKnownTypes(corev1.SchemeGroupVersion, &corev1.Secret{})
+	client := clientfake.NewFakeClientWithScheme(s, cc, genClusterDeployment(), genMachinePool(), genInstallConfigSecret())
+
+	aJob, err := RunAnsibleJob(client, cc, POSTHOOK, cc.Spec.Install.Posthook[0], "toweraccess")
+	assert.Nil(t, err, "err is nil when job is started")
+	assert.Equal(t, "my-cluster01", aJob.Object["spec"].(map[string]interface{})["inventory"], "inventory should be my-cluster01")
+	t.Logf("Fake ansibleJob launched with name: %v", aJob.GetName())
+}
+
 /*
 func TestMonitorAnsibleRetryForLoop(t *testing.T) {
 

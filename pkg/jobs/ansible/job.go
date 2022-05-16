@@ -27,6 +27,7 @@ const PREHOOK = "prehook"
 const POSTHOOK = "posthook"
 const MPSUFFIX = "-worker"
 const ICSUFFIX = "-install-config"
+const ANSIBLEINVENTORY = "ansible.curator.open-cluster-management.io/inventory"
 
 var ansibleJobGVR = schema.GroupVersionResource{
 	Group: "tower.ansible.com", Version: "v1alpha1", Resource: "ansiblejobs"}
@@ -302,6 +303,10 @@ func RunAnsibleJob(
 		}
 	} else {
 		ansibleJob.Object["spec"].(map[string]interface{})["extra_vars"].(map[string]interface{})["install_config"] = mp
+	}
+
+	if curator.Annotations != nil && curator.Annotations[ANSIBLEINVENTORY] != "" {
+		ansibleJob.Object["spec"].(map[string]interface{})["inventory"] = curator.Annotations[ANSIBLEINVENTORY]
 	}
 
 	klog.V(0).Info("Creating AnsibleJob " + ansibleJob.GetName() + " in namespace " + namespace)
