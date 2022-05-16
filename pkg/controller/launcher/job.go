@@ -202,7 +202,6 @@ func getBatchJob(clusterName string, imageURI string, curator clustercuratorv1.C
 				Annotations: map[string]string{
 					DeleteClusterDeployment: "Initiates uninstall of cluster",
 					MonitorDestroy:          "Monitor uninstall of cluster",
-					DeleteClusterNamespace:  "Delete the cluster Namespace when complete",
 					DoneDoneDone:            "Cluster Curator job has completed",
 				},
 			},
@@ -225,13 +224,6 @@ func getBatchJob(clusterName string, imageURI string, curator clustercuratorv1.C
 								Name:            MonitorDestroy,
 								Image:           imageURI,
 								Command:         append([]string{CurCmd, MonitorDestroy}),
-								ImagePullPolicy: corev1.PullIfNotPresent,
-								Resources:       resourceSettings,
-							},
-							corev1.Container{
-								Name:            DeleteClusterNamespace,
-								Image:           imageURI,
-								Command:         append([]string{CurCmd, DeleteClusterNamespace}),
 								ImagePullPolicy: corev1.PullIfNotPresent,
 								Resources:       resourceSettings,
 							},
