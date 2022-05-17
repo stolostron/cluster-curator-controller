@@ -307,6 +307,9 @@ func RunAnsibleJob(
 
 	if curator.Annotations != nil && curator.Annotations[ANSIBLEINVENTORY] != "" {
 		ansibleJob.Object["spec"].(map[string]interface{})["inventory"] = curator.Annotations[ANSIBLEINVENTORY]
+		ansibleJob.Object["spec"].(map[string]interface{})["extra_vars"].(map[string]interface{})["managedcluster_name"] = curator.Annotations[ANSIBLEINVENTORY]
+	} else {
+		ansibleJob.Object["spec"].(map[string]interface{})["extra_vars"].(map[string]interface{})["managedcluster_name"] = curator.Name
 	}
 
 	klog.V(0).Info("Creating AnsibleJob " + ansibleJob.GetName() + " in namespace " + namespace)
