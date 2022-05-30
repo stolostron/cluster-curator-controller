@@ -736,3 +736,53 @@ func TestUpgradeAnsibleJobExtraVars(t *testing.T) {
 		})
 	}
 }
+
+func TestInventory(t *testing.T) {
+	tests := []struct {
+		name                 string
+		inventory            string
+		expectedInventory    bool
+		expectedInventoryVar string
+	}{
+		{
+			name:                 "configure inventory",
+			inventory:            ClusterName,
+			expectedInventory:    true,
+			expectedInventoryVar: ClusterName,
+		},
+		{
+			name:              "configure no inventory",
+			inventory:         "",
+			expectedInventory: false,
+		},
+	}
+
+	os.Setenv(EnvJobType, POSTHOOK)
+
+	s.AddKnownTypes(ajv1.SchemeBuilder.GroupVersion, &ajv1.AnsibleJob{})
+	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
+	s.AddKnownTypes(hivev1.SchemeBuilder.GroupVersion, &hivev1.ClusterDeployment{}, &hivev1.MachinePool{})
+	s.AddKnownTypes(corev1.SchemeGroupVersion, &corev1.Secret{})
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cc := getClusterCurator()
+			if test.inventory != "" {
+				cc.Spec.Inventory = test.inventory
+			}
+
+			client := clientfake.NewFakeClientWithScheme(s, cc, genClusterDeployment(), genMachinePool(), genInstallConfigSecret())
+			aJob, err := RunAnsibleJob(client, cc, POSTHOOK, cc.Spec.Install.Posthook[0], "toweraccess")
+			assert.Nil(t, err, "err is nil when job is started")
+
+			extraVars := aJob.Object["spec"].(map[string]interface{})["extra_vars"].(map[string]interface{})
+			assert.NotNil(t, extraVars, "not nil, extra_vars")
+
+			_, existed := extraVars["inventory"]
+			assert.Equal(t, existed, test.expectedInventory)
+			if test.expectedInventory {
+				assert.Equal(t, extraVars["inventory"], test.expectedInventoryVar)
+			}
+		})
+	}
+}

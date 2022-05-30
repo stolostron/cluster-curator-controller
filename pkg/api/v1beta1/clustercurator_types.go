@@ -35,6 +35,9 @@ type ClusterCuratorSpec struct {
 
 	// Kubernetes job resource created for curation of a cluster
 	CuratingJob string `json:"curatorJob,omitempty"`
+
+	// Inventory values are supplied for use with the pre/post jobs.
+	Inventory string `json:"inventory,omitempty"`
 }
 
 type Hook struct {
