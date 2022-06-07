@@ -11,6 +11,7 @@ import (
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 	clustercuratorv1 "github.com/stolostron/cluster-curator-controller/pkg/api/v1beta1"
 	"github.com/stolostron/cluster-curator-controller/pkg/jobs/utils"
+	managedclusterinfov1beta1 "github.com/stolostron/multicloud-operators-foundation/pkg/apis/internal.open-cluster-management.io/v1beta1"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -18,6 +19,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"open-cluster-management.io/api/client/cluster/clientset/versioned/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	clientfake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
@@ -495,7 +497,7 @@ func TestAnsibleJobExtraVars(t *testing.T) {
 	assert.NotNil(t, extraVars, "not nil, extra_vars")
 	t.Logf("extraVars: %v", extraVars)
 
-	//Test all the expected keys
+	// Test all the expected keys
 	assert.NotNil(t, extraVars["cluster_deployment"], "nil when cluster_deployment missing")
 	assert.NotNil(t, extraVars["install_config"], "nil when install_config missing")
 
@@ -582,3 +584,155 @@ func TestMonitorAnsibleRetryForLoopJobResourceObjectNil(t *testing.T) {
 
 	assert.Panics(t, func() { MonitorAnsibleJob(dynclient, ansibleJob, nil) }, "Panics when For loop times out, no condition status")
 }*/
+
+func getUpgradeClusterCurator() *clustercuratorv1.ClusterCurator {
+	return &clustercuratorv1.ClusterCurator{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      ClusterName,
+			Namespace: ClusterName,
+		},
+		Spec: clustercuratorv1.ClusterCuratorSpec{
+			DesiredCuration: "upgrade",
+			Upgrade: clustercuratorv1.UpgradeHooks{
+				Prehook: []clustercuratorv1.Hook{
+					clustercuratorv1.Hook{
+						Name: "Service now App Update",
+						ExtraVars: &runtime.RawExtension{
+							Raw: []byte(`{"variable1": "1","variable2": "2"}`),
+						},
+					},
+				},
+				Posthook: []clustercuratorv1.Hook{
+					clustercuratorv1.Hook{
+						Name: "Service now App Update",
+						ExtraVars: &runtime.RawExtension{
+							Raw: []byte(`{"variable1": "3","variable2": "4"}`),
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func genManagedClusterInfo() *managedclusterinfov1beta1.ManagedClusterInfo {
+	return &managedclusterinfov1beta1.ManagedClusterInfo{
+		TypeMeta: v1.TypeMeta{},
+		ObjectMeta: v1.ObjectMeta{
+			Name:      ClusterName,
+			Namespace: ClusterName,
+		},
+		Spec: managedclusterinfov1beta1.ClusterInfoSpec{
+			LoggingCA:      nil,
+			MasterEndpoint: "https://managedclusterapiserver:6443",
+		},
+		Status: managedclusterinfov1beta1.ClusterInfoStatus{
+			Conditions:  nil,
+			Version:     "1.19.1",
+			KubeVendor:  "Openshift",
+			CloudVendor: "AWS",
+			ClusterID:   "abc",
+			DistributionInfo: managedclusterinfov1beta1.DistributionInfo{
+				Type: "OCP",
+				OCP: managedclusterinfov1beta1.OCPDistributionInfo{
+					Version:                 "OCP4.1",
+					AvailableUpdates:        nil,
+					DesiredVersion:          "",
+					UpgradeFailed:           false,
+					Channel:                 "stable",
+					Desired:                 managedclusterinfov1beta1.OCPVersionRelease{},
+					VersionAvailableUpdates: nil,
+					VersionHistory:          nil,
+					ManagedClusterClientConfig: managedclusterinfov1beta1.ClientConfig{
+						URL:      "https://managedclusterapiserver:6443",
+						CABundle: []byte("abc"),
+					},
+				},
+			},
+			ConsoleURL:      "https://console.managedclusterapiserver:6443",
+			NodeList:        nil,
+			LoggingEndpoint: corev1.EndpointAddress{},
+			LoggingPort:     corev1.EndpointPort{},
+		},
+	}
+}
+
+func TestUpgradeAnsibleJobExtraVars(t *testing.T) {
+	tests := []struct {
+		name                   string
+		curation               string
+		clusterCurator         *clustercuratorv1.ClusterCurator
+		managedClusterInfo     *managedclusterinfov1beta1.ManagedClusterInfo
+		expectedClusterInfoVar bool
+	}{
+		{
+			name:                   "upgrade has clusterInfo",
+			curation:               "upgrade",
+			clusterCurator:         getUpgradeClusterCurator(),
+			managedClusterInfo:     genManagedClusterInfo(),
+			expectedClusterInfoVar: true,
+		},
+		{
+			name:                   "upgrade has no clusterInfo",
+			curation:               "upgrade",
+			clusterCurator:         getUpgradeClusterCurator(),
+			managedClusterInfo:     nil,
+			expectedClusterInfoVar: false,
+		},
+		{
+			name:                   "install has clusterInfo",
+			curation:               "install",
+			clusterCurator:         getClusterCurator(),
+			managedClusterInfo:     genManagedClusterInfo(),
+			expectedClusterInfoVar: false,
+		},
+	}
+
+	os.Setenv(EnvJobType, POSTHOOK)
+
+	s.AddKnownTypes(ajv1.SchemeBuilder.GroupVersion, &ajv1.AnsibleJob{})
+	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
+	s.AddKnownTypes(hivev1.SchemeBuilder.GroupVersion, &hivev1.ClusterDeployment{}, &hivev1.MachinePool{})
+	s.AddKnownTypes(corev1.SchemeGroupVersion, &corev1.Secret{})
+	s.AddKnownTypes(managedclusterinfov1beta1.SchemeBuilder.GroupVersion, &managedclusterinfov1beta1.ManagedClusterInfo{})
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var fakeClient client.WithWatch
+			if test.managedClusterInfo != nil {
+				fakeClient = clientfake.NewFakeClientWithScheme(s, test.clusterCurator, genClusterDeployment(), genMachinePool(), genInstallConfigSecret(), test.managedClusterInfo)
+			} else {
+				fakeClient = clientfake.NewFakeClientWithScheme(s, test.clusterCurator, genClusterDeployment(), genMachinePool(), genInstallConfigSecret())
+			}
+
+			var hook clustercuratorv1.Hook
+			switch test.curation {
+			case "install":
+				hook = test.clusterCurator.Spec.Install.Posthook[0]
+			case "upgrade":
+				hook = test.clusterCurator.Spec.Upgrade.Posthook[0]
+			}
+			aJob, err := RunAnsibleJob(fakeClient, test.clusterCurator, POSTHOOK, hook, "toweraccess")
+			assert.Nil(t, err, "err is nil when job is started")
+
+			extraVars := aJob.Object["spec"].(map[string]interface{})["extra_vars"].(map[string]interface{})
+			assert.NotNil(t, extraVars, "not nil, extra_vars")
+			t.Logf("extraVars: %v", extraVars)
+
+			_, existed := extraVars["cluster_info"]
+			assert.Equal(t, existed, test.expectedClusterInfoVar)
+
+			if test.expectedClusterInfoVar {
+				// clusterinfo
+				assert.NotNil(t, extraVars["cluster_info"], "nil when cluster_info missing")
+				assert.NotNil(t, extraVars["cluster_info"].(map[string]interface{})["distributionInfo"], "should not be nil as we want to include this")
+				assert.Nil(t, extraVars["cluster_info"].(map[string]interface{})["distributionInfo"].(map[string]interface{})["managedClusterClientConfig"], "should be nil as we don't want to include this")
+				assert.NotNil(t, extraVars["cluster_info"].(map[string]interface{})["clusterName"], "should not be nil as we want to include this")
+				assert.NotNil(t, extraVars["cluster_info"].(map[string]interface{})["apiServer"], "should not be nil as we want to include this")
+				assert.NotNil(t, extraVars["cluster_info"].(map[string]interface{})["kubeVendor"], "should not be nil as we want to include this")
+				assert.NotNil(t, extraVars["cluster_info"].(map[string]interface{})["cloudVendor"], "should not be nil as we want to include this")
+				assert.NotNil(t, extraVars["cluster_info"].(map[string]interface{})["clusterID"], "should not be nil as we want to include this")
+			}
+
+		})
+	}
+}

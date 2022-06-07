@@ -11,6 +11,7 @@ import (
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 	clustercuratorv1 "github.com/stolostron/cluster-curator-controller/pkg/api/v1beta1"
 	"github.com/stolostron/cluster-curator-controller/pkg/jobs/utils"
+	managedclusterinfov1beta1 "github.com/stolostron/multicloud-operators-foundation/pkg/apis/internal.open-cluster-management.io/v1beta1"
 	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -37,7 +38,7 @@ func Job(client client.Client, curator *clustercuratorv1.ClusterCurator) error {
 		return errors.New("Missing JOB_TYPE environment parameter, use \"prehook\" or \"posthook\"")
 	}
 
-	//var hooks clustercuratorv1.Hooks
+	// var hooks clustercuratorv1.Hooks
 	var prehook []clustercuratorv1.Hook
 	var posthook []clustercuratorv1.Hook
 	var towerauthsecret string
@@ -206,6 +207,40 @@ func getInstallConfig(client client.Client, clusterName string) (map[string]inte
 	return subset, nil
 }
 
+func getManagedClusterInfo(client client.Client, clusterName string) (map[string]interface{}, error) {
+	managedClusterInfo := managedclusterinfov1beta1.ManagedClusterInfo{}
+	if err := client.Get(context.TODO(), types.NamespacedName{
+		Namespace: clusterName,
+		Name:      clusterName,
+	}, &managedClusterInfo); err != nil {
+		return nil, err
+	}
+
+	info, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&managedClusterInfo)
+	if err != nil {
+		return nil, err
+	}
+
+	clusterInfo := map[string]interface{}{}
+	clusterInfo["clusterName"] = managedClusterInfo.GetName()
+	if managedClusterInfo.Spec.MasterEndpoint != "" {
+		clusterInfo["apiServer"] = managedClusterInfo.Spec.MasterEndpoint
+	}
+	clusterInfo["kubeVendor"] = managedClusterInfo.Status.KubeVendor
+	clusterInfo["cloudVendor"] = managedClusterInfo.Status.CloudVendor
+	clusterInfo["kubeVersion"] = managedClusterInfo.Status.Version
+	if managedClusterInfo.Status.ClusterID != "" {
+		clusterInfo["clusterID"] = managedClusterInfo.Status.ClusterID
+	}
+	if managedClusterInfo.Status.DistributionInfo.Type == managedclusterinfov1beta1.DistributionTypeOCP {
+		clusterInfo["distributionInfo"] = info["status"].(map[string]interface{})["distributionInfo"].(map[string]interface{})["ocp"]
+		// exclude the managedClusterClientConfig since there is ca in it.
+		delete(clusterInfo["distributionInfo"].(map[string]interface{}), "managedClusterClientConfig")
+	}
+
+	return clusterInfo, nil
+}
+
 // Not currently used, represents an OPT-IN approach
 func parsePlatform(m interface{}) interface{} {
 
@@ -302,6 +337,19 @@ func RunAnsibleJob(
 		}
 	} else {
 		ansibleJob.Object["spec"].(map[string]interface{})["extra_vars"].(map[string]interface{})["install_config"] = mp
+	}
+
+	if curator.Spec.DesiredCuration == "upgrade" {
+		mcl, err := getManagedClusterInfo(client, namespace)
+		if err != nil {
+			if k8serrors.IsNotFound(err) {
+				klog.Warning("Did not find managedClusterInfo")
+			} else {
+				return nil, err
+			}
+		} else {
+			ansibleJob.Object["spec"].(map[string]interface{})["extra_vars"].(map[string]interface{})["cluster_info"] = mcl
+		}
 	}
 
 	klog.V(0).Info("Creating AnsibleJob " + ansibleJob.GetName() + " in namespace " + namespace)
