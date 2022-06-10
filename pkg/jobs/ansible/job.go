@@ -162,19 +162,20 @@ func getClusterDeployment(client client.Client, clusterName string) (map[string]
 	return runtime.DefaultUnstructuredConverter.ToUnstructured(&cd)
 }
 
-// // Retreive the Machine Pool for use in the extra_vars
+// Retreive the Machine Pool for use in the extra_vars
 // func getMachinePool(client client.Client, clusterName string) (map[string]interface{}, error) {
 // 	mp := hivev1.MachinePool{}
-
+//
 // 	if err := client.Get(context.Background(), types.NamespacedName{
 // 		Namespace: clusterName,
 // 		Name:      clusterName + MPSUFFIX,
 // 	}, &mp); err != nil {
 // 		return nil, err
 // 	}
-
+//
 // 	return runtime.DefaultUnstructuredConverter.ToUnstructured(&mp)
 // }
+
 // Extract the control, compute and networking keys from the install config. This skips sensitive values
 func getInstallConfig(client client.Client, clusterName string) (map[string]interface{}, error) {
 	ic := corev1.Secret{}
@@ -242,42 +243,42 @@ func getManagedClusterInfo(client client.Client, clusterName string) (map[string
 
 // Not currently used, represents an OPT-IN approach
 // func parsePlatform(m interface{}) interface{} {
-
+//
 // 	newMap := utils.ConvertMap(m).(map[string]interface{})
 // 	ret := map[string]interface{}{}
-
+//
 // 	for platformType, _ := range newMap {
-
+//
 // 		klog.V(4).Infof("platformType: %v", platformType)
-
+//
 // 		if platformType == "vsphere" {
 // 			ret[platformType] = map[string]interface{}{}
-
+//
 // 			for key, value := range newMap[platformType].(map[string]interface{}) {
-
+//
 // 				// Makes it easy to read and skip additional keys
 // 				switch key {
-
+//
 // 				// vmware
 // 				case "vCenter", "datacenter", "defaultDatastore", "cluster", "apiVIP",
 // 					"ingressVIP", "network":
-
+//
 // 					klog.V(4).Infof("key: value %v: %v", key, value)
 // 					ret[platformType].(map[string]interface{})[key] = value
 // 				}
 // 			}
 // 		} else if platformType == "baremetal" {
 // 			ret[platformType] = map[string]interface{}{}
-
+//
 // 			for key, value := range newMap[platformType].(map[string]interface{}) {
-
+//
 // 				// Makes it easy to read and skip additional keys
 // 				switch key {
-
+//
 // 				// vmware
 // 				case "libvirtURI", "provisioningNetworkCIDR", "provisioningNetworkInterface", "provisioningBridge", "externalBridge",
 // 					"apiVIP", "ingressVIP", "bootstrapOSImage", "clusterOSImage":
-
+//
 // 					klog.V(4).Infof("key: value %v: %v", key, value)
 // 					ret[platformType].(map[string]interface{})[key] = value
 // 				}
