@@ -76,26 +76,116 @@ func TestGetBatchJobImageSHA(t *testing.T) {
 
 // Use the default URI
 func TestGetBatchJobImageDefault(t *testing.T) {
+	testcases := []struct {
+		name           string
+		clusterCurator clustercuratorv1.ClusterCurator
+		verify         func(b *batchv1.Job)
+	}{
+		{
+			name: "install",
+			clusterCurator: clustercuratorv1.ClusterCurator{
+				ObjectMeta: v1.ObjectMeta{Name: clusterName, Namespace: clusterName},
+				Spec: clustercuratorv1.ClusterCuratorSpec{
+					ProviderCredentialPath: "default/provider-secret",
+					DesiredCuration:        "install",
+				},
+			},
+			verify: func(batchJobObj *batchv1.Job) {
+				t.Logf("Check image is applied correctly %v", imageURI)
+				uri := imageURI
 
-	clusterCurator := clustercuratorv1.ClusterCurator{
-		ObjectMeta: v1.ObjectMeta{Name: clusterName, Namespace: clusterName},
-		Spec: clustercuratorv1.ClusterCuratorSpec{
-			ProviderCredentialPath: "default/provider-secret",
-			DesiredCuration:        "install",
+				t.Log("Access the first initContainer")
+				initContianer := batchJobObj.Spec.Template.Spec.InitContainers[0]
+
+				if initContianer.Image != uri {
+					t.Fatalf("The initContainer.image did not have the correct URI %v, expected %v", initContianer.Image, uri)
+				}
+			},
+		},
+		{
+			name: "install with prehook",
+			clusterCurator: clustercuratorv1.ClusterCurator{
+				ObjectMeta: v1.ObjectMeta{Name: clusterName, Namespace: clusterName},
+				Spec: clustercuratorv1.ClusterCuratorSpec{
+					ProviderCredentialPath: "default/provider-secret",
+					DesiredCuration:        "install",
+					Install: clustercuratorv1.Hooks{
+						Prehook: []clustercuratorv1.Hook{
+							{
+								Name: "fake hook",
+							},
+						},
+					},
+				},
+			},
+			verify: func(batchJobObj *batchv1.Job) {
+				for _, ic := range batchJobObj.Spec.Template.Spec.InitContainers {
+					if ic.Name == PreAJob {
+						return
+					}
+				}
+				t.Fatalf("The prehook initContainer was not found")
+			},
+		},
+		{
+			name: "install with posthook",
+			clusterCurator: clustercuratorv1.ClusterCurator{
+				ObjectMeta: v1.ObjectMeta{Name: clusterName, Namespace: clusterName},
+				Spec: clustercuratorv1.ClusterCuratorSpec{
+					ProviderCredentialPath: "default/provider-secret",
+					DesiredCuration:        "install",
+					Install: clustercuratorv1.Hooks{
+						Posthook: []clustercuratorv1.Hook{
+							{
+								Name: "fake hook",
+							},
+						},
+					},
+				},
+			},
+			verify: func(batchJobObj *batchv1.Job) {
+				for _, ic := range batchJobObj.Spec.Template.Spec.InitContainers {
+					if ic.Name == PostAJob {
+						return
+					}
+				}
+				t.Fatalf("The posthook initContainer was not found")
+			},
+		},
+		{
+			name: "upgrade",
+			clusterCurator: clustercuratorv1.ClusterCurator{
+				ObjectMeta: v1.ObjectMeta{Name: clusterName, Namespace: clusterName},
+				Spec: clustercuratorv1.ClusterCuratorSpec{
+					ProviderCredentialPath: "default/provider-secret",
+					DesiredCuration:        "upgrade",
+				},
+			},
+			verify: func(batchJobObj *batchv1.Job) {
+				if _, ok := batchJobObj.ObjectMeta.Annotations[UpgradeCluster]; !ok {
+					t.Fatal("The upgrade annotation was not set")
+				}
+			},
+		},
+		{
+			name: "destroy",
+			clusterCurator: clustercuratorv1.ClusterCurator{
+				ObjectMeta: v1.ObjectMeta{Name: clusterName, Namespace: clusterName},
+				Spec: clustercuratorv1.ClusterCuratorSpec{
+					ProviderCredentialPath: "default/provider-secret",
+					DesiredCuration:        "destroy",
+				},
+			},
+			verify: func(batchJobObj *batchv1.Job) {
+				if _, ok := batchJobObj.ObjectMeta.Annotations[DeleteClusterDeployment]; !ok {
+					t.Fatal("The destroy annotation was not set")
+				}
+			},
 		},
 	}
 
-	t.Log("Create a batchJobObj with no sha256 or URI")
-	batchJobObj := getBatchJob(clusterName, imageURI, clusterCurator)
-
-	t.Logf("Check image is applied correclty %v", imageURI)
-	uri := imageURI
-
-	t.Log("Access the first initContainer")
-	initContianer := batchJobObj.Spec.Template.Spec.InitContainers[0]
-
-	if initContianer.Image != uri {
-		t.Fatalf("The initContainer.image did not have the correct URI %v, expected %v", initContianer.Image, uri)
+	for _, c := range testcases {
+		c.verify(getBatchJob(clusterName, imageURI, c.clusterCurator))
 	}
 }
 
@@ -222,7 +312,6 @@ func TestCreateLauncherOverrideJob(t *testing.T) {
 
 // Test launcher with an Invalid overrideJob
 func TestCreateLauncherInvalidOverrideJob(t *testing.T) {
-
 	clusterCurator := &clustercuratorv1.ClusterCurator{
 		ObjectMeta: v1.ObjectMeta{Name: clusterName, Namespace: clusterName},
 		Spec: clustercuratorv1.ClusterCuratorSpec{
