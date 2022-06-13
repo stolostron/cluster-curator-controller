@@ -126,6 +126,9 @@ spec:
                     description: TowerAuthSecret is ansible secret used in template to run in tower
                     type: string
                 type: object
+              inventory:
+                description: Inventory values are supplied for use with the pre/post jobs.
+                type: string
               providerCredentialPath:
                 description: 'Points to the Cloud Provider or Ansible Provider secret, format: namespace/secretName'
                 type: string
