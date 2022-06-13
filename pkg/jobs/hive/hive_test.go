@@ -23,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/klog"
 	clientv1 "sigs.k8s.io/controller-runtime/pkg/client"
 	clientfake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
@@ -427,8 +428,8 @@ func TestMonitorDestroyStatusJobDelayedComplete(t *testing.T) {
 		t.Log("Created the Job resource")
 		uninstallJob := getUninstallJob()
 		client.Create(context.Background(), uninstallJob)
-		//time.Sleep(utils.PauseTenSeconds)
-		//client.Delete(context.Background(), uninstallJob)
+		// time.Sleep(utils.PauseTenSeconds)
+		// client.Delete(context.Background(), uninstallJob)
 	}()
 
 	assert.Nil(t, monitorClusterStatus(client, hiveset, ClusterName, utils.Destroying, testTimeout),
@@ -439,7 +440,7 @@ func TestMonitorDestroyClusterDeployementMissing(t *testing.T) {
 
 	hiveset := hivefake.NewSimpleClientset()
 
-	//Should not return an error, just logs a warning
+	// Should not return an error, just logs a warning
 	assert.Nil(t, DestroyClusterDeployment(hiveset, ClusterName))
 }
 
@@ -449,7 +450,7 @@ func TestMonitorDestroyClusterDeployement(t *testing.T) {
 
 	hiveset := hivefake.NewSimpleClientset(cd)
 
-	//Should not return an error, just logs a warning
+	// Should not return an error, just logs a warning
 	assert.Nil(t, DestroyClusterDeployment(hiveset, ClusterName))
 
 	_, err := hiveset.HiveV1().ClusterDeployments(ClusterName).Get(context.Background(), ClusterName, v1.GetOptions{})
@@ -711,18 +712,31 @@ func TestUpgradeCluster(t *testing.T) {
 
 	go func() {
 		for i := 0; i < 10; i++ {
+			time.Sleep(1 * time.Second)
 			resultmcview := managedclusterviewv1beta1.ManagedClusterView{}
-			client.Get(context.TODO(), types.NamespacedName{
+			err := client.Get(context.TODO(), types.NamespacedName{
 				Namespace: ClusterName,
 				Name:      ClusterName,
 			}, &resultmcview)
+			if err != nil {
+				klog.Error("failed to get managedClusterview.", err)
+				continue
+			}
 			resultmcview.Status.Result.Raw = b
-			client.Update(context.TODO(), &resultmcview)
+			err = client.Update(context.TODO(), &resultmcview)
+			if err != nil {
+				klog.Error("failed to update managedClusterview.", err)
+				continue
+			}
 			updatedresultmcview := managedclusterviewv1beta1.ManagedClusterView{}
-			client.Get(context.TODO(), types.NamespacedName{
+			err = client.Get(context.TODO(), types.NamespacedName{
 				Namespace: ClusterName,
 				Name:      ClusterName,
 			}, &updatedresultmcview)
+			if err != nil {
+				klog.Error("failed to get managedClusterview.", err)
+				continue
+			}
 			if updatedresultmcview.Status.Result.Raw != nil {
 				break
 			}
@@ -812,18 +826,31 @@ func TestUpgradeClusterWithChannelUpstream(t *testing.T) {
 
 	go func() {
 		for i := 0; i < 10; i++ {
+			time.Sleep(1 * time.Second)
 			resultmcview := managedclusterviewv1beta1.ManagedClusterView{}
-			client.Get(context.TODO(), types.NamespacedName{
+			err := client.Get(context.TODO(), types.NamespacedName{
 				Namespace: ClusterName,
 				Name:      ClusterName,
 			}, &resultmcview)
+			if err != nil {
+				klog.Error("failed to get managedClusterview.", err)
+				continue
+			}
 			resultmcview.Status.Result.Raw = b
-			client.Update(context.TODO(), &resultmcview)
+			err = client.Update(context.TODO(), &resultmcview)
+			if err != nil {
+				klog.Error("failed to update managedClusterview.", err)
+				continue
+			}
 			updatedresultmcview := managedclusterviewv1beta1.ManagedClusterView{}
-			client.Get(context.TODO(), types.NamespacedName{
+			err = client.Get(context.TODO(), types.NamespacedName{
 				Namespace: ClusterName,
 				Name:      ClusterName,
 			}, &updatedresultmcview)
+			if err != nil {
+				klog.Error("failed to get managedClusterview.", err)
+				continue
+			}
 			if updatedresultmcview.Status.Result.Raw != nil {
 				break
 			}
