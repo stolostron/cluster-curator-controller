@@ -126,13 +126,13 @@ push-curator: build-curator
 
 .PHONY: compile-curator
 compile-curator:
-	go mod tidy -compat=1.18
+	go mod tidy
 	go mod vendor
 	GOFLAGS="" go build -o build/_output/curator ./cmd/curator/curator.go
 	GOFLAGS="" go build -o build/_output/manager ./cmd/manager/main.go
 
 .PHONY: build-curator
-build-curator: 
+build-curator:
 	docker build -f Dockerfile.prow . -t ${REPO_URL}/cluster-curator-controller:${VERSION}
 
 .PHONY: scale-up-test
@@ -142,4 +142,3 @@ scale-up-test:
 .PHONY: scale-down-test
 scale-down-test:
 	go test -v -timeout 500s ./cmd/controller/controller_test.go -run TestDeleteManagedClusters
-
