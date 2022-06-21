@@ -11,7 +11,7 @@ import (
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 	clustercuratorv1 "github.com/stolostron/cluster-curator-controller/pkg/api/v1beta1"
 	"github.com/stolostron/cluster-curator-controller/pkg/jobs/utils"
-	managedclusterinfov1beta1 "github.com/stolostron/multicloud-operators-foundation/pkg/apis/internal.open-cluster-management.io/v1beta1"
+	managedclusterinfov1beta1 "github.com/stolostron/cluster-lifecycle-api/clusterinfo/v1beta1"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -694,7 +694,7 @@ func TestUpgradeAnsibleJobExtraVars(t *testing.T) {
 	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
 	s.AddKnownTypes(hivev1.SchemeBuilder.GroupVersion, &hivev1.ClusterDeployment{}, &hivev1.MachinePool{})
 	s.AddKnownTypes(corev1.SchemeGroupVersion, &corev1.Secret{})
-	s.AddKnownTypes(managedclusterinfov1beta1.SchemeBuilder.GroupVersion, &managedclusterinfov1beta1.ManagedClusterInfo{})
+	s.AddKnownTypes(managedclusterinfov1beta1.SchemeGroupVersion, &managedclusterinfov1beta1.ManagedClusterInfo{})
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			var fakeClient client.WithWatch

@@ -14,9 +14,9 @@ import (
 	hiveclient "github.com/openshift/hive/pkg/client/clientset/versioned"
 	clustercuratorv1 "github.com/stolostron/cluster-curator-controller/pkg/api/v1beta1"
 	"github.com/stolostron/cluster-curator-controller/pkg/jobs/utils"
-	managedclusteractionv1beta1 "github.com/stolostron/multicloud-operators-foundation/pkg/apis/action/v1beta1"
-	managedclusterinfov1beta1 "github.com/stolostron/multicloud-operators-foundation/pkg/apis/internal.open-cluster-management.io/v1beta1"
-	managedclusterviewv1beta1 "github.com/stolostron/multicloud-operators-foundation/pkg/apis/view/v1beta1"
+	managedclusteractionv1beta1 "github.com/stolostron/cluster-lifecycle-api/action/v1beta1"
+	managedclusterinfov1beta1 "github.com/stolostron/cluster-lifecycle-api/clusterinfo/v1beta1"
+	managedclusterviewv1beta1 "github.com/stolostron/cluster-lifecycle-api/view/v1beta1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -160,7 +160,7 @@ func monitorClusterStatus(client clientv1.Client, hiveset hiveclient.Interface, 
 			// If the job is missing, follow the main loop
 			if err != nil && k8serrors.IsNotFound(err) {
 				klog.Warningf("Could not retrieve job: %v", err)
-				time.Sleep(utils.PauseFiveSeconds) //10s
+				time.Sleep(utils.PauseFiveSeconds) // 10s
 				continue
 			}
 
@@ -185,7 +185,7 @@ func monitorClusterStatus(client clientv1.Client, hiveset hiveclient.Interface, 
 				if elapsedTime%6 == 0 {
 					klog.V(0).Info("Job: " + jobPath + " - " + strconv.Itoa(elapsedTime/6) + "min")
 				}
-				time.Sleep(utils.PauseTenSeconds) //10s
+				time.Sleep(utils.PauseTenSeconds) // 10s
 				elapsedTime++
 
 				// Reset the job, so we make sure we're getting clean data (not cached)
