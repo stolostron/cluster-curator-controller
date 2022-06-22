@@ -23,9 +23,9 @@ import (
 	ajv1 "github.com/open-cluster-management/ansiblejob-go-lib/api/v1alpha1"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 	clustercuratorv1 "github.com/stolostron/cluster-curator-controller/pkg/api/v1beta1"
-	managedclusteractionv1beta1 "github.com/stolostron/multicloud-operators-foundation/pkg/apis/action/v1beta1"
-	managedclusterinfov1beta1 "github.com/stolostron/multicloud-operators-foundation/pkg/apis/internal.open-cluster-management.io/v1beta1"
-	managedclusterviewv1beta1 "github.com/stolostron/multicloud-operators-foundation/pkg/apis/view/v1beta1"
+	managedclusteractionv1beta1 "github.com/stolostron/cluster-lifecycle-api/action/v1beta1"
+	managedclusterinfov1beta1 "github.com/stolostron/cluster-lifecycle-api/clusterinfo/v1beta1"
+	managedclusterviewv1beta1 "github.com/stolostron/cluster-lifecycle-api/view/v1beta1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -92,7 +92,7 @@ func LogWarning(err error) {
 	}
 }
 
-//Path splitter NAMSPACE/RESOURCE_NAME
+// Path splitter NAMSPACE/RESOURCE_NAME
 func PathSplitterFromEnv(path string) (namespace string, resource string, err error) {
 	values := strings.Split(path, "/")
 	if len(values) != 2 {
@@ -292,7 +292,7 @@ func DeleteClusterNamespace(client kubernetes.Interface, clusterName string) err
 		}
 	}
 
-	//Delete the namespace
+	// Delete the namespace
 	return client.CoreV1().Namespaces().Delete(context.Background(), clusterName, v1.DeleteOptions{})
 }
 

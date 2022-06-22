@@ -17,7 +17,8 @@ cover-functional-filtered.html
 *.tap
 *.test
 .DS_Store
-
+.idea
+test
 
 # Folders
 .build-docker

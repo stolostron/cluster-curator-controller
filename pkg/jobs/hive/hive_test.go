@@ -13,9 +13,9 @@ import (
 	hivefake "github.com/openshift/hive/pkg/client/clientset/versioned/fake"
 	clustercuratorv1 "github.com/stolostron/cluster-curator-controller/pkg/api/v1beta1"
 	"github.com/stolostron/cluster-curator-controller/pkg/jobs/utils"
-	managedclusteractionv1beta1 "github.com/stolostron/multicloud-operators-foundation/pkg/apis/action/v1beta1"
-	managedclusterinfov1beta1 "github.com/stolostron/multicloud-operators-foundation/pkg/apis/internal.open-cluster-management.io/v1beta1"
-	managedclusterviewv1beta1 "github.com/stolostron/multicloud-operators-foundation/pkg/apis/view/v1beta1"
+	managedclusteractionv1beta1 "github.com/stolostron/cluster-lifecycle-api/action/v1beta1"
+	managedclusterinfov1beta1 "github.com/stolostron/cluster-lifecycle-api/clusterinfo/v1beta1"
+	managedclusterviewv1beta1 "github.com/stolostron/cluster-lifecycle-api/view/v1beta1"
 	"github.com/stretchr/testify/assert"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -95,7 +95,7 @@ func getUpgradeClusterCurator() *clustercuratorv1.ClusterCurator {
 func getManagedClusterInfo() *managedclusterinfov1beta1.ManagedClusterInfo {
 	return &managedclusterinfov1beta1.ManagedClusterInfo{
 		TypeMeta: v1.TypeMeta{
-			APIVersion: managedclusterinfov1beta1.GroupVersion.String(),
+			APIVersion: managedclusterinfov1beta1.SchemeGroupVersion.String(),
 			Kind:       "ManagedClusterInfo",
 		},
 		ObjectMeta: v1.ObjectMeta{
@@ -496,11 +496,11 @@ func TestUpgradeClusterNonOpenshift(t *testing.T) {
 
 	s := scheme.Scheme
 	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
-	s.AddKnownTypes(managedclusterinfov1beta1.GroupVersion, &managedclusterinfov1beta1.ManagedClusterInfo{})
+	s.AddKnownTypes(managedclusterinfov1beta1.SchemeGroupVersion, &managedclusterinfov1beta1.ManagedClusterInfo{})
 
 	managedclusterinfo := &managedclusterinfov1beta1.ManagedClusterInfo{
 		TypeMeta: v1.TypeMeta{
-			APIVersion: managedclusterinfov1beta1.GroupVersion.String(),
+			APIVersion: managedclusterinfov1beta1.SchemeGroupVersion.String(),
 			Kind:       "ManagedClusterInfo",
 		},
 		ObjectMeta: v1.ObjectMeta{
@@ -524,7 +524,7 @@ func TestUpgradeClusterNoDesiredUpdate(t *testing.T) {
 
 	s := scheme.Scheme
 	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
-	s.AddKnownTypes(managedclusterinfov1beta1.GroupVersion, &managedclusterinfov1beta1.ManagedClusterInfo{})
+	s.AddKnownTypes(managedclusterinfov1beta1.SchemeGroupVersion, &managedclusterinfov1beta1.ManagedClusterInfo{})
 
 	clustercurator := &clustercuratorv1.ClusterCurator{
 		ObjectMeta: v1.ObjectMeta{
@@ -549,7 +549,7 @@ func TestUpgradeClusterInValidVersion(t *testing.T) {
 
 	s := scheme.Scheme
 	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
-	s.AddKnownTypes(managedclusterinfov1beta1.GroupVersion, &managedclusterinfov1beta1.ManagedClusterInfo{})
+	s.AddKnownTypes(managedclusterinfov1beta1.SchemeGroupVersion, &managedclusterinfov1beta1.ManagedClusterInfo{})
 
 	clustercurator := &clustercuratorv1.ClusterCurator{
 		ObjectMeta: v1.ObjectMeta{
@@ -576,7 +576,7 @@ func TestUpgradeClusterInValidChannel(t *testing.T) {
 
 	s := scheme.Scheme
 	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
-	s.AddKnownTypes(managedclusterinfov1beta1.GroupVersion, &managedclusterinfov1beta1.ManagedClusterInfo{})
+	s.AddKnownTypes(managedclusterinfov1beta1.SchemeGroupVersion, &managedclusterinfov1beta1.ManagedClusterInfo{})
 
 	clustercurator := &clustercuratorv1.ClusterCurator{
 		ObjectMeta: v1.ObjectMeta{
@@ -617,9 +617,9 @@ func TestUpgradeClusterMCVExists(t *testing.T) {
 
 	s := scheme.Scheme
 	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
-	s.AddKnownTypes(managedclusterinfov1beta1.GroupVersion, &managedclusterinfov1beta1.ManagedClusterInfo{})
-	s.AddKnownTypes(managedclusteractionv1beta1.GroupVersion, &managedclusteractionv1beta1.ManagedClusterAction{})
-	s.AddKnownTypes(managedclusterviewv1beta1.GroupVersion, &managedclusterviewv1beta1.ManagedClusterView{})
+	s.AddKnownTypes(managedclusterinfov1beta1.SchemeGroupVersion, &managedclusterinfov1beta1.ManagedClusterInfo{})
+	s.AddKnownTypes(managedclusteractionv1beta1.SchemeGroupVersion, &managedclusteractionv1beta1.ManagedClusterAction{})
+	s.AddKnownTypes(managedclusterviewv1beta1.SchemeGroupVersion, &managedclusterviewv1beta1.ManagedClusterView{})
 
 	clustercurator := &clustercuratorv1.ClusterCurator{
 		ObjectMeta: v1.ObjectMeta{
@@ -661,9 +661,9 @@ func TestUpgradeCluster(t *testing.T) {
 
 	s := scheme.Scheme
 	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
-	s.AddKnownTypes(managedclusterinfov1beta1.GroupVersion, &managedclusterinfov1beta1.ManagedClusterInfo{})
-	s.AddKnownTypes(managedclusteractionv1beta1.GroupVersion, &managedclusteractionv1beta1.ManagedClusterAction{})
-	s.AddKnownTypes(managedclusterviewv1beta1.GroupVersion, &managedclusterviewv1beta1.ManagedClusterView{})
+	s.AddKnownTypes(managedclusterinfov1beta1.SchemeGroupVersion, &managedclusterinfov1beta1.ManagedClusterInfo{})
+	s.AddKnownTypes(managedclusteractionv1beta1.SchemeGroupVersion, &managedclusteractionv1beta1.ManagedClusterAction{})
+	s.AddKnownTypes(managedclusterviewv1beta1.SchemeGroupVersion, &managedclusterviewv1beta1.ManagedClusterView{})
 
 	clustercurator := &clustercuratorv1.ClusterCurator{
 		ObjectMeta: v1.ObjectMeta{
@@ -773,9 +773,9 @@ func TestUpgradeClusterWithChannelUpstream(t *testing.T) {
 
 	s := scheme.Scheme
 	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
-	s.AddKnownTypes(managedclusterinfov1beta1.GroupVersion, &managedclusterinfov1beta1.ManagedClusterInfo{})
-	s.AddKnownTypes(managedclusteractionv1beta1.GroupVersion, &managedclusteractionv1beta1.ManagedClusterAction{})
-	s.AddKnownTypes(managedclusterviewv1beta1.GroupVersion, &managedclusterviewv1beta1.ManagedClusterView{})
+	s.AddKnownTypes(managedclusterinfov1beta1.SchemeGroupVersion, &managedclusterinfov1beta1.ManagedClusterInfo{})
+	s.AddKnownTypes(managedclusteractionv1beta1.SchemeGroupVersion, &managedclusteractionv1beta1.ManagedClusterAction{})
+	s.AddKnownTypes(managedclusterviewv1beta1.SchemeGroupVersion, &managedclusterviewv1beta1.ManagedClusterView{})
 
 	clustercurator := &clustercuratorv1.ClusterCurator{
 		ObjectMeta: v1.ObjectMeta{
