@@ -6,13 +6,13 @@ require (
 	github.com/go-logr/logr v1.2.3
 	github.com/open-cluster-management/ansiblejob-go-lib v0.1.12
 	github.com/openshift/api v3.9.1-0.20191111211345-a27ff30ebf09+incompatible
-	github.com/openshift/hive v1.1.17-0.20220715150811-b87d3cb0a987
+	github.com/openshift/hive v1.1.17-0.20220726120844-e78dfd39116d
 	github.com/openshift/hive/apis v0.0.0
 	github.com/stolostron/cluster-lifecycle-api v0.0.0-20220621134646-8b67f2e6afed
 	github.com/stolostron/library-go v0.0.0-20220328023725-63d77a3ad428
-	github.com/stretchr/testify v1.7.1
+	github.com/stretchr/testify v1.7.2
 	gopkg.in/yaml.v2 v2.4.0
-	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b
+	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.24.1
 	k8s.io/apimachinery v0.24.1
 	k8s.io/client-go v12.0.0+incompatible
@@ -40,7 +40,7 @@ require (
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/gnostic v0.5.7-v3refs // indirect
-	github.com/google/go-cmp v0.5.7 // indirect
+	github.com/google/go-cmp v0.5.8 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/imdario/mergo v0.3.12 // indirect
@@ -70,7 +70,7 @@ require (
 	golang.org/x/time v0.0.0-20220210224613-90d013bbcef8 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.2.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
-	google.golang.org/protobuf v1.27.1 // indirect
+	google.golang.org/protobuf v1.28.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	k8s.io/apiextensions-apiserver v0.24.1 // indirect
 	k8s.io/component-base v0.24.1 // indirect
@@ -108,7 +108,6 @@ replace (
 // Prevent the following modules from upgrading version as result of terraform-provider-kubernetes module
 // The following modules need to be locked to compile correctly with terraform-provider-azure and terraform-provider-google
 replace (
-	github.com/IBM/vpc-go-sdk => github.com/IBM/vpc-go-sdk v0.7.0
 	github.com/apparentlymart/go-cidr => github.com/apparentlymart/go-cidr v1.0.1
 	github.com/go-openapi/errors => github.com/go-openapi/errors v0.19.2
 	github.com/go-openapi/spec => github.com/go-openapi/spec v0.19.4
@@ -121,7 +120,7 @@ replace (
 )
 
 replace (
-	github.com/openshift/hive/apis => github.com/openshift/hive/apis v0.0.0-20220715150811-b87d3cb0a987
+	github.com/openshift/hive/apis => github.com/openshift/hive/apis v0.0.0-20220726120844-e78dfd39116d
 	k8s.io/api => k8s.io/api v0.24.1
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.24.1
 	k8s.io/apimachinery => k8s.io/apimachinery v0.24.1
