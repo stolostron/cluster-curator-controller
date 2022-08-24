@@ -6,7 +6,7 @@ require (
 	github.com/go-logr/logr v0.4.0
 	github.com/open-cluster-management/ansiblejob-go-lib v0.1.12
 	github.com/openshift/api v3.9.1-0.20191111211345-a27ff30ebf09+incompatible
-	github.com/openshift/hive v1.1.17-0.20220223000051-b1c8fa5853b1
+	github.com/openshift/hive v1.1.17-0.20220815155411-ba519850c166
 	github.com/openshift/hive/apis v0.0.0
 	github.com/stolostron/library-go v0.0.0-20220112062416-536980fdb526
 	github.com/stolostron/multicloud-operators-foundation v1.0.0-2021-10-26-20-16-14.0.20220119065659-cc30cffdf570
@@ -42,7 +42,7 @@ require (
 	github.com/json-iterator/go v1.1.11 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.2-0.20181231171920-c182affec369 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
-	github.com/modern-go/reflect2 v1.0.1 // indirect
+	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/client_golang v1.11.0 // indirect
@@ -107,7 +107,6 @@ replace (
 	github.com/go-openapi/errors => github.com/go-openapi/errors v0.19.2
 	github.com/go-openapi/spec => github.com/go-openapi/spec v0.19.4
 	github.com/go-openapi/validate => github.com/go-openapi/validate v0.19.8
-	github.com/hashicorp/go-getter => github.com/hashicorp/go-getter v1.5.2 // CVE-2022-29810
 	github.com/hashicorp/go-plugin => github.com/hashicorp/go-plugin v1.2.2
 	github.com/ulikunitz/xz => github.com/ulikunitz/xz v0.5.7
 	google.golang.org/api => google.golang.org/api v0.25.0
