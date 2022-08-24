@@ -231,7 +231,7 @@ func monitorClusterStatus(client clientv1.Client, hiveset hiveclient.Interface, 
 
 			for _, condition := range cluster.Status.Conditions {
 				if condition.Status == "True" && (condition.Type == hivev1.ProvisionFailedCondition ||
-					condition.Type == hivev1.ClusterImageSetNotFoundCondition) {
+					condition.Type == hivev1.RequirementsMetCondition) {
 					klog.Warning(cluster.Status.Conditions)
 					return errors.New("Failure detected")
 				}
