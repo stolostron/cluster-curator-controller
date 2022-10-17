@@ -13,9 +13,9 @@ import (
 	hivefake "github.com/openshift/hive/pkg/client/clientset/versioned/fake"
 	clustercuratorv1 "github.com/stolostron/cluster-curator-controller/pkg/api/v1beta1"
 	"github.com/stolostron/cluster-curator-controller/pkg/jobs/utils"
-	managedclusteractionv1beta1 "github.com/stolostron/multicloud-operators-foundation/pkg/apis/action/v1beta1"
-	managedclusterinfov1beta1 "github.com/stolostron/multicloud-operators-foundation/pkg/apis/internal.open-cluster-management.io/v1beta1"
-	managedclusterviewv1beta1 "github.com/stolostron/multicloud-operators-foundation/pkg/apis/view/v1beta1"
+	managedclusteractionv1beta1 "github.com/stolostron/cluster-lifecycle-api/action/v1beta1"
+	managedclusterinfov1beta1 "github.com/stolostron/cluster-lifecycle-api/clusterinfo/v1beta1"
+	managedclusterviewv1beta1 "github.com/stolostron/cluster-lifecycle-api/view/v1beta1"
 	"github.com/stretchr/testify/assert"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -812,6 +812,7 @@ func TestUpgradeClusterWithChannelUpstream(t *testing.T) {
 
 	go func() {
 		for i := 0; i < 10; i++ {
+			time.Sleep(1 * time.Second)
 			resultmcview := managedclusterviewv1beta1.ManagedClusterView{}
 			client.Get(context.TODO(), types.NamespacedName{
 				Namespace: ClusterName,
