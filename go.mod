@@ -8,8 +8,8 @@ require (
 	github.com/openshift/api v3.9.1-0.20191111211345-a27ff30ebf09+incompatible
 	github.com/openshift/hive v1.1.17-0.20220326152255-f42617c99ca1
 	github.com/openshift/hive/apis v0.0.0
+	github.com/stolostron/cluster-lifecycle-api v0.0.0-20221017035138-e14880af0f1a
 	github.com/stolostron/library-go v0.0.0-20220328023725-63d77a3ad428
-	github.com/stolostron/multicloud-operators-foundation v1.0.0-2021-10-26-20-16-14.0.20220119065659-cc30cffdf570
 	//	github.com/openshift/api v3.9.1-0.20191111211345-a27ff30ebf09+incompatible
 	github.com/stretchr/testify v1.7.1
 	gopkg.in/yaml.v2 v2.4.0
@@ -19,7 +19,7 @@ require (
 	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/klog v1.0.0
 	k8s.io/klog/v2 v2.60.1
-	open-cluster-management.io/api v0.5.1-0.20220114083559-8d7cc32bed7b
+	open-cluster-management.io/api v0.7.0
 	sigs.k8s.io/controller-runtime v0.11.1
 )
 
