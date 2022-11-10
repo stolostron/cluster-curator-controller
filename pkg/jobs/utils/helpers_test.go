@@ -305,3 +305,14 @@ func TestDeleteNamespacePodsSuceeded(t *testing.T) {
 	_, err := kubeset.CoreV1().Namespaces().Get(context.Background(), ClusterName, v1.GetOptions{})
 	assert.Contains(t, err.Error(), " not found")
 }
+
+func TestGetRetryTimes(t *testing.T) {
+	retryTimes := GetRetryTimes(5, 5, PauseTwoSeconds)
+	assert.Equal(t, 150, retryTimes)
+
+	retryTimes = GetRetryTimes(0, 5, PauseTwoSeconds)
+	assert.Equal(t, 150, retryTimes)
+
+	retryTimes = GetRetryTimes(120, 120, PauseSixtySeconds)
+	assert.Equal(t, 120, retryTimes)
+}

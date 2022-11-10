@@ -176,7 +176,7 @@ func curatorRun(config *rest.Config, client clientv1.Client, clusterName string)
 	}
 
 	if jobChoice == "monitor" || jobChoice == "activate-and-monitor" {
-		if err := hive.MonitorClusterStatus(config, clusterName, utils.Installing); err != nil {
+		if err := hive.MonitorClusterStatus(config, clusterName, utils.Installing, curator); err != nil {
 			utils.CheckError(utils.RecordFailedCuratorStatusCondition(
 				client,
 				clusterName,
@@ -193,7 +193,7 @@ func curatorRun(config *rest.Config, client clientv1.Client, clusterName string)
 		dynclient, err := utils.GetDynset(nil)
 		utils.CheckError(err)
 
-		if err = importer.MonitorMCInfoImport(dynclient, clusterName); err != nil {
+		if err = importer.MonitorMCInfoImport(dynclient, clusterName, curator); err != nil {
 			utils.CheckError(utils.RecordFailedCuratorStatusCondition(
 				client,
 				clusterName,
@@ -222,7 +222,7 @@ func curatorRun(config *rest.Config, client clientv1.Client, clusterName string)
 	}
 
 	if jobChoice == "monitor-destroy" {
-		if err := hive.MonitorClusterStatus(config, clusterName, utils.Destroying); err != nil {
+		if err := hive.MonitorClusterStatus(config, clusterName, utils.Destroying, curator); err != nil {
 			utils.CheckError(utils.RecordFailedCuratorStatusCondition(
 				client,
 				clusterName,

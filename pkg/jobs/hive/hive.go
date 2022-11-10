@@ -28,16 +28,14 @@ import (
 	clientv1 "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-//  patchStringValue specifies a json patch operation for a string.
+// patchStringValue specifies a json patch operation for a string.
 type patchStringValue struct {
 	Op    string `json:"op"`
 	Path  string `json:"path"`
 	Value int32  `json:"value"`
 }
 
-const UpgradeAttempts = 120
 const MCVUpgradeLabel = "cluster-curator-upgrade"
-const ThreeMinuteMonitorTimeout = 36
 
 func ActivateDeploy(hiveset hiveclient.Interface, clusterName string) error {
 	klog.V(0).Info("* Initiate Provisioning")
@@ -70,7 +68,8 @@ func ActivateDeploy(hiveset hiveclient.Interface, clusterName string) error {
 	return nil
 }
 
-func MonitorClusterStatus(config *rest.Config, clusterName string, jobType string) error {
+func MonitorClusterStatus(
+	config *rest.Config, clusterName string, jobType string, curator *clustercuratorv1.ClusterCurator) error {
 	hiveset, err := hiveclient.NewForConfig(config)
 	if err = utils.LogError(err); err != nil {
 		return err
@@ -79,7 +78,20 @@ func MonitorClusterStatus(config *rest.Config, clusterName string, jobType strin
 	if err = utils.LogError(err); err != nil {
 		return err
 	}
-	return monitorClusterStatus(client, hiveset, clusterName, jobType, ThreeMinuteMonitorTimeout)
+
+	return monitorClusterStatus(client, hiveset, clusterName, jobType, getMonitorAttempts(jobType, curator))
+}
+
+func getMonitorAttempts(jobType string, curator *clustercuratorv1.ClusterCurator) int {
+	monitorAttempts := utils.GetRetryTimes(0, 5, utils.PauseTwoSeconds)
+	switch jobType {
+	case utils.Installing:
+		monitorAttempts = utils.GetRetryTimes(curator.Spec.Install.JobMonitorTimeout, 5, utils.PauseTwoSeconds)
+	case utils.Destroying:
+		monitorAttempts = utils.GetRetryTimes(curator.Spec.Destroy.JobMonitorTimeout, 5, utils.PauseTwoSeconds)
+	}
+
+	return monitorAttempts
 }
 
 func DestroyClusterDeployment(hiveset hiveclient.Interface, clusterName string) error {
@@ -414,9 +426,11 @@ func MonitorUpgradeStatus(client clientv1.Client, clusterName string, curator *c
 	upstream := curator.Spec.Upgrade.Upstream
 	resultmcview := managedclusterviewv1beta1.ManagedClusterView{}
 
+	upgradeAttempts := utils.GetRetryTimes(curator.Spec.Upgrade.MonitorTimeout, 120, utils.PauseSixtySeconds)
+
 	var getErr, timeoutErr error
 	isChannelUpstreamUpdate := false
-	for i := 0; i < UpgradeAttempts; i++ {
+	for i := 0; i < upgradeAttempts; i++ {
 
 		if getErr = client.Get(context.TODO(), types.NamespacedName{
 			Namespace: clusterName,
@@ -449,10 +463,10 @@ func MonitorUpgradeStatus(client clientv1.Client, clusterName string, curator *c
 					if condition.(map[string]interface{})["type"] == "Available" && condition.(map[string]interface{})["status"] == "True" {
 						if strings.Contains(condition.(map[string]interface{})["message"].(string), desiredUpdate) {
 							klog.V(2).Info("Upgrade succeeded ✓")
-							i = UpgradeAttempts
+							i = upgradeAttempts
 							break
 						}
-					} else if i == (UpgradeAttempts - 1) {
+					} else if i == (upgradeAttempts - 1) {
 						klog.Warning(cvConditions)
 						klog.V(2).Info("Timed out waiting for monitor upgrade job")
 						timeoutErr = errors.New("Timed out waiting for monitor upgrade job")
