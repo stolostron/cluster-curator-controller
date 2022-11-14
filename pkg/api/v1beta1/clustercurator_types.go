@@ -45,6 +45,13 @@ type Hook struct {
 	// +kubebuilder:validation:Required
 	Name string `json:"name"`
 
+	// Type of the Hook. For Job type, Ansible job template will be used.
+	// For Workflow type, Ansible workflow template will be used.
+	// If omitted, default to Job type.
+	// +optional
+	// +kubebuilder:default=Job
+	Type HookType `json:"type,omitempty"`
+
 	// Ansible job extra_vars is passed to the Ansible job at execution time
 	// and is a known Ansible entity.
 	// +kubebuilder:pruning:PreserveUnknownFields
@@ -108,6 +115,18 @@ type ClusterCuratorStatus struct {
 	// executed as a job
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
+
+// HookType indicates the type for the Hook. It can be 'Job' or 'Workflow'
+// +kubebuilder:validation:Enum=Job;Workflow
+type HookType string
+
+const (
+	// HookTypeJob, the Hook is an Ansible Job template
+	HookTypeJob HookType = "Job"
+
+	// HookTypeWorkflow, the Hook is an Ansible Workflow template
+	HookTypeWorkflow HookType = "Workflow"
+)
 
 // +kubebuilder:object:root=true
 

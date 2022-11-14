@@ -29,7 +29,7 @@ const AnsibleJobName = "my-ansiblejob-12345"
 const SecretRef = "toweraccess"
 const AnsibleJobTemplateName = "Ansible Tower Template to run as a job"
 
-var ansibleJob = getAnsibleJob(PREHOOK, AnsibleJobTemplateName, SecretRef, nil, AnsibleJobName, ClusterName)
+var ansibleJob = getAnsibleJob(PREHOOK, "", AnsibleJobTemplateName, SecretRef, nil, AnsibleJobName, ClusterName)
 var s = scheme.Scheme
 
 func getClusterCurator() *clustercuratorv1.ClusterCurator {
@@ -783,6 +783,43 @@ func TestInventory(t *testing.T) {
 			if test.expectedInventory {
 				assert.Equal(t, extraVars["inventory"], test.expectedInventoryVar)
 			}
+		})
+	}
+}
+
+func Test_getAnsibleJobHooktype(t *testing.T) {
+	tests := []struct {
+		name                       string
+		hooktype                   string
+		expectedTemplateNameKey    string
+		expectedNotTemplateNameKey string
+	}{
+		{
+			name:                       "empty hooktype",
+			hooktype:                   "",
+			expectedTemplateNameKey:    JOB_TEMPLATE_NAME_KEY,
+			expectedNotTemplateNameKey: WORKFLOW_TEMPLATE_NAME_KEY,
+		},
+		{
+			name:                       "job hooktype",
+			hooktype:                   string(clustercuratorv1.HookTypeJob),
+			expectedTemplateNameKey:    JOB_TEMPLATE_NAME_KEY,
+			expectedNotTemplateNameKey: WORKFLOW_TEMPLATE_NAME_KEY,
+		},
+		{
+			name:                       "workflow hooktype",
+			hooktype:                   string(clustercuratorv1.HookTypeWorkflow),
+			expectedTemplateNameKey:    WORKFLOW_TEMPLATE_NAME_KEY,
+			expectedNotTemplateNameKey: JOB_TEMPLATE_NAME_KEY,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			aJob := getAnsibleJob(PREHOOK, test.hooktype, AnsibleJobTemplateName, SecretRef, nil, AnsibleJobName, ClusterName)
+			_, ok := aJob.Object["spec"].(map[string]interface{})[test.expectedTemplateNameKey]
+			assert.True(t, ok, "template name key is not %s", test.expectedTemplateNameKey)
+			_, ok = aJob.Object["spec"].(map[string]interface{})[test.expectedNotTemplateNameKey]
+			assert.False(t, ok, "template name key is %s", test.expectedNotTemplateNameKey)
 		})
 	}
 }
