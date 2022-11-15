@@ -28,6 +28,8 @@ const PREHOOK = "prehook"
 const POSTHOOK = "posthook"
 const MPSUFFIX = "-worker"
 const ICSUFFIX = "-install-config"
+const JOB_TEMPLATE_NAME_KEY = "job_template_name"
+const WORKFLOW_TEMPLATE_NAME_KEY = "workflow_template_name"
 
 var ansibleJobGVR = schema.GroupVersionResource{
 	Group: "tower.ansible.com", Version: "v1alpha1", Resource: "ansiblejobs"}
@@ -77,7 +79,7 @@ func Job(client client.Client, curator *clustercuratorv1.ClusterCurator) error {
 	}
 
 	for _, ttn := range hooksToRun {
-		klog.V(3).Info("Tower Job name: " + ttn.Name)
+		klog.V(3).Info("Tower Job name: " + ttn.Name + " type:" + string(ttn.Type))
 		jobResource, err := RunAnsibleJob(client, curator, jobType, ttn, towerauthsecret)
 		if err != nil {
 			return err
@@ -97,8 +99,9 @@ func Job(client client.Client, curator *clustercuratorv1.ClusterCurator) error {
 	return nil
 }
 
-func getAnsibleJob(jobtype string,
-	ansibleJobTemplate string,
+func getAnsibleJob(jobtype string, // pre or post
+	hooktype string, // Job or Workflow
+	ansibleTemplateName string, // job or workflow template name
 	secretRef string,
 	extraVars *runtime.RawExtension,
 	ansibleJobName string,
@@ -115,6 +118,11 @@ func getAnsibleJob(jobtype string,
 		utils.CheckError(err)
 	}*/
 
+	templateNameKey := JOB_TEMPLATE_NAME_KEY
+	if hooktype == string(clustercuratorv1.HookTypeWorkflow) {
+		templateNameKey = WORKFLOW_TEMPLATE_NAME_KEY
+	}
+
 	ansibleJob := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": "tower.ansible.com/v1alpha1",
@@ -128,7 +136,7 @@ func getAnsibleJob(jobtype string,
 				},
 			},
 			"spec": map[string]interface{}{
-				"job_template_name": ansibleJobTemplate,
+				templateNameKey:     ansibleTemplateName,
 				"tower_auth_secret": secretRef,
 			},
 		},
@@ -304,13 +312,14 @@ func RunAnsibleJob(
 	hookToRun clustercuratorv1.Hook,
 	secretRef string) (*unstructured.Unstructured, error) {
 
-	klog.V(2).Info("* Run " + jobtype + " AnsibleJob")
+	klog.V(2).Info("* Run " + jobtype + " AnsibleJob " + string(hookToRun.Type))
 
 	namespace := curator.Namespace
 	klog.V(4).Infof("hookToRun: %v", hookToRun)
 
 	ansibleJob := getAnsibleJob(
 		jobtype,
+		string(hookToRun.Type),
 		hookToRun.Name,
 		secretRef,
 		hookToRun.ExtraVars,
