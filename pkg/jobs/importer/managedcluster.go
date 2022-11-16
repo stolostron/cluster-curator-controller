@@ -7,6 +7,7 @@ import (
 	"errors"
 	"time"
 
+	clustercuratorv1 "github.com/stolostron/cluster-curator-controller/pkg/api/v1beta1"
 	"github.com/stolostron/cluster-curator-controller/pkg/jobs/utils"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -57,14 +58,14 @@ func MonitorImport(mcset managedclusterclient.Interface, clusterName string) err
 	}
 }
 
-const retryCount = 150
-
-func MonitorMCInfoImport(mcset dynamic.Interface, clusterName string) error {
+func MonitorMCInfoImport(mcset dynamic.Interface, clusterName string, curator *clustercuratorv1.ClusterCurator) error {
 
 	var mciGVR = schema.GroupVersionResource{
 		Group: "internal.open-cluster-management.io", Version: "v1beta1", Resource: "managedclusterinfos"}
 	klog.V(0).Info("=> Monitoring ManagedClusterInfos import of \"" + clusterName +
 		"\" using Override Template \"" + clusterName + "\"")
+
+	retryCount := utils.GetRetryTimes(curator.Spec.Install.JobMonitorTimeout, 5, utils.PauseTwoSeconds)
 
 	/* Two levels of status.conditions:
 	 * managedClusterAvailable
