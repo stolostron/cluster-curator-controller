@@ -73,6 +73,14 @@ type Hooks struct {
 	// When provided, this is a Job specification and overrides the default flow
 	// +kubebuilder:pruning:PreserveUnknownFields
 	OverrideJob *runtime.RawExtension `json:"overrideJob,omitempty"`
+
+	// JobMonitorTimeout defines the timeout for finding a job, the unit of this is minute.
+	// If job is found, the curator controller waits until the job becomes active.
+	// By default, it is 5 minutes
+	// If its value is less than or equal to zero, the default value will be used.
+	// +optional
+	// +kubebuilder:default=5
+	JobMonitorTimeout int `json:"jobMonitorTimeout,omitempty"`
 }
 
 type UpgradeHooks struct {
@@ -107,6 +115,13 @@ type UpgradeHooks struct {
 	// When provided, this is a Job specification and overrides the default flow
 	// +kubebuilder:pruning:PreserveUnknownFields
 	OverrideJob *runtime.RawExtension `json:"overrideJob,omitempty"`
+
+	// MonitorTimeout defines the monitor process timeout, the unit of this is minute.
+	// By default, it is 120 minutes
+	// If its value is less than or equal to zero, the default value will be used.
+	// +optional
+	// +kubebuilder:default=120
+	MonitorTimeout int `json:"monitorTimeout,omitempty"`
 }
 
 // ClusterCuratorStatus defines the observed state of ClusterCurator work

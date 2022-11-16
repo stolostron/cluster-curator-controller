@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	clustercuratorv1 "github.com/stolostron/cluster-curator-controller/pkg/api/v1beta1"
 	"github.com/stolostron/cluster-curator-controller/pkg/jobs/utils"
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -37,13 +38,13 @@ func TestMonitorManagedClusterConditionAvailable(t *testing.T) {
 		},
 		Status: managedclusterv1.ManagedClusterStatus{
 			Conditions: []v1.Condition{
-				v1.Condition{
+				{
 					Type: managedclusterv1.ManagedClusterConditionHubAccepted,
 				},
-				v1.Condition{
+				{
 					Type: managedclusterv1.ManagedClusterConditionJoined,
 				},
-				v1.Condition{
+				{
 					Type: managedclusterv1.ManagedClusterConditionAvailable,
 				},
 			},
@@ -65,7 +66,7 @@ func TestMonitorManagedClusterConditionDenied(t *testing.T) {
 		},
 		Status: managedclusterv1.ManagedClusterStatus{
 			Conditions: []v1.Condition{
-				v1.Condition{
+				{
 					Type: managedclusterv1.ManagedClusterConditionHubDenied,
 				},
 			},
@@ -99,18 +100,18 @@ func getManagedClusterInfos(conditionType string, conditionMessage string) *unst
 func TestMonitorMCInfoConditionMissingManagedClusterInfos(t *testing.T) {
 
 	dynfake := dynfake.NewSimpleDynamicClient(runtime.NewScheme())
-	assert.NotNil(t, MonitorMCInfoImport(dynfake, ClusterName), "err not nil, when ManagedClusterInfo resource is not present")
+	assert.NotNil(t, MonitorMCInfoImport(dynfake, ClusterName, &clustercuratorv1.ClusterCurator{}), "err not nil, when ManagedClusterInfo resource is not present")
 }
 func TestMonitorMCInfoConditionAvailable(t *testing.T) {
 
 	dynfake := dynfake.NewSimpleDynamicClient(runtime.NewScheme(), getManagedClusterInfos(managedclusterv1.ManagedClusterConditionAvailable, "All good"))
-	assert.Nil(t, MonitorMCInfoImport(dynfake, ClusterName), "err nil, when ManagedClusterInfos is available")
+	assert.Nil(t, MonitorMCInfoImport(dynfake, ClusterName, &clustercuratorv1.ClusterCurator{}), "err nil, when ManagedClusterInfos is available")
 }
 
 func TestMonitorMCInfoConditionDenied(t *testing.T) {
 
 	dynfake := dynfake.NewSimpleDynamicClient(runtime.NewScheme(), getManagedClusterInfos(managedclusterv1.ManagedClusterConditionHubDenied, "Not Allowed"))
-	assert.NotNil(t, MonitorMCInfoImport(dynfake, ClusterName), "err not nil, when ManagedClusterInfos is denied")
+	assert.NotNil(t, MonitorMCInfoImport(dynfake, ClusterName, &clustercuratorv1.ClusterCurator{}), "err not nil, when ManagedClusterInfos is denied")
 }
 
 var mciGVR = schema.GroupVersionResource{
@@ -129,7 +130,7 @@ func TestMonitorMCInfoConditionFullFlowAvailable(t *testing.T) {
 		_, err = dynfake.Resource(mciGVR).Namespace(ClusterName).Update(context.TODO(), getManagedClusterInfos(managedclusterv1.ManagedClusterConditionAvailable, "connected"), v1.UpdateOptions{})
 		assert.Nil(t, err, "err is nill, when ManagedClusterConditionAvailable condition is updated")
 	}()
-	assert.Nil(t, MonitorMCInfoImport(dynfake, ClusterName), "err nil, when ManagedCluster is available")
+	assert.Nil(t, MonitorMCInfoImport(dynfake, ClusterName, &clustercuratorv1.ClusterCurator{}), "err nil, when ManagedCluster is available")
 }
 
 // Includes a test for no-initial conditions
@@ -149,5 +150,5 @@ func TestMonitorMCInfoConditionFullFlowDenied(t *testing.T) {
 		_, err = dynfake.Resource(mciGVR).Namespace(ClusterName).Update(context.TODO(), getManagedClusterInfos(managedclusterv1.ManagedClusterConditionHubDenied, "connected"), v1.UpdateOptions{})
 		assert.Nil(t, err, "err is nill, when ManagedClusterConditionAvailable condition is updated")
 	}()
-	assert.NotNil(t, MonitorMCInfoImport(dynfake, ClusterName), "err not nil, when ManagedCluster is denied")
+	assert.NotNil(t, MonitorMCInfoImport(dynfake, ClusterName, &clustercuratorv1.ClusterCurator{}), "err not nil, when ManagedCluster is denied")
 }

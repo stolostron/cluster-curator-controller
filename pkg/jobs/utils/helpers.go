@@ -345,3 +345,11 @@ func ConvertMap(m interface{}) interface{} {
 		return fmt.Sprintf("%v", m)
 	}
 }
+
+func GetRetryTimes(timeout, defaultTimeout int, interval time.Duration) int {
+	if timeout <= 0 {
+		timeout = defaultTimeout
+	}
+
+	return int(time.Duration(timeout) * time.Minute / interval)
+}
