@@ -4,6 +4,8 @@ go 1.18
 
 require (
 	github.com/go-logr/logr v1.2.3
+	github.com/onsi/ginkgo/v2 v2.1.4
+	github.com/onsi/gomega v1.20.0
 	github.com/open-cluster-management/ansiblejob-go-lib v0.1.12
 	github.com/openshift/api v3.9.1-0.20191111211345-a27ff30ebf09+incompatible
 	github.com/openshift/hive v1.1.17-0.20220726120844-e78dfd39116d
@@ -14,6 +16,7 @@ require (
 	gopkg.in/yaml.v2 v2.4.0
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.24.3
+	k8s.io/apiextensions-apiserver v0.24.3
 	k8s.io/apimachinery v0.24.3
 	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/klog v1.0.0
@@ -69,7 +72,6 @@ require (
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/protobuf v1.28.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
-	k8s.io/apiextensions-apiserver v0.24.3 // indirect
 	k8s.io/component-base v0.24.3 // indirect
 	k8s.io/kube-openapi v0.0.0-20220627174259-011e075b9cb8 // indirect
 	k8s.io/utils v0.0.0-20220725171434-9bab9ef40391 // indirect

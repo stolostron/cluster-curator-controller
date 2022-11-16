@@ -6,6 +6,7 @@ import (
 	"flag"
 	"os"
 
+	clientsetx "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -60,6 +61,13 @@ func main() {
 		setupLog.Error(err, "unable to connect to kubernetes rest")
 	}
 
+	// create the clientset for the CRDs
+	kubeXset, err := clientsetx.NewForConfig(mgr.GetConfig())
+	if err != nil {
+		setupLog.Error(err, "unable to connect to kubernetes extension rest")
+		os.Exit(1)
+	}
+
 	imageURI := os.Getenv("IMAGE_URI")
 	if imageURI == "" {
 		imageURI = utils.DefaultImageURI
@@ -69,6 +77,7 @@ func main() {
 	if err = (&controllers.ClusterCuratorReconciler{
 		Client:   mgr.GetClient(),
 		Kubeset:  kubeset,
+		KubeXset: kubeXset,
 		Log:      ctrl.Log.WithName("controllers").WithName("ClusterCurator"),
 		Scheme:   mgr.GetScheme(),
 		ImageURI: imageURI,
