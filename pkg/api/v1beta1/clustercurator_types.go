@@ -56,6 +56,16 @@ type Hook struct {
 	// and is a known Ansible entity.
 	// +kubebuilder:pruning:PreserveUnknownFields
 	ExtraVars *runtime.RawExtension `json:"extra_vars,omitempty"`
+
+	// A comma-separated list of tags to specify which sets
+	// of ansible tasks in a job should be run.
+	// +optional
+	JobTags string `json:"job_tags,omitempty"`
+
+	// A comma-separated list of tags to specify which sets
+	// of ansible tasks in a job should not be run.
+	// +optional
+	SkipTags string `json:"skip_tags,omitempty"`
 }
 
 type Hooks struct {
