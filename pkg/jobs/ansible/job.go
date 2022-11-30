@@ -105,7 +105,9 @@ func getAnsibleJob(jobtype string, // pre or post
 	secretRef string,
 	extraVars *runtime.RawExtension,
 	ansibleJobName string,
-	clusterName string) *unstructured.Unstructured {
+	clusterName string,
+	jobTags string,
+	skipTags string) *unstructured.Unstructured {
 
 	/*mapExtraVars := map[string]interface{}{}
 	if extraVars != nil {
@@ -138,6 +140,8 @@ func getAnsibleJob(jobtype string, // pre or post
 			"spec": map[string]interface{}{
 				templateNameKey:     ansibleTemplateName,
 				"tower_auth_secret": secretRef,
+				"job_tags":          jobTags,
+				"skip_tags":         skipTags,
 			},
 		},
 	}
@@ -324,7 +328,9 @@ func RunAnsibleJob(
 		secretRef,
 		hookToRun.ExtraVars,
 		"",
-		namespace)
+		namespace,
+		hookToRun.JobTags,
+		hookToRun.SkipTags)
 
 	cd, err := getClusterDeployment(client, namespace)
 	if err != nil {

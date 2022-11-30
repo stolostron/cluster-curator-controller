@@ -29,7 +29,7 @@ const AnsibleJobName = "my-ansiblejob-12345"
 const SecretRef = "toweraccess"
 const AnsibleJobTemplateName = "Ansible Tower Template to run as a job"
 
-var ansibleJob = getAnsibleJob(PREHOOK, "", AnsibleJobTemplateName, SecretRef, nil, AnsibleJobName, ClusterName)
+var ansibleJob = getAnsibleJob(PREHOOK, "", AnsibleJobTemplateName, SecretRef, nil, AnsibleJobName, ClusterName, "", "")
 var s = scheme.Scheme
 
 func getClusterCurator() *clustercuratorv1.ClusterCurator {
@@ -815,11 +815,42 @@ func Test_getAnsibleJobHooktype(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			aJob := getAnsibleJob(PREHOOK, test.hooktype, AnsibleJobTemplateName, SecretRef, nil, AnsibleJobName, ClusterName)
+			aJob := getAnsibleJob(PREHOOK, test.hooktype, AnsibleJobTemplateName, SecretRef, nil, AnsibleJobName, ClusterName, "", "")
 			_, ok := aJob.Object["spec"].(map[string]interface{})[test.expectedTemplateNameKey]
 			assert.True(t, ok, "template name key is not %s", test.expectedTemplateNameKey)
 			_, ok = aJob.Object["spec"].(map[string]interface{})[test.expectedNotTemplateNameKey]
 			assert.False(t, ok, "template name key is %s", test.expectedNotTemplateNameKey)
+		})
+	}
+}
+
+func Test_getAnsibleJob_Tags(t *testing.T) {
+	tests := []struct {
+		name     string
+		jobTags  string
+		skipTags string
+	}{
+		{
+			name:     "empty tags",
+			jobTags:  "",
+			skipTags: "",
+		},
+		{
+			name:     "single tags",
+			jobTags:  "hello",
+			skipTags: "goodbye",
+		},
+		{
+			name:     "multiple tags",
+			jobTags:  "hello,hi",
+			skipTags: "goodbye,bye,seeyou,later",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			aJob := getAnsibleJob(PREHOOK, "", AnsibleJobTemplateName, SecretRef, nil, AnsibleJobName, ClusterName, test.jobTags, test.skipTags)
+			assert.Equal(t, aJob.Object["spec"].(map[string]interface{})["job_tags"], test.jobTags)
+			assert.Equal(t, aJob.Object["spec"].(map[string]interface{})["skip_tags"], test.skipTags)
 		})
 	}
 }
