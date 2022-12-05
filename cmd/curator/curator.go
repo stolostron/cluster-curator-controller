@@ -111,7 +111,11 @@ func curatorRun(config *rest.Config, client clientv1.Client, clusterName string)
 		// This makes sure we set the curator-job condition to false when there is a failure
 		defer func() {
 			if r := recover(); r != nil {
-				message := curator.Spec.CuratingJob + " DesiredCuration: " + curator.Spec.DesiredCuration + " Failed - " + fmt.Sprintf("%v", r)
+				message := curator.Spec.CuratingJob + " DesiredCuration: " + curator.Spec.DesiredCuration
+				if curator.Spec.DesiredCuration == "upgrade" {
+					message = message + " Version (" + curator.Spec.Upgrade.DesiredUpdate + ")"
+				}
+				message = message + " Failed - " + fmt.Sprintf("%v", r)
 				utils.CheckError(utils.RecordFailedCuratorStatusCondition(
 					client,
 					clusterName,
@@ -312,6 +316,10 @@ func curatorRun(config *rest.Config, client clientv1.Client, clusterName string)
 		msg = curator.Spec.CuratingJob + " DesiredCuration: " + curator.Spec.DesiredCuration
 		condition = v1.ConditionTrue
 
+		if curator.Spec.DesiredCuration == "upgrade" {
+			msg = msg + " Version (" + curator.Spec.Upgrade.DesiredUpdate + ")"
+		}
+
 		// Remove DesireCuration, CuratingJob, Status from curator resource
 		updateDoneClusterCurator(client, curator, clusterName)
 	}
@@ -328,12 +336,26 @@ func curatorRun(config *rest.Config, client clientv1.Client, clusterName string)
 }
 
 func updateDoneClusterCurator(client clientv1.Client, curator *clustercuratorv1.ClusterCurator, clusterName string) {
+	if curator.Spec.DesiredCuration == "upgrade" {
+		patch := []byte(`{"spec":{"curatorJob": null},"status": null}`)
+		err := client.Patch(context.Background(), curator, clientv1.RawPatch(types.MergePatchType, patch))
+		utils.CheckError(err)
+		return
+	}
+
 	patch := []byte(`{"spec":{"curatorJob": null, "desiredCuration": null},"status": null}`)
 	err := client.Patch(context.Background(), curator, clientv1.RawPatch(types.MergePatchType, patch))
 	utils.CheckError(err)
 }
 
 func updateFailingClusterCurator(client clientv1.Client, curator *clustercuratorv1.ClusterCurator) {
+	if curator.Spec.DesiredCuration == "upgrade" {
+		patch := []byte(`{"spec":{"curatorJob": null}}`)
+		err := client.Patch(context.Background(), curator, clientv1.RawPatch(types.MergePatchType, patch))
+		utils.CheckError(err)
+		return
+	}
+
 	patch := []byte(`{"spec":{"curatorJob": null, "desiredCuration": null}}`)
 	err := client.Patch(context.Background(), curator, clientv1.RawPatch(types.MergePatchType, patch))
 	utils.CheckError(err)

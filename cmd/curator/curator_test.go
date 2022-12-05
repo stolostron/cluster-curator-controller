@@ -179,3 +179,59 @@ func TestInvokeMonitorDestroy(t *testing.T) {
 
 	curatorRun(nil, clientfake.NewFakeClient(), ClusterName)
 }
+
+func TestUpgradFailed(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("expected recover, but failed")
+		}
+	}()
+
+	os.Args[1] = "upgrade-cluster"
+
+	s := scheme.Scheme
+	s.AddKnownTypes(utils.CCGVR.GroupVersion(), &clustercuratorv1.ClusterCurator{})
+
+	client := clientfake.NewFakeClientWithScheme(s, &clustercuratorv1.ClusterCurator{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      ClusterName,
+			Namespace: ClusterName,
+		},
+		Spec: clustercuratorv1.ClusterCuratorSpec{
+			DesiredCuration: "upgrade",
+			Upgrade: clustercuratorv1.UpgradeHooks{
+				DesiredUpdate: "4.11.4",
+			},
+		},
+	})
+
+	curatorRun(nil, client, ClusterName)
+}
+
+func TestUpgradDone(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("unexpected error %v", r)
+		}
+	}()
+
+	os.Args[1] = "done"
+
+	s := scheme.Scheme
+	s.AddKnownTypes(utils.CCGVR.GroupVersion(), &clustercuratorv1.ClusterCurator{})
+
+	client := clientfake.NewFakeClientWithScheme(s, &clustercuratorv1.ClusterCurator{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      ClusterName,
+			Namespace: ClusterName,
+		},
+		Spec: clustercuratorv1.ClusterCuratorSpec{
+			DesiredCuration: "upgrade",
+			Upgrade: clustercuratorv1.UpgradeHooks{
+				DesiredUpdate: "4.11.4",
+			},
+		},
+	})
+
+	curatorRun(nil, client, ClusterName)
+}

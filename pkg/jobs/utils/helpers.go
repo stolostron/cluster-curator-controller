@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/blang/semver/v4"
 	"github.com/stolostron/library-go/pkg/config"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -352,4 +353,69 @@ func GetRetryTimes(timeout, defaultTimeout int, interval time.Duration) int {
 	}
 
 	return int(time.Duration(timeout) * time.Minute / interval)
+}
+
+func NeedToUpgrade(curator clustercuratorv1.ClusterCurator) (bool, error) {
+	jobCondtion := meta.FindStatusCondition(curator.Status.Conditions, "clustercurator-job")
+	if jobCondtion == nil {
+		// no clustercurator-job conditon, a new curation, run the upgrade
+		klog.V(2).Info(fmt.Sprintf("No ClusterCuratorJob for curator %q", curator.Name))
+		return true, nil
+	}
+
+	if jobCondtion.Status == metav1.ConditionFalse {
+		// job is not done, do nothing
+		klog.V(2).Info("The ClusterCuratorJob of the curator %q is not done, do nothing", curator.Name)
+		return false, nil
+	}
+
+	if !strings.Contains(jobCondtion.Message, "upgrade") {
+		klog.V(2).Info(fmt.Sprintf("Previous curator %q is not for upgrade, %q)", curator.Name, jobCondtion.Message))
+		// last job is not for upgrade, run the upgrade
+		return true, nil
+	}
+
+	if strings.Contains(jobCondtion.Message, "Failed") {
+		klog.V(2).Info(fmt.Sprintf("Previous curator %q is failed, %q", curator.Name, jobCondtion.Message))
+		if strings.Contains(jobCondtion.Message, curator.Spec.Upgrade.DesiredUpdate) {
+			// last job failed and desired version is unchange, do nothing
+			return false, nil
+		}
+
+		// last job failed and desired version is changed, upgrade
+		return true, nil
+	}
+
+	desiredVersion, err := semver.Make(curator.Spec.Upgrade.DesiredUpdate)
+	if err != nil {
+		return false, err
+	}
+
+	currentVersion, err := semver.Make(getVersion(jobCondtion.Message))
+	if err != nil {
+		return false, err
+	}
+
+	klog.V(2).Info(fmt.Sprintf("Curator %q current=%v desired=%v", curator.Name, currentVersion, desiredVersion))
+
+	if desiredVersion.Compare(currentVersion) == 1 {
+		// desired version is greater than current version, need upgrade
+		return true, nil
+	}
+
+	// desired version is less than or equal to current version，do nothing
+	return false, nil
+}
+
+func getVersion(msg string) string {
+	index := strings.Index(msg, "(")
+	if index == -1 {
+		return "0.0.0"
+	}
+	version := msg[index:]
+	lastIndex := strings.Index(version, ")")
+	if lastIndex == -1 {
+		return "0.0.0"
+	}
+	return version[1:lastIndex]
 }
