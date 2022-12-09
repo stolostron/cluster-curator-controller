@@ -140,8 +140,6 @@ func getAnsibleJob(jobtype string, // pre or post
 			"spec": map[string]interface{}{
 				templateNameKey:     ansibleTemplateName,
 				"tower_auth_secret": secretRef,
-				"job_tags":          jobTags,
-				"skip_tags":         skipTags,
 			},
 		},
 	}
@@ -156,6 +154,16 @@ func getAnsibleJob(jobtype string, // pre or post
 	}
 
 	ansibleJob.Object["spec"].(map[string]interface{})["extra_vars"] = mapExtraVars
+
+	if hooktype != string(clustercuratorv1.HookTypeWorkflow) {
+		if jobTags != "" {
+			ansibleJob.Object["spec"].(map[string]interface{})["job_tags"] = jobTags
+		}
+
+		if skipTags != "" {
+			ansibleJob.Object["spec"].(map[string]interface{})["skip_tags"] = skipTags
+		}
+	}
 
 	return ansibleJob
 }

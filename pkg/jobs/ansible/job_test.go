@@ -826,14 +826,24 @@ func Test_getAnsibleJobHooktype(t *testing.T) {
 
 func Test_getAnsibleJob_Tags(t *testing.T) {
 	tests := []struct {
-		name     string
-		jobTags  string
-		skipTags string
+		name              string
+		jobTags           string
+		skipTags          string
+		isWorkflow        bool
+		expectEmptyFields bool
 	}{
 		{
-			name:     "empty tags",
-			jobTags:  "",
-			skipTags: "",
+			name:              "empty tags",
+			jobTags:           "",
+			skipTags:          "",
+			expectEmptyFields: true,
+		},
+		{
+			name:              "workflow type",
+			jobTags:           "hi",
+			skipTags:          "bye",
+			isWorkflow:        true,
+			expectEmptyFields: true,
 		},
 		{
 			name:     "single tags",
@@ -848,9 +858,19 @@ func Test_getAnsibleJob_Tags(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			aJob := getAnsibleJob(PREHOOK, "", AnsibleJobTemplateName, SecretRef, nil, AnsibleJobName, ClusterName, test.jobTags, test.skipTags)
-			assert.Equal(t, aJob.Object["spec"].(map[string]interface{})["job_tags"], test.jobTags)
-			assert.Equal(t, aJob.Object["spec"].(map[string]interface{})["skip_tags"], test.skipTags)
+			var aJob *unstructured.Unstructured
+			if test.isWorkflow {
+				aJob = getAnsibleJob(PREHOOK, string(clustercuratorv1.HookTypeWorkflow), AnsibleJobTemplateName, SecretRef, nil, AnsibleJobName, ClusterName, test.jobTags, test.skipTags)
+			} else {
+				aJob = getAnsibleJob(PREHOOK, string(clustercuratorv1.HookTypeJob), AnsibleJobTemplateName, SecretRef, nil, AnsibleJobName, ClusterName, test.jobTags, test.skipTags)
+			}
+			if test.expectEmptyFields {
+				assert.Nil(t, aJob.Object["spec"].(map[string]interface{})["job_tags"])
+				assert.Nil(t, aJob.Object["spec"].(map[string]interface{})["skip_tags"])
+			} else {
+				assert.Equal(t, aJob.Object["spec"].(map[string]interface{})["job_tags"], test.jobTags)
+				assert.Equal(t, aJob.Object["spec"].(map[string]interface{})["skip_tags"], test.skipTags)
+			}
 		})
 	}
 }
