@@ -55,7 +55,7 @@ This will run the code locally:
 ```bash
 ./build/_output/cluster-curator-controller
 ```
-You will see the log output on the console. Provision a NEW cluster in ACM with `spec.installAttemptsLimit: 0` and you will see the controller launch a job.  Monitor the job with `oc logs jobs/cluster-curator-job-XYZAB` Where the job name is found using `oc get jobs`. The jobs are run in the cluster namespace.
+You will see the log output on the console. Provision a NEW cluster in ACM with annotation `hive.openshift.io/reconcile-pause=true` and you will see the controller launch a job.  Monitor the job with `oc logs jobs/cluster-curator-job-XYZAB` Where the job name is found using `oc get jobs`. The jobs are run in the cluster namespace.
 
 ## Build images
 Make sure your code compiled (passed).

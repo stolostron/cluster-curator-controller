@@ -11,6 +11,7 @@ import (
 	clusterversionv1 "github.com/openshift/api/config/v1"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 	hivefake "github.com/openshift/hive/pkg/client/clientset/versioned/fake"
+	hiveconstants "github.com/openshift/hive/pkg/constants"
 	clustercuratorv1 "github.com/stolostron/cluster-curator-controller/pkg/api/v1beta1"
 	"github.com/stolostron/cluster-curator-controller/pkg/jobs/utils"
 	managedclusteractionv1beta1 "github.com/stolostron/cluster-lifecycle-api/action/v1beta1"
@@ -133,7 +134,7 @@ func TestActivateDeployNoCD(t *testing.T) {
 		"err NotNil when ClusterDeployment kind does not exist")
 }
 
-func TestActivateDeployNoInstallAttemptsLimit(t *testing.T) {
+func TestActivateDeployNoPauseAnnotation(t *testing.T) {
 
 	hiveset := hivefake.NewSimpleClientset(&hivev1.ClusterDeployment{
 		TypeMeta: v1.TypeMeta{
@@ -145,51 +146,42 @@ func TestActivateDeployNoInstallAttemptsLimit(t *testing.T) {
 		},
 	})
 
-	t.Log("ClusterDeployment with no installAttemptsLimit")
-	assert.NotNil(t, ActivateDeploy(hiveset, ClusterName),
-		"err NotNil when ClusterDeployment has no installAttemptsLimit")
+	t.Log("ClusterDeployment with no Pause annotation")
+	assert.Nil(t, ActivateDeploy(hiveset, ClusterName),
+		"err Nil when ClusterDeployment has no Pause annotation")
 }
 
-func TestActivateDeployNonZeroInstallAttemptsLimit(t *testing.T) {
-
-	intValue := int32(1)
+func TestActivateDeployNoneTruePauseAnnotation(t *testing.T) {
 	hiveset := hivefake.NewSimpleClientset(&hivev1.ClusterDeployment{
 		TypeMeta: v1.TypeMeta{
 			APIVersion: "v1",
 		},
 		ObjectMeta: v1.ObjectMeta{
-			Name:      ClusterName,
-			Namespace: ClusterName,
-		},
-		Spec: hivev1.ClusterDeploymentSpec{
-			InstallAttemptsLimit: &intValue,
+			Name:        ClusterName,
+			Namespace:   ClusterName,
+			Annotations: map[string]string{hiveconstants.ReconcilePauseAnnotation: "false"},
 		},
 	})
 
-	t.Log("ClusterDeployment with installAttemptsLimit int32(1)")
-	assert.NotNil(t, ActivateDeploy(hiveset, ClusterName),
-		"err NotNil when ClusterDeployment with installAttemptsLimit not zero")
+	assert.Nil(t, ActivateDeploy(hiveset, ClusterName),
+		"err Nil when ClusterDeployment with non true pause annotation")
 }
 
 func TestActivateDeploy(t *testing.T) {
-
-	intValue := int32(0)
 	hiveset := hivefake.NewSimpleClientset(&hivev1.ClusterDeployment{
 		TypeMeta: v1.TypeMeta{
 			APIVersion: "v1",
 		},
 		ObjectMeta: v1.ObjectMeta{
-			Name:      ClusterName,
-			Namespace: ClusterName,
-		},
-		Spec: hivev1.ClusterDeploymentSpec{
-			InstallAttemptsLimit: &intValue,
+			Name:        ClusterName,
+			Namespace:   ClusterName,
+			Annotations: map[string]string{hiveconstants.ReconcilePauseAnnotation: "true"},
 		},
 	})
 
-	t.Log("ClusterDeployment with installAttemptsLimit zero")
+	t.Log("ClusterDeployment with true pause annotation")
 	assert.Nil(t, ActivateDeploy(hiveset, ClusterName),
-		"err NotNil when ClusterDeployment with installAttemptsLimit not zero")
+		"err Nil when ClusterDeployment with true pause annotation")
 }
 
 func getClusterDeployment() *hivev1.ClusterDeployment {
