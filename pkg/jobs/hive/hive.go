@@ -28,14 +28,14 @@ import (
 	clientv1 "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-//  patchStringValue specifies a json patch operation for a string.
+// patchStringValue specifies a json patch operation for a string.
 type patchStringValue struct {
 	Op    string `json:"op"`
 	Path  string `json:"path"`
 	Value int32  `json:"value"`
 }
 
-const UpgradeAttempts = 120
+const UpgradeAttempts = 480
 const MCVUpgradeLabel = "cluster-curator-upgrade"
 const ThreeMinuteMonitorTimeout = 36
 
