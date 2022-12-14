@@ -71,7 +71,7 @@ For more details on job flow within our architecture see our [**swimlane chart**
 
 - ### Cluster provisioning example: _(AWS)_
 
-  * In the Red Hat Advanced Cluster Management console, create a NEW cluster. Before you press the button to create the button, flip the YAML switch.  Look for the key-value field `installAttemptsLimit: 2`, and change it to `installAttemptsLimit: 0`, then press **Create**
+  * In the Red Hat Advanced Cluster Management console, create a NEW cluster. Before you press the button to create the button, flip the YAML switch.  Add the annotation `hive.openshift.io/reconcile-pause=true`, then press **Create**
 
   * The cluster will show in the console as **Creating**, but it is waiting for curation. If you will be using Ansible, create a secret in the cluster namespace. Here is a an example:
     ```yaml

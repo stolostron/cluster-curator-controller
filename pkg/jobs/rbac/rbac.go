@@ -29,7 +29,7 @@ func getRole(clusterName string) *rbacv1.Role {
 			rbacv1.PolicyRule{
 				APIGroups: []string{"hive.openshift.io"},
 				Resources: []string{"clusterdeployments"},
-				Verbs:     []string{"patch", "delete"},
+				Verbs:     []string{"patch", "delete", "update"},
 			},
 			rbacv1.PolicyRule{
 				APIGroups: []string{"batch", "hive.openshift.io", "tower.ansible.com"},
@@ -61,7 +61,7 @@ func getRole(clusterName string) *rbacv1.Role {
 				Resources: []string{"managedclusteractions"},
 				Verbs:     []string{"get", "create", "update", "delete"},
 			},
-			//To read the install-config secret
+			// To read the install-config secret
 			rbacv1.PolicyRule{
 				APIGroups:     []string{""},
 				Resources:     []string{"secrets"},
@@ -88,7 +88,7 @@ func getClusterInstallerRules() []rbacv1.PolicyRule {
 		rbacv1.PolicyRule{
 			APIGroups: []string{"hive.openshift.io"},
 			Resources: []string{"clusterdeployments"},
-			Verbs:     []string{"patch"},
+			Verbs:     []string{"patch", "update"},
 		},
 		rbacv1.PolicyRule{
 			APIGroups: []string{"internal.open-cluster-management.io"},
@@ -172,7 +172,7 @@ func ExtendClusterInstallerRole(kubeset kubernetes.Interface, namespace string) 
 
 	klog.V(0).Infof("Extending the %v role to support curator", clusterInstaller)
 
-	checkCount := 15 //Loop every 2s
+	checkCount := 15 // Loop every 2s
 	for i := 1; i <= checkCount; i++ {
 		ciRole, err := kubeset.RbacV1().Roles(namespace).Get(context.TODO(), clusterInstaller, v1.GetOptions{})
 		if err != nil {

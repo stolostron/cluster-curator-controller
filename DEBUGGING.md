@@ -53,7 +53,7 @@ oc -n my-cluster get ansibleJobs  #There will be just one job that should reach 
 oc -n my-cluster get jobs  
 ```
 4. There should now be a completed batchv1/job that has completed to run the Anisble Tower Job template
-5. The curator job will continue on to activate the ClusterDeployment by changing `ClusterDeployment.Spec.InstallAttemptsLimit: 1`, it was zero up to this point
+5. The curator job will continue on to activate the ClusterDeployment by removing the annotation `hive.openshift.io/reconcile-pause`, it was zero up to this point
 6. The curator job will then monitor the Cluster
 7. If the cluster deploys successfully, then a Posthook AnsibleJob will run if it is defined.
 

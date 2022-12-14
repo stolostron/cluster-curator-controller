@@ -25,7 +25,7 @@ func getRules(clusterName string) []rbacv1.PolicyRule {
 		rbacv1.PolicyRule{
 			APIGroups: []string{"hive.openshift.io"},
 			Resources: []string{"clusterdeployments"},
-			Verbs:     []string{"patch", "delete"},
+			Verbs:     []string{"patch", "delete", "update"},
 		},
 		rbacv1.PolicyRule{
 			APIGroups: []string{"batch", "hive.openshift.io", "tower.ansible.com"},
@@ -57,7 +57,7 @@ func getRules(clusterName string) []rbacv1.PolicyRule {
 			Resources: []string{"managedclusteractions"},
 			Verbs:     []string{"get", "create", "update", "delete"},
 		},
-		//To read the install-config secret
+		// To read the install-config secret
 		rbacv1.PolicyRule{
 			APIGroups:     []string{""},
 			Resources:     []string{"secrets"},
@@ -83,7 +83,7 @@ func getCombinedCIRules() []rbacv1.PolicyRule {
 			rbacv1.PolicyRule{
 				APIGroups: []string{"hive.openshift.io"},
 				Resources: []string{"clusterdeployments"},
-				Verbs:     []string{"patch"},
+				Verbs:     []string{"patch", "update"},
 			},
 			rbacv1.PolicyRule{
 				APIGroups: []string{"internal.open-cluster-management.io"},
