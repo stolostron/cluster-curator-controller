@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"k8s.io/client-go/util/retry"
 	"log"
 	"strconv"
 	"strings"
@@ -26,6 +25,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
 	clientv1 "sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -237,8 +237,16 @@ func monitorClusterStatus(client clientv1.Client, hiveset hiveclient.Interface, 
 			time.Sleep(utils.PauseFiveSeconds)
 
 			for _, condition := range cluster.Status.Conditions {
+				// the cluster provisioning will be treated as failed if the ClusterDeployment has any of
+				// the following conditions:
+				// 1) ProvisionFailedCondition is True, it indicates that a provision failed;
+				// 2) ProvisionStoppedCondition is True, it indicates that at least one provision attempt was
+				//    made, but there will be no further retries;
+				// 3) RequirementsMetCondition is False , it indicates that some pre-provision requirement has not
+				//    been met;
 				if (condition.Status == "True" && condition.Type == hivev1.ProvisionFailedCondition) ||
-					(condition.Type == hivev1.RequirementsMetCondition && condition.Status != "True") {
+					(condition.Status == "True" && condition.Type == hivev1.ProvisionStoppedCondition) ||
+					(condition.Type == hivev1.RequirementsMetCondition && condition.Status == "False") {
 					klog.Warning(cluster.Status.Conditions)
 					return errors.New("Failure detected")
 				}
