@@ -239,13 +239,16 @@ func monitorClusterStatus(client clientv1.Client, hiveset hiveclient.Interface, 
 			for _, condition := range cluster.Status.Conditions {
 				// the cluster provisioning will be treated as failed if the ClusterDeployment has any of
 				// the following conditions:
-				// 1) ProvisionFailedCondition is True, it indicates that a provision failed;
-				// 2) ProvisionStoppedCondition is True, it indicates that at least one provision attempt was
+				// 1) ProvisionStoppedCondition is True, it indicates that at least one provision attempt was
 				//    made, but there will be no further retries;
-				// 3) RequirementsMetCondition is False , it indicates that some pre-provision requirement has not
+				// 2) RequirementsMetCondition is False , it indicates that some pre-provision requirement has not
 				//    been met;
-				if (condition.Status == "True" && condition.Type == hivev1.ProvisionFailedCondition) ||
-					(condition.Status == "True" && condition.Type == hivev1.ProvisionStoppedCondition) ||
+				//
+				// Check ProvisionStoppedCondition instead of ProvisionFailedCondition because ProvisionFailedCondition
+				// is transient. If it's True, hive might still be trying; and if the provisioning subsequently succeed
+				// it can be set back to False. Whereas once ProvisionStoppedCondition is True, it means hive has given
+				// up completely and won't try anymore.
+				if (condition.Status == "True" && condition.Type == hivev1.ProvisionStoppedCondition) ||
 					(condition.Type == hivev1.RequirementsMetCondition && condition.Status == "False") {
 					klog.Warning(cluster.Status.Conditions)
 					return errors.New("Failure detected")

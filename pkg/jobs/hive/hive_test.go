@@ -239,22 +239,6 @@ func TestMonitorDeployStatusNoClusterDeployment(t *testing.T) {
 		"err is not nil, when cluster provisioning has a condition")
 }
 
-func TestMonitorDeployStatusProvisionFailedCondition(t *testing.T) {
-
-	cd := getClusterDeployment()
-	cd.Status.Conditions = []hivev1.ClusterDeploymentCondition{
-		{
-			Type:   hivev1.ProvisionFailedCondition,
-			Status: "True",
-		},
-	}
-
-	hiveset := hivefake.NewSimpleClientset(cd)
-
-	assert.NotNil(t, monitorClusterStatus(nil, hiveset, ClusterName, utils.Installing, testTimeout),
-		"err is not nil, when cluster provisioning has a condition")
-}
-
 func TestMonitorDeployStatusProvisionStoppedCondition(t *testing.T) {
 
 	cd := getClusterDeployment()
