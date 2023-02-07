@@ -140,3 +140,42 @@ func TestCuratorRunProviderCredentialPathEnv(t *testing.T) {
 
 	curatorRun(nil, client, ClusterName)
 }
+
+func TestInvokeMonitor(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("expected recover, but failed")
+		}
+	}()
+
+	os.Setenv("PROVIDER_CREDENTIAL_PATH", "namespace/secretname")
+	os.Args[1] = "monitor"
+
+	curatorRun(nil, clientfake.NewFakeClient(), ClusterName)
+}
+
+func TestInvokeMonitorImport(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("expected recover, but failed")
+		}
+	}()
+
+	os.Setenv("PROVIDER_CREDENTIAL_PATH", "namespace/secretname")
+	os.Args[1] = "monitor-import"
+
+	curatorRun(nil, clientfake.NewFakeClient(), ClusterName)
+}
+
+func TestInvokeMonitorDestroy(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("expected recover, but failed")
+		}
+	}()
+
+	os.Setenv("PROVIDER_CREDENTIAL_PATH", "namespace/secretname")
+	os.Args[1] = "monitor-destroy"
+
+	curatorRun(nil, clientfake.NewFakeClient(), ClusterName)
+}
