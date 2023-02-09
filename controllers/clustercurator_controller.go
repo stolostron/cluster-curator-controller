@@ -63,6 +63,16 @@ func (r *ClusterCuratorReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, nil
 	}
 
+	if curator.Spec.DesiredCuration == "upgrade" {
+		needed, err := utils.NeedToUpgrade(curator)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		if !needed {
+			return ctrl.Result{}, nil
+		}
+	}
+
 	// Curation flow begins here
 	// Apply RBAC required by the curation job
 	err := rbac.ApplyRBAC(r.Kubeset, req.Namespace)

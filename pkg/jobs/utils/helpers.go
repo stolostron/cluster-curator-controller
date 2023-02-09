@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/blang/semver/v4"
 	"github.com/stolostron/library-go/pkg/config"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -352,4 +353,109 @@ func GetRetryTimes(timeout, defaultTimeout int, interval time.Duration) int {
 	}
 
 	return int(time.Duration(timeout) * time.Minute / interval)
+}
+
+func NeedToUpgrade(curator clustercuratorv1.ClusterCurator) (bool, error) {
+	jobCondtion := meta.FindStatusCondition(curator.Status.Conditions, "clustercurator-job")
+	if jobCondtion == nil {
+		// no clustercurator-job conditon, a new curation, run the upgrade
+		klog.V(2).Info(fmt.Sprintf("No ClusterCuratorJob for curator %q", curator.Name))
+		return true, nil
+	}
+
+	if jobCondtion.Status == metav1.ConditionFalse {
+		// job is not done, do nothing
+		klog.V(2).Info("The ClusterCuratorJob of the curator %q is not done, do nothing", curator.Name)
+		return false, nil
+	}
+
+	if !strings.Contains(jobCondtion.Message, "upgrade") {
+		klog.V(2).Info(fmt.Sprintf("Previous curator %q is not for upgrade, %q)", curator.Name, jobCondtion.Message))
+		// last job is not for upgrade, run the upgrade
+		return true, nil
+	}
+
+	if strings.Contains(jobCondtion.Message, "Failed") {
+		klog.V(2).Info(fmt.Sprintf("Previous curator %q is failed, %q", curator.Name, jobCondtion.Message))
+		if strings.Contains(jobCondtion.Message, GetCurrentVersionInfo(&curator)) {
+			// last job failed and desired version is unchange, do nothing
+			return false, nil
+		}
+
+		// last job failed and desired version is changed, upgrade
+		return true, nil
+	}
+
+	specDesiredUpdate := curator.Spec.Upgrade.DesiredUpdate
+	if specDesiredUpdate == "" {
+		specDesiredUpdate = "0.0.0"
+	}
+
+	desiredVersion, err := semver.Make(specDesiredUpdate)
+	if err != nil {
+		return false, err
+	}
+
+	currentChannel, currentUpstream, currentVersion, err := parseVersionInfo(jobCondtion.Message)
+	if err != nil {
+		klog.V(2).Info(fmt.Sprintf("Previous curator has a wrong clustercurator-job condition message, %v", err))
+		return true, nil
+	}
+
+	klog.V(2).Info(fmt.Sprintf("Curator %q channel, current=%v desired=%v", curator.Name, currentChannel, curator.Spec.Upgrade.Channel))
+	klog.V(2).Info(fmt.Sprintf("Curator %q upstream, current=%v desired=%v", curator.Name, currentUpstream, curator.Spec.Upgrade.Upstream))
+	klog.V(2).Info(fmt.Sprintf("Curator %q version, current=%v desired=%v", curator.Name, currentVersion, desiredVersion))
+
+	if desiredVersion.Compare(currentVersion) == 1 {
+		// desired version is greater than current version, need upgrade
+		return true, nil
+	}
+
+	if curator.Spec.Upgrade.Channel != "" && curator.Spec.Upgrade.Channel != currentChannel {
+		return true, nil
+	}
+
+	if curator.Spec.Upgrade.Upstream != "" && curator.Spec.Upgrade.Upstream != currentUpstream {
+		return true, nil
+	}
+
+	// desired version is less than or equal to current version, or channel or upstream is not changed, do nothing
+	return false, nil
+}
+
+func GetCurrentVersionInfo(curator *clustercuratorv1.ClusterCurator) string {
+	return fmt.Sprintf("%s;%s;%s", curator.Spec.Upgrade.DesiredUpdate, curator.Spec.Upgrade.Channel, curator.Spec.Upgrade.Upstream)
+}
+
+func parseVersionInfo(msg string) (channel, upstream string, semversion semver.Version, err error) {
+	index := strings.Index(msg, "(")
+	if index == -1 {
+		return channel, upstream, semversion, fmt.Errorf("missing '(' in the message")
+	}
+	versionInfo := msg[index:]
+	lastIndex := strings.Index(versionInfo, ")")
+	if lastIndex == -1 {
+		return channel, upstream, semversion, fmt.Errorf("missing ')' in the message")
+	}
+
+	infos := strings.Split(versionInfo[1:lastIndex], ";")
+	if len(infos) != 3 {
+		return channel, upstream, semversion, fmt.Errorf("wrong split message")
+	}
+
+	version := infos[0]
+	channel = infos[1]
+	upstream = infos[2]
+
+	// there are only channel or upstream
+	if version == "" {
+		version = "0.0.0"
+	}
+
+	semversion, err = semver.Make(version)
+	if err != nil {
+		return channel, upstream, semversion, fmt.Errorf("")
+	}
+
+	return channel, upstream, semversion, nil
 }

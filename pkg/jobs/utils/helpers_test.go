@@ -316,3 +316,313 @@ func TestGetRetryTimes(t *testing.T) {
 	retryTimes = GetRetryTimes(120, 120, PauseSixtySeconds)
 	assert.Equal(t, 120, retryTimes)
 }
+
+func TestParseVersionInfo(t *testing.T) {
+	cases := []struct {
+		name             string
+		msg              string
+		expectedVersion  string
+		expectedChannel  string
+		expectedUpstream string
+		expectedErr      bool
+	}{
+		{
+			name:            "done msg",
+			msg:             "curator-job-xxxx DesiredCuration: upgrade Version (4.11.4;;)",
+			expectedVersion: "4.11.4",
+			expectedErr:     false,
+		},
+		{
+			name:             "done msg - all",
+			msg:              "curator-job-xxxx DesiredCuration: upgrade Version (4.11.4;stable-4.10;upstream)",
+			expectedVersion:  "4.11.4",
+			expectedChannel:  "stable-4.10",
+			expectedUpstream: "upstream",
+			expectedErr:      false,
+		},
+		{
+			name:        "broken msg",
+			msg:         "curator-job-xxxx DesiredCuration: upgrade Version )",
+			expectedErr: true,
+		},
+		{
+			name:        "broken msg",
+			msg:         "curator-job-xxxx DesiredCuration: upgrade Version (",
+			expectedErr: true,
+		},
+		{
+			name:        "broken msg",
+			msg:         "curator-job-xxxx DesiredCuration: upgrade Version ()",
+			expectedErr: true,
+		},
+	}
+
+	for _, c := range cases {
+		actualChannel, actualUpstream, actualVersion, err := parseVersionInfo(c.msg)
+		if err != nil && !c.expectedErr {
+			t.Errorf("unexpected error %v", err)
+		}
+
+		if c.expectedErr {
+			continue
+		}
+
+		if actualChannel != c.expectedChannel {
+			t.Errorf("expected %s, but %s", c.expectedChannel, actualChannel)
+		}
+
+		if actualUpstream != c.expectedUpstream {
+			t.Errorf("expected %s, but %s", c.expectedUpstream, actualUpstream)
+		}
+
+		if actualVersion.String() != c.expectedVersion {
+			t.Errorf("expected %s, but %s", c.expectedVersion, actualVersion)
+		}
+	}
+}
+
+func TestNeedToUpgrade(t *testing.T) {
+	cases := []struct {
+		name            string
+		curator         clustercuratorv1.ClusterCurator
+		expectedUpgrade bool
+		expectedErr     bool
+	}{
+		{
+			name:            "job is not started",
+			curator:         clustercuratorv1.ClusterCurator{},
+			expectedUpgrade: true,
+			expectedErr:     false,
+		},
+		{
+			name: "job is running",
+			curator: clustercuratorv1.ClusterCurator{
+				Status: clustercuratorv1.ClusterCuratorStatus{
+					Conditions: []v1.Condition{
+						{
+							Status: v1.ConditionFalse,
+							Type:   "clustercurator-job",
+						},
+					},
+				},
+			},
+			expectedUpgrade: false,
+			expectedErr:     false,
+		},
+		{
+			name: "non-upgrade job",
+			curator: clustercuratorv1.ClusterCurator{
+				Status: clustercuratorv1.ClusterCuratorStatus{
+					Conditions: []v1.Condition{
+						{
+							Message: "curator-job-xxxx DesiredCuration: install",
+							Status:  v1.ConditionTrue,
+							Type:    "clustercurator-job",
+						},
+					},
+				},
+			},
+			expectedUpgrade: true,
+			expectedErr:     false,
+		},
+		{
+			name: "failed job - desired version is unchange",
+			curator: clustercuratorv1.ClusterCurator{
+				Spec: clustercuratorv1.ClusterCuratorSpec{
+					Upgrade: clustercuratorv1.UpgradeHooks{
+						DesiredUpdate: "4.11.4",
+					},
+				},
+				Status: clustercuratorv1.ClusterCuratorStatus{
+					Conditions: []v1.Condition{
+						{
+							Message: "curator-job-xxxx DesiredCuration: upgrade Version (4.11.4;;) Failed - error",
+							Status:  v1.ConditionTrue,
+							Type:    "clustercurator-job",
+						},
+					},
+				},
+			},
+			expectedUpgrade: false,
+			expectedErr:     false,
+		},
+		{
+			name: "failed job - desired version is changed",
+			curator: clustercuratorv1.ClusterCurator{
+				Spec: clustercuratorv1.ClusterCuratorSpec{
+					Upgrade: clustercuratorv1.UpgradeHooks{
+						DesiredUpdate: "4.11.4",
+					},
+				},
+				Status: clustercuratorv1.ClusterCuratorStatus{
+					Conditions: []v1.Condition{
+						{
+							Message: "curator-job-xxxx DesiredCuration: upgrade Version (4.11.3;;) Failed - error",
+							Status:  v1.ConditionTrue,
+							Type:    "clustercurator-job",
+						},
+					},
+				},
+			},
+			expectedUpgrade: true,
+			expectedErr:     false,
+		},
+		{
+			name: "invalid desired version",
+			curator: clustercuratorv1.ClusterCurator{
+				Spec: clustercuratorv1.ClusterCuratorSpec{
+					Upgrade: clustercuratorv1.UpgradeHooks{
+						DesiredUpdate: "invalid",
+					},
+				},
+				Status: clustercuratorv1.ClusterCuratorStatus{
+					Conditions: []v1.Condition{
+						{
+							Message: "curator-job-xxxx DesiredCuration: upgrade Version (4.11.3)",
+							Status:  v1.ConditionTrue,
+							Type:    "clustercurator-job",
+						},
+					},
+				},
+			},
+			expectedUpgrade: false,
+			expectedErr:     true,
+		},
+		{
+			name: "invalid version in msg",
+			curator: clustercuratorv1.ClusterCurator{
+				Spec: clustercuratorv1.ClusterCuratorSpec{
+					Upgrade: clustercuratorv1.UpgradeHooks{
+						DesiredUpdate: "4.11.4",
+					},
+				},
+				Status: clustercuratorv1.ClusterCuratorStatus{
+					Conditions: []v1.Condition{
+						{
+							Message: "curator-job-xxxx DesiredCuration: upgrade Version (invalid)",
+							Status:  v1.ConditionTrue,
+							Type:    "clustercurator-job",
+						},
+					},
+				},
+			},
+			expectedUpgrade: true,
+			expectedErr:     false,
+		},
+		{
+			name: "desired version is not changed",
+			curator: clustercuratorv1.ClusterCurator{
+				Spec: clustercuratorv1.ClusterCuratorSpec{
+					Upgrade: clustercuratorv1.UpgradeHooks{
+						DesiredUpdate: "4.11.4",
+					},
+				},
+				Status: clustercuratorv1.ClusterCuratorStatus{
+					Conditions: []v1.Condition{
+						{
+							Message: "curator-job-xxxx DesiredCuration: upgrade Version (4.11.4;;)",
+							Status:  v1.ConditionTrue,
+							Type:    "clustercurator-job",
+						},
+					},
+				},
+			},
+			expectedUpgrade: false,
+			expectedErr:     false,
+		},
+		{
+			name: "desired version is changed",
+			curator: clustercuratorv1.ClusterCurator{
+				Spec: clustercuratorv1.ClusterCuratorSpec{
+					Upgrade: clustercuratorv1.UpgradeHooks{
+						DesiredUpdate: "4.11.5",
+					},
+				},
+				Status: clustercuratorv1.ClusterCuratorStatus{
+					Conditions: []v1.Condition{
+						{
+							Message: "curator-job-xxxx DesiredCuration: upgrade Version (4.11.4;;)",
+							Status:  v1.ConditionTrue,
+							Type:    "clustercurator-job",
+						},
+					},
+				},
+			},
+			expectedUpgrade: true,
+			expectedErr:     false,
+		},
+		{
+			name: "desired channel is changed",
+			curator: clustercuratorv1.ClusterCurator{
+				Spec: clustercuratorv1.ClusterCuratorSpec{
+					Upgrade: clustercuratorv1.UpgradeHooks{
+						Channel: "stable-4.11",
+					},
+				},
+				Status: clustercuratorv1.ClusterCuratorStatus{
+					Conditions: []v1.Condition{
+						{
+							Message: "curator-job-xxxx DesiredCuration: upgrade Version (;stable-4.10;)",
+							Status:  v1.ConditionTrue,
+							Type:    "clustercurator-job",
+						},
+					},
+				},
+			},
+			expectedUpgrade: true,
+			expectedErr:     false,
+		},
+		{
+			name: "desired upsteam is changed",
+			curator: clustercuratorv1.ClusterCurator{
+				Spec: clustercuratorv1.ClusterCuratorSpec{
+					Upgrade: clustercuratorv1.UpgradeHooks{
+						Upstream: "server2",
+					},
+				},
+				Status: clustercuratorv1.ClusterCuratorStatus{
+					Conditions: []v1.Condition{
+						{
+							Message: "curator-job-xxxx DesiredCuration: upgrade Version (;stable-4.10;server1)",
+							Status:  v1.ConditionTrue,
+							Type:    "clustercurator-job",
+						},
+					},
+				},
+			},
+			expectedUpgrade: true,
+			expectedErr:     false,
+		},
+		{
+			name: "a broken msg",
+			curator: clustercuratorv1.ClusterCurator{
+				Spec: clustercuratorv1.ClusterCuratorSpec{
+					Upgrade: clustercuratorv1.UpgradeHooks{
+						DesiredUpdate: "4.11.5",
+					},
+				},
+				Status: clustercuratorv1.ClusterCuratorStatus{
+					Conditions: []v1.Condition{
+						{
+							Message: "curator-job-xxxx DesiredCuration: upgrade Version )",
+							Status:  v1.ConditionTrue,
+							Type:    "clustercurator-job",
+						},
+					},
+				},
+			},
+			expectedUpgrade: true,
+			expectedErr:     false,
+		},
+	}
+
+	for _, c := range cases {
+		actual, err := NeedToUpgrade(c.curator)
+		if err != nil && !c.expectedErr {
+			t.Errorf("unexpected error %v", err)
+		}
+		if actual != c.expectedUpgrade {
+			t.Errorf("expected %v, but %v", c.expectedUpgrade, actual)
+		}
+	}
+}
