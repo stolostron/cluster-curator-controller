@@ -317,38 +317,66 @@ func TestGetRetryTimes(t *testing.T) {
 	assert.Equal(t, 120, retryTimes)
 }
 
-func TestGetVersion(t *testing.T) {
+func TestParseVersionInfo(t *testing.T) {
 	cases := []struct {
-		name            string
-		msg             string
-		expectedVersion string
+		name             string
+		msg              string
+		expectedVersion  string
+		expectedChannel  string
+		expectedUpstream string
+		expectedErr      bool
 	}{
 		{
 			name:            "done msg",
-			msg:             "curator-job-xxxx DesiredCuration: upgrade Version (4.11.4)",
+			msg:             "curator-job-xxxx DesiredCuration: upgrade Version (4.11.4;;)",
 			expectedVersion: "4.11.4",
+			expectedErr:     false,
 		},
 		{
-			name:            "done msg",
-			msg:             "curator-job-xxxx DesiredCuration: upgrade Version (4.11.3) Failed - error",
-			expectedVersion: "4.11.3",
+			name:             "done msg - all",
+			msg:              "curator-job-xxxx DesiredCuration: upgrade Version (4.11.4;stable-4.10;upstream)",
+			expectedVersion:  "4.11.4",
+			expectedChannel:  "stable-4.10",
+			expectedUpstream: "upstream",
+			expectedErr:      false,
 		},
 		{
-			name:            "broken msg",
-			msg:             "curator-job-xxxx DesiredCuration: upgrade Version )",
-			expectedVersion: "0.0.0",
+			name:        "broken msg",
+			msg:         "curator-job-xxxx DesiredCuration: upgrade Version )",
+			expectedErr: true,
 		},
 		{
-			name:            "broken msg",
-			msg:             "curator-job-xxxx DesiredCuration: upgrade Version (",
-			expectedVersion: "0.0.0",
+			name:        "broken msg",
+			msg:         "curator-job-xxxx DesiredCuration: upgrade Version (",
+			expectedErr: true,
+		},
+		{
+			name:        "broken msg",
+			msg:         "curator-job-xxxx DesiredCuration: upgrade Version ()",
+			expectedErr: true,
 		},
 	}
 
 	for _, c := range cases {
-		actual := getVersion(c.msg)
-		if actual != c.expectedVersion {
-			t.Errorf("expected %s, but %s", c.expectedVersion, actual)
+		actualChannel, actualUpstream, actualVersion, err := parseVersionInfo(c.msg)
+		if err != nil && !c.expectedErr {
+			t.Errorf("unexpected error %v", err)
+		}
+
+		if c.expectedErr {
+			continue
+		}
+
+		if actualChannel != c.expectedChannel {
+			t.Errorf("expected %s, but %s", c.expectedChannel, actualChannel)
+		}
+
+		if actualUpstream != c.expectedUpstream {
+			t.Errorf("expected %s, but %s", c.expectedUpstream, actualUpstream)
+		}
+
+		if actualVersion.String() != c.expectedVersion {
+			t.Errorf("expected %s, but %s", c.expectedVersion, actualVersion)
 		}
 	}
 }
@@ -408,7 +436,7 @@ func TestNeedToUpgrade(t *testing.T) {
 				Status: clustercuratorv1.ClusterCuratorStatus{
 					Conditions: []v1.Condition{
 						{
-							Message: "curator-job-xxxx DesiredCuration: upgrade Version (4.11.4) Failed - error",
+							Message: "curator-job-xxxx DesiredCuration: upgrade Version (4.11.4;;) Failed - error",
 							Status:  v1.ConditionTrue,
 							Type:    "clustercurator-job",
 						},
@@ -429,7 +457,7 @@ func TestNeedToUpgrade(t *testing.T) {
 				Status: clustercuratorv1.ClusterCuratorStatus{
 					Conditions: []v1.Condition{
 						{
-							Message: "curator-job-xxxx DesiredCuration: upgrade Version (4.11.3) Failed - error",
+							Message: "curator-job-xxxx DesiredCuration: upgrade Version (4.11.3;;) Failed - error",
 							Status:  v1.ConditionTrue,
 							Type:    "clustercurator-job",
 						},
@@ -478,8 +506,8 @@ func TestNeedToUpgrade(t *testing.T) {
 					},
 				},
 			},
-			expectedUpgrade: false,
-			expectedErr:     true,
+			expectedUpgrade: true,
+			expectedErr:     false,
 		},
 		{
 			name: "desired version is not changed",
@@ -492,7 +520,7 @@ func TestNeedToUpgrade(t *testing.T) {
 				Status: clustercuratorv1.ClusterCuratorStatus{
 					Conditions: []v1.Condition{
 						{
-							Message: "curator-job-xxxx DesiredCuration: upgrade Version (4.11.4)",
+							Message: "curator-job-xxxx DesiredCuration: upgrade Version (4.11.4;;)",
 							Status:  v1.ConditionTrue,
 							Type:    "clustercurator-job",
 						},
@@ -513,7 +541,49 @@ func TestNeedToUpgrade(t *testing.T) {
 				Status: clustercuratorv1.ClusterCuratorStatus{
 					Conditions: []v1.Condition{
 						{
-							Message: "curator-job-xxxx DesiredCuration: upgrade Version (4.11.4)",
+							Message: "curator-job-xxxx DesiredCuration: upgrade Version (4.11.4;;)",
+							Status:  v1.ConditionTrue,
+							Type:    "clustercurator-job",
+						},
+					},
+				},
+			},
+			expectedUpgrade: true,
+			expectedErr:     false,
+		},
+		{
+			name: "desired channel is changed",
+			curator: clustercuratorv1.ClusterCurator{
+				Spec: clustercuratorv1.ClusterCuratorSpec{
+					Upgrade: clustercuratorv1.UpgradeHooks{
+						Channel: "stable-4.11",
+					},
+				},
+				Status: clustercuratorv1.ClusterCuratorStatus{
+					Conditions: []v1.Condition{
+						{
+							Message: "curator-job-xxxx DesiredCuration: upgrade Version (;stable-4.10;)",
+							Status:  v1.ConditionTrue,
+							Type:    "clustercurator-job",
+						},
+					},
+				},
+			},
+			expectedUpgrade: true,
+			expectedErr:     false,
+		},
+		{
+			name: "desired upsteam is changed",
+			curator: clustercuratorv1.ClusterCurator{
+				Spec: clustercuratorv1.ClusterCuratorSpec{
+					Upgrade: clustercuratorv1.UpgradeHooks{
+						Upstream: "server2",
+					},
+				},
+				Status: clustercuratorv1.ClusterCuratorStatus{
+					Conditions: []v1.Condition{
+						{
+							Message: "curator-job-xxxx DesiredCuration: upgrade Version (;stable-4.10;server1)",
 							Status:  v1.ConditionTrue,
 							Type:    "clustercurator-job",
 						},

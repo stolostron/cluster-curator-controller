@@ -113,7 +113,7 @@ func curatorRun(config *rest.Config, client clientv1.Client, clusterName string)
 			if r := recover(); r != nil {
 				message := curator.Spec.CuratingJob + " DesiredCuration: " + curator.Spec.DesiredCuration
 				if curator.Spec.DesiredCuration == "upgrade" {
-					message = message + " Version (" + curator.Spec.Upgrade.DesiredUpdate + ")"
+					message = message + " Version (" + utils.GetCurrentVersionInfo(curator) + ")"
 				}
 				message = message + " Failed - " + fmt.Sprintf("%v", r)
 				utils.CheckError(utils.RecordFailedCuratorStatusCondition(
@@ -317,7 +317,7 @@ func curatorRun(config *rest.Config, client clientv1.Client, clusterName string)
 		condition = v1.ConditionTrue
 
 		if curator.Spec.DesiredCuration == "upgrade" {
-			msg = msg + " Version (" + curator.Spec.Upgrade.DesiredUpdate + ")"
+			msg = msg + " Version (" + utils.GetCurrentVersionInfo(curator) + ")"
 		}
 
 		// Remove DesireCuration, CuratingJob, Status from curator resource
