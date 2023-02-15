@@ -377,7 +377,7 @@ func NeedToUpgrade(curator clustercuratorv1.ClusterCurator) (bool, error) {
 
 	if strings.Contains(jobCondtion.Message, "Failed") {
 		klog.V(2).Info(fmt.Sprintf("Previous curator %q is failed, %q", curator.Name, jobCondtion.Message))
-		if strings.Contains(jobCondtion.Message, curator.Spec.Upgrade.DesiredUpdate) {
+		if strings.Contains(jobCondtion.Message, GetCurrentVersionInfo(&curator)) {
 			// last job failed and desired version is unchange, do nothing
 			return false, nil
 		}
@@ -386,36 +386,76 @@ func NeedToUpgrade(curator clustercuratorv1.ClusterCurator) (bool, error) {
 		return true, nil
 	}
 
-	desiredVersion, err := semver.Make(curator.Spec.Upgrade.DesiredUpdate)
+	specDesiredUpdate := curator.Spec.Upgrade.DesiredUpdate
+	if specDesiredUpdate == "" {
+		specDesiredUpdate = "0.0.0"
+	}
+
+	desiredVersion, err := semver.Make(specDesiredUpdate)
 	if err != nil {
 		return false, err
 	}
 
-	currentVersion, err := semver.Make(getVersion(jobCondtion.Message))
+	currentChannel, currentUpstream, currentVersion, err := parseVersionInfo(jobCondtion.Message)
 	if err != nil {
-		return false, err
+		klog.V(2).Info(fmt.Sprintf("Previous curator has a wrong clustercurator-job condition message, %v", err))
+		return true, nil
 	}
 
-	klog.V(2).Info(fmt.Sprintf("Curator %q current=%v desired=%v", curator.Name, currentVersion, desiredVersion))
+	klog.V(2).Info(fmt.Sprintf("Curator %q channel, current=%v desired=%v", curator.Name, currentChannel, curator.Spec.Upgrade.Channel))
+	klog.V(2).Info(fmt.Sprintf("Curator %q upstream, current=%v desired=%v", curator.Name, currentUpstream, curator.Spec.Upgrade.Upstream))
+	klog.V(2).Info(fmt.Sprintf("Curator %q version, current=%v desired=%v", curator.Name, currentVersion, desiredVersion))
 
 	if desiredVersion.Compare(currentVersion) == 1 {
 		// desired version is greater than current version, need upgrade
 		return true, nil
 	}
 
-	// desired version is less than or equal to current version，do nothing
+	if curator.Spec.Upgrade.Channel != "" && curator.Spec.Upgrade.Channel != currentChannel {
+		return true, nil
+	}
+
+	if curator.Spec.Upgrade.Upstream != "" && curator.Spec.Upgrade.Upstream != currentUpstream {
+		return true, nil
+	}
+
+	// desired version is less than or equal to current version, or channel or upstream is not changed, do nothing
 	return false, nil
 }
 
-func getVersion(msg string) string {
+func GetCurrentVersionInfo(curator *clustercuratorv1.ClusterCurator) string {
+	return fmt.Sprintf("%s;%s;%s", curator.Spec.Upgrade.DesiredUpdate, curator.Spec.Upgrade.Channel, curator.Spec.Upgrade.Upstream)
+}
+
+func parseVersionInfo(msg string) (channel, upstream string, semversion semver.Version, err error) {
 	index := strings.Index(msg, "(")
 	if index == -1 {
-		return "0.0.0"
+		return channel, upstream, semversion, fmt.Errorf("missing '(' in the message")
 	}
-	version := msg[index:]
-	lastIndex := strings.Index(version, ")")
+	versionInfo := msg[index:]
+	lastIndex := strings.Index(versionInfo, ")")
 	if lastIndex == -1 {
-		return "0.0.0"
+		return channel, upstream, semversion, fmt.Errorf("missing ')' in the message")
 	}
-	return version[1:lastIndex]
+
+	infos := strings.Split(versionInfo[1:lastIndex], ";")
+	if len(infos) != 3 {
+		return channel, upstream, semversion, fmt.Errorf("wrong split message")
+	}
+
+	version := infos[0]
+	channel = infos[1]
+	upstream = infos[2]
+
+	// there are only channel or upstream
+	if version == "" {
+		version = "0.0.0"
+	}
+
+	semversion, err = semver.Make(version)
+	if err != nil {
+		return channel, upstream, semversion, fmt.Errorf("")
+	}
+
+	return channel, upstream, semversion, nil
 }
