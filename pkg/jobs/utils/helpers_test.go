@@ -426,7 +426,7 @@ func TestNeedToUpgrade(t *testing.T) {
 			expectedErr:     false,
 		},
 		{
-			name: "failed job - desired version is unchange",
+			name: "failed job - desired version is unchanged",
 			curator: clustercuratorv1.ClusterCurator{
 				Spec: clustercuratorv1.ClusterCuratorSpec{
 					Upgrade: clustercuratorv1.UpgradeHooks{
@@ -437,6 +437,27 @@ func TestNeedToUpgrade(t *testing.T) {
 					Conditions: []v1.Condition{
 						{
 							Message: "curator-job-xxxx DesiredCuration: upgrade Version (4.11.4;;) Failed - error",
+							Status:  v1.ConditionTrue,
+							Type:    "clustercurator-job",
+						},
+					},
+				},
+			},
+			expectedUpgrade: false,
+			expectedErr:     false,
+		},
+		{
+			name: "failed job - desired version is unchanged in old version",
+			curator: clustercuratorv1.ClusterCurator{
+				Spec: clustercuratorv1.ClusterCuratorSpec{
+					Upgrade: clustercuratorv1.UpgradeHooks{
+						DesiredUpdate: "4.11.4",
+					},
+				},
+				Status: clustercuratorv1.ClusterCuratorStatus{
+					Conditions: []v1.Condition{
+						{
+							Message: "curator-job-xxxx DesiredCuration: upgrade Version (4.11.4) Failed - error",
 							Status:  v1.ConditionTrue,
 							Type:    "clustercurator-job",
 						},
@@ -617,12 +638,14 @@ func TestNeedToUpgrade(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		actual, err := NeedToUpgrade(c.curator)
-		if err != nil && !c.expectedErr {
-			t.Errorf("unexpected error %v", err)
-		}
-		if actual != c.expectedUpgrade {
-			t.Errorf("expected %v, but %v", c.expectedUpgrade, actual)
-		}
+		t.Run(c.name, func(t *testing.T) {
+			actual, err := NeedToUpgrade(c.curator)
+			if err != nil && !c.expectedErr {
+				t.Errorf("unexpected error %v", err)
+			}
+			if actual != c.expectedUpgrade {
+				t.Errorf("expected %v, but %v", c.expectedUpgrade, actual)
+			}
+		})
 	}
 }
