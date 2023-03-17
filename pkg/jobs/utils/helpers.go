@@ -378,7 +378,14 @@ func NeedToUpgrade(curator clustercuratorv1.ClusterCurator) (bool, error) {
 	if strings.Contains(jobCondtion.Message, "Failed") {
 		klog.V(2).Info(fmt.Sprintf("Previous curator %q is failed, %q", curator.Name, jobCondtion.Message))
 		if strings.Contains(jobCondtion.Message, GetCurrentVersionInfo(&curator)) {
-			// last job failed and desired version is unchange, do nothing
+			// last job failed and desired version is unchanged, do nothing
+			klog.V(2).Info(fmt.Sprintf("last job failed and desired version is unchanged, do not need to upgrade"))
+			return false, nil
+		}
+
+		// To be compatible with 2.2.0 version
+		if strings.Contains(jobCondtion.Message, fmt.Sprintf("Version (%s)", curator.Spec.Upgrade.DesiredUpdate)) {
+			klog.V(2).Info(fmt.Sprintf("last job failed and desired version is unchanged, do not need to upgrade"))
 			return false, nil
 		}
 
