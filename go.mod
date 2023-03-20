@@ -1,6 +1,6 @@
 module github.com/stolostron/cluster-curator-controller
 
-go 1.18
+go 1.20
 
 require (
 	github.com/blang/semver/v4 v4.0.0
@@ -14,8 +14,8 @@ require (
 	github.com/stretchr/testify v1.8.0
 	gopkg.in/yaml.v2 v2.4.0
 	gopkg.in/yaml.v3 v3.0.1
-	k8s.io/api v0.24.3
-	k8s.io/apimachinery v0.24.3
+	k8s.io/api v0.24.11
+	k8s.io/apimachinery v0.24.11
 	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/klog v1.0.0
 	k8s.io/klog/v2 v2.70.1
@@ -61,11 +61,11 @@ require (
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.8.0 // indirect
 	go.uber.org/zap v1.21.0 // indirect
-	golang.org/x/net v0.0.0-20220726230323-06994584191e // indirect
+	golang.org/x/net v0.7.0 // indirect
 	golang.org/x/oauth2 v0.0.0-20220722155238-128564f6959c // indirect
-	golang.org/x/sys v0.0.0-20220727055044-e65921a090b8 // indirect
-	golang.org/x/term v0.0.0-20220722155259-a9ba230a4035 // indirect
-	golang.org/x/text v0.3.7 // indirect
+	golang.org/x/sys v0.5.0 // indirect
+	golang.org/x/term v0.5.0 // indirect
+	golang.org/x/text v0.7.0 // indirect
 	golang.org/x/time v0.0.0-20220722155302-e5dcc9cfc0b9 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.2.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
@@ -76,7 +76,7 @@ require (
 	k8s.io/kube-openapi v0.0.0-20220627174259-011e075b9cb8 // indirect
 	k8s.io/utils v0.0.0-20220725171434-9bab9ef40391 // indirect
 	sigs.k8s.io/json v0.0.0-20220713155537-f223a00ba0e2 // indirect
-	sigs.k8s.io/structured-merge-diff/v4 v4.2.1 // indirect
+	sigs.k8s.io/structured-merge-diff/v4 v4.2.3 // indirect
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
 
@@ -120,12 +120,9 @@ replace (
 
 replace (
 	github.com/openshift/hive/apis => github.com/openshift/hive/apis v0.0.0-20221110093336-443b7d70c311
-	k8s.io/api => k8s.io/api v0.24.3
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.24.3
-	k8s.io/apimachinery => k8s.io/apimachinery v0.24.3
-	k8s.io/apiserver => k8s.io/apiserver v0.24.3
 	k8s.io/cli-runtime => k8s.io/cli-runtime v0.24.3
-	k8s.io/client-go => k8s.io/client-go v0.24.3
+	k8s.io/client-go => k8s.io/client-go v0.24.11
 	k8s.io/cloud-provider => k8s.io/cloud-provider v0.24.3
 	k8s.io/cluster-bootstrap => k8s.io/cluster-bootstrap v0.24.3
 	k8s.io/code-generator => k8s.io/code-generator v0.24.3
