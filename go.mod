@@ -1,6 +1,6 @@
 module github.com/stolostron/cluster-curator-controller
 
-go 1.20
+go 1.19
 
 require (
 	github.com/blang/semver/v4 v4.0.0
