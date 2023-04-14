@@ -255,7 +255,7 @@ func getBatchJob(clusterName string, imageURI string, curator clustercuratorv1.C
 					"open-cluster-management": "curator-job",
 				},
 				Annotations: map[string]string{
-					PostAJob:     "Retry an install posthook job",
+					PostAJob:     "Retry a posthook job",
 					DoneDoneDone: "Cluster Curator job has completed",
 				},
 			},
