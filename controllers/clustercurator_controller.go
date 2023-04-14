@@ -57,13 +57,16 @@ func (r *ClusterCuratorReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	log.V(3).Info("Reconcile: %v, DesiredCuration: %v, Previous CuratingJob: %v",
 		req.NamespacedName, curator.Spec.DesiredCuration, curator.Spec.CuratingJob)
 
+	isPosthookOnly := curator.Operation != nil && curator.Operation.RetryPosthook != ""
+
 	// Curating work has already started OR no curation work supplied curator.Spec.CuratingJob != "" ||
-	if curator.Spec.CuratingJob != "" || curator.Spec.DesiredCuration == "" {
+	if (curator.Spec.CuratingJob != "" || curator.Spec.DesiredCuration == "") && !isPosthookOnly {
 		log.V(3).Info("No curation to do for %v", req.NamespacedName)
 		return ctrl.Result{}, nil
 	}
 
-	if curator.Spec.DesiredCuration == "upgrade" {
+	// Override upgrade if there's an operation requested
+	if curator.Spec.DesiredCuration == "upgrade" && !isPosthookOnly {
 		needed, err := utils.NeedToUpgrade(curator)
 		if err != nil {
 			return ctrl.Result{}, err
@@ -106,6 +109,12 @@ func newClusterCuratorPredicate() predicate.Predicate {
 					return false
 				}
 				if newClusterCurator.Spec.DesiredCuration == DeleteNamespace {
+					return true
+				}
+				if (newClusterCurator.Operation != nil && oldClusterCurator.Operation != nil) && (newClusterCurator.Operation.RetryPosthook == oldClusterCurator.Operation.RetryPosthook) {
+					return false
+				}
+				if newClusterCurator.Operation != nil && newClusterCurator.Operation.RetryPosthook != "" {
 					return true
 				}
 				if newClusterCurator.Spec.DesiredCuration != oldClusterCurator.Spec.DesiredCuration && newClusterCurator.Spec.DesiredCuration == "" {

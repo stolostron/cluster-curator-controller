@@ -44,7 +44,13 @@ func Job(client client.Client, curator *clustercuratorv1.ClusterCurator) error {
 	var prehook []clustercuratorv1.Hook
 	var posthook []clustercuratorv1.Hook
 	var towerauthsecret string
-	switch curator.Spec.DesiredCuration {
+
+	desiredCuration := curator.Spec.DesiredCuration
+	if curator.Operation != nil && curator.Operation.RetryPosthook != "" {
+		desiredCuration = curator.Operation.RetryPosthook
+	}
+
+	switch desiredCuration {
 	case "install":
 		prehook = curator.Spec.Install.Prehook
 		posthook = curator.Spec.Install.Posthook
@@ -62,6 +68,12 @@ func Job(client client.Client, curator *clustercuratorv1.ClusterCurator) error {
 			case "upgrade":
 				hooks = curator.Spec.Upgrade
 		*/
+	case "installPosthook":
+		posthook = curator.Spec.Install.Posthook
+		towerauthsecret = curator.Spec.Install.TowerAuthSecret
+	case "upgradePosthook":
+		posthook = curator.Spec.Upgrade.Posthook
+		towerauthsecret = curator.Spec.Upgrade.TowerAuthSecret
 	default:
 		return errors.New("The Spec.DesiredCuration value is not supported: " + curator.Spec.DesiredCuration)
 	}

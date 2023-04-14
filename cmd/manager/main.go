@@ -63,7 +63,7 @@ func main() {
 	imageURI := os.Getenv("IMAGE_URI")
 	if imageURI == "" {
 		imageURI = utils.DefaultImageURI
-		klog.Warning("IMAGE_URI=" + imageURI + ", becauese environment variable was not set")
+		klog.Warning("IMAGE_URI=" + imageURI + ", because environment variable was not set")
 	}
 
 	if err = (&controllers.ClusterCuratorReconciler{

@@ -155,6 +155,13 @@ const (
 
 // +kubebuilder:object:root=true
 
+// Operation contains information about a requested or running operation
+type Operation struct {
+	// Option for retrying a failed posthook job
+	// +kubebuilder:validation:Enum={installPosthook,upgradePosthook}
+	RetryPosthook string `json:"retryPosthook,omitempty"`
+}
+
 // ClusterCurator is the Schema for the clustercurators API
 // This kind allows for prehook and posthook jobs to be executed prior to Hive provisioning
 // and import of a cluster.
@@ -162,8 +169,9 @@ type ClusterCurator struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   ClusterCuratorSpec   `json:"spec,omitempty"`
-	Status ClusterCuratorStatus `json:"status,omitempty"`
+	Spec      ClusterCuratorSpec   `json:"spec,omitempty"`
+	Status    ClusterCuratorStatus `json:"status,omitempty"`
+	Operation *Operation           `json:"operation,omitempty"`
 }
 
 // +kubebuilder:object:root=true
