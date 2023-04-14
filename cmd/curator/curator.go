@@ -85,13 +85,16 @@ func curatorRun(config *rest.Config, client clientv1.Client, clusterName string)
 
 	// Gets the Cluster Configuration overrides
 	curator, err := utils.GetClusterCurator(client, clusterName)
-	desiredCuration := curator.Spec.DesiredCuration
-	if curator.Operation != nil && curator.Operation.RetryPosthook != "" {
-		if curator.Operation.RetryPosthook == "installPosthook" {
-			desiredCuration = "install"
-		}
-		if curator.Operation.RetryPosthook == "upgradePosthook" {
-			desiredCuration = "upgrade"
+	var desiredCuration string
+	if curator != nil {
+		desiredCuration = curator.Spec.DesiredCuration
+		if curator.Operation != nil && curator.Operation.RetryPosthook != "" {
+			if curator.Operation.RetryPosthook == "installPosthook" {
+				desiredCuration = "install"
+			}
+			if curator.Operation.RetryPosthook == "upgradePosthook" {
+				desiredCuration = "upgrade"
+			}
 		}
 	}
 
