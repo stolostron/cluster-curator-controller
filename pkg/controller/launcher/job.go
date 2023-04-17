@@ -58,6 +58,10 @@ func getBatchJob(clusterName string, imageURI string, curator clustercuratorv1.C
 	var ttlf int32 = 3600
 
 	desiredCuration := curator.Spec.DesiredCuration
+	if curator.Operation != nil && curator.Operation.RetryPosthook != "" {
+		desiredCuration = curator.Operation.RetryPosthook
+	}
+
 	isPrehook := false
 	isPosthook := false
 
@@ -228,6 +232,41 @@ func getBatchJob(clusterName string, imageURI string, curator clustercuratorv1.C
 								Resources:       resourceSettings,
 							},
 						},
+						Containers: []corev1.Container{
+							corev1.Container{
+								Name:    DoneDoneDone,
+								Image:   imageURI,
+								Command: append([]string{CurCmd, DoneDoneDone}),
+							},
+						},
+					},
+				},
+			},
+		}
+	case "installPosthook", "upgradePosthook":
+		if (desiredCuration == "installPosthook" && curator.Spec.Install.Posthook != nil) || (desiredCuration == "upgradePosthook" && curator.Spec.Upgrade.Posthook != nil) {
+			isPosthook = true
+		}
+		newJob = &batchv1.Job{
+			ObjectMeta: v1.ObjectMeta{
+				GenerateName: "curator-job-",
+				Namespace:    clusterName,
+				Labels: map[string]string{
+					"open-cluster-management": "curator-job",
+				},
+				Annotations: map[string]string{
+					PostAJob:     "Retry a posthook job",
+					DoneDoneDone: "Cluster Curator job has completed",
+				},
+			},
+			Spec: batchv1.JobSpec{
+				BackoffLimit:            new(int32),
+				TTLSecondsAfterFinished: &ttlf,
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						ServiceAccountName: "cluster-installer",
+						RestartPolicy:      corev1.RestartPolicyNever,
+						InitContainers:     []corev1.Container{},
 						Containers: []corev1.Container{
 							corev1.Container{
 								Name:    DoneDoneDone,

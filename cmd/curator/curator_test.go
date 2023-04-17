@@ -29,6 +29,36 @@ func getClusterCurator() *clustercuratorv1.ClusterCurator {
 	}
 }
 
+func getClusterCuratorWithInstallOperation() *clustercuratorv1.ClusterCurator {
+	return &clustercuratorv1.ClusterCurator{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      ClusterName,
+			Namespace: ClusterName,
+		},
+		Operation: &clustercuratorv1.Operation{
+			RetryPosthook: "installPosthook",
+		},
+		Spec: clustercuratorv1.ClusterCuratorSpec{
+			DesiredCuration: "install",
+		},
+	}
+}
+
+func getClusterCuratorWithUpgradeOperation() *clustercuratorv1.ClusterCurator {
+	return &clustercuratorv1.ClusterCurator{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      ClusterName,
+			Namespace: ClusterName,
+		},
+		Operation: &clustercuratorv1.Operation{
+			RetryPosthook: "upgradePosthook",
+		},
+		Spec: clustercuratorv1.ClusterCuratorSpec{
+			DesiredCuration: "upgrade",
+		},
+	}
+}
+
 func TestCuratorRunNoParam(t *testing.T) {
 
 	defer func() {
@@ -95,6 +125,20 @@ func TestCuratorRunClusterCurator(t *testing.T) {
 	client := clientfake.NewFakeClientWithScheme(s, getClusterCurator())
 
 	os.Args[1] = "SKIP_ALL_TESTING"
+
+	assert.NotPanics(t, func() { curatorRun(nil, client, ClusterName) }, "no panic when ClusterCurator found and skip test")
+}
+
+func TestCuratorRunClusterCuratorInstallUpgradeOperation(t *testing.T) {
+	s := scheme.Scheme
+	s.AddKnownTypes(utils.CCGVR.GroupVersion(), &clustercuratorv1.ClusterCurator{})
+	client := clientfake.NewFakeClientWithScheme(s, getClusterCuratorWithInstallOperation())
+
+	os.Args[1] = "SKIP_ALL_TESTING"
+
+	assert.NotPanics(t, func() { curatorRun(nil, client, ClusterName) }, "no panic when ClusterCurator found and skip test")
+
+	client = clientfake.NewFakeClientWithScheme(s, getClusterCuratorWithUpgradeOperation())
 
 	assert.NotPanics(t, func() { curatorRun(nil, client, ClusterName) }, "no panic when ClusterCurator found and skip test")
 }

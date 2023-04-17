@@ -189,6 +189,94 @@ func TestGetBatchJobImageDefault(t *testing.T) {
 	}
 }
 
+// The Retryposthook feature for install
+func TestGetBatchJobRetryInstallPosthook(t *testing.T) {
+	clusterCurator := clustercuratorv1.ClusterCurator{
+		ObjectMeta: v1.ObjectMeta{Name: clusterName, Namespace: clusterName},
+		Operation: &clustercuratorv1.Operation{
+			RetryPosthook: "installPosthook",
+		},
+		Spec: clustercuratorv1.ClusterCuratorSpec{
+			ProviderCredentialPath: "default/provider-secret",
+			Install: clustercuratorv1.Hooks{
+				Prehook: []clustercuratorv1.Hook{
+					{
+						Name: "prehook job",
+					},
+				},
+				Posthook: []clustercuratorv1.Hook{
+					{
+						Name: "posthook job",
+					},
+				},
+			},
+		},
+	}
+
+	batchJobObj := getBatchJob(clusterName, imageURI, clusterCurator)
+
+	t.Log("Test count initContainers in job")
+	foundInitContainers := len(batchJobObj.Spec.Template.Spec.InitContainers)
+
+	if foundInitContainers != 1 {
+		t.Fatalf("Invalid InitContainers count, expected %v found %v\n",
+			1, foundInitContainers)
+	}
+
+	t.Log("Access the first initContainer")
+	initContianer := batchJobObj.Spec.Template.Spec.InitContainers[0]
+
+	t.Log("Validate initContainer is posthook")
+	if initContianer.Name != "posthook-ansiblejob" {
+		t.Fatalf("Invalid InitContainers job, expected %v found %v\n",
+			"posthook-ansiblejob", initContianer.Name)
+	}
+}
+
+// The Retryposthook feature for install
+func TestGetBatchJobRetryUpgradePosthook(t *testing.T) {
+	clusterCurator := clustercuratorv1.ClusterCurator{
+		ObjectMeta: v1.ObjectMeta{Name: clusterName, Namespace: clusterName},
+		Operation: &clustercuratorv1.Operation{
+			RetryPosthook: "upgradePosthook",
+		},
+		Spec: clustercuratorv1.ClusterCuratorSpec{
+			ProviderCredentialPath: "default/provider-secret",
+			Upgrade: clustercuratorv1.UpgradeHooks{
+				Prehook: []clustercuratorv1.Hook{
+					{
+						Name: "prehook job",
+					},
+				},
+				Posthook: []clustercuratorv1.Hook{
+					{
+						Name: "posthook job",
+					},
+				},
+			},
+		},
+	}
+
+	batchJobObj := getBatchJob(clusterName, imageURI, clusterCurator)
+
+	t.Log("Test count initContainers in job")
+	foundInitContainers := len(batchJobObj.Spec.Template.Spec.InitContainers)
+
+	if foundInitContainers != 1 {
+		t.Fatalf("Invalid InitContainers count, expected %v found %v\n",
+			1, foundInitContainers)
+	}
+
+	t.Log("Access the first initContainer")
+	initContianer := batchJobObj.Spec.Template.Spec.InitContainers[0]
+
+	t.Log("Validate initContainer is posthook")
+	if initContianer.Name != "posthook-ansiblejob" {
+		t.Fatalf("Invalid InitContainers job, expected %v found %v\n",
+			"posthook-ansiblejob", initContianer.Name)
+	}
+}
+
 // Test the launcher to create a job.batchv1 object
 func TestCreateLauncher(t *testing.T) {
 

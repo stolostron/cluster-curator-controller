@@ -282,6 +282,25 @@ func TestJobNoClusterCuratorData(t *testing.T) {
 	assert.Nil(t, Job(nil, getClusterCuratorEmpty()), "err nil, when no Ansible prehooks")
 }
 
+func TestJobInstallUpgradeRetryposthook(t *testing.T) {
+	cc := getClusterCurator()
+	os.Setenv(EnvJobType, PREHOOK)
+
+	// Install posthook retry
+	operationInstall := clustercuratorv1.Operation{
+		RetryPosthook: "installPosthook",
+	}
+	cc.Operation = &operationInstall
+	assert.Nil(t, Job(nil, cc), "Test installPosthook case statement only")
+
+	// Upgrade posthook retry
+	operationUpgrade := clustercuratorv1.Operation{
+		RetryPosthook: "upgradePosthook",
+	}
+	cc.Operation = &operationUpgrade
+	assert.Nil(t, Job(nil, cc), "Test upgradePosthook case statement only")
+}
+
 func TestFindAnsibleTemplateNamefromClusterCurator(t *testing.T) {
 
 	cc := getClusterCurator()

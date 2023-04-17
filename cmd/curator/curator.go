@@ -64,7 +64,7 @@ func curatorRun(config *rest.Config, client clientv1.Client, clusterName string)
 	var cmdErrorMsg = errors.New("Invalid Parameter: \"" + os.Args[1] +
 		"\"\nCommand: ./curator [monitor-import|monitor|activate-and-monitor|applycloudprovider-aws|" +
 		"applycloudprovider-gcp|applycloudprovider-azure|upgrade-cluster|monitor-upgrade|" +
-		"prehook-ansiblejob|pothook-ansiblejob|done]")
+		"prehook-ansiblejob|posthook-ansiblejob|done]")
 
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
@@ -85,6 +85,18 @@ func curatorRun(config *rest.Config, client clientv1.Client, clusterName string)
 
 	// Gets the Cluster Configuration overrides
 	curator, err := utils.GetClusterCurator(client, clusterName)
+	var desiredCuration string
+	if curator != nil {
+		desiredCuration = curator.Spec.DesiredCuration
+		if curator.Operation != nil && curator.Operation.RetryPosthook != "" {
+			if curator.Operation.RetryPosthook == "installPosthook" {
+				desiredCuration = "install"
+			}
+			if curator.Operation.RetryPosthook == "upgradePosthook" {
+				desiredCuration = "upgrade"
+			}
+		}
+	}
 
 	// Allow an override with the PROVIDER_CREDENTIAL_PATH
 	if err == nil {
@@ -95,7 +107,7 @@ func curatorRun(config *rest.Config, client clientv1.Client, clusterName string)
 			clusterName,
 			CuratorJob,
 			v1.ConditionFalse,
-			curator.Spec.CuratingJob+" DesiredCuration: "+curator.Spec.DesiredCuration))
+			curator.Spec.CuratingJob+" DesiredCuration: "+desiredCuration))
 
 		// Special case
 		if jobChoice != launcher.DoneDoneDone {
@@ -111,8 +123,8 @@ func curatorRun(config *rest.Config, client clientv1.Client, clusterName string)
 		// This makes sure we set the curator-job condition to false when there is a failure
 		defer func() {
 			if r := recover(); r != nil {
-				message := curator.Spec.CuratingJob + " DesiredCuration: " + curator.Spec.DesiredCuration
-				if curator.Spec.DesiredCuration == "upgrade" {
+				message := curator.Spec.CuratingJob + " DesiredCuration: " + desiredCuration
+				if desiredCuration == "upgrade" {
 					message = message + " Version (" + utils.GetCurrentVersionInfo(curator) + ")"
 				}
 				message = message + " Failed - " + fmt.Sprintf("%v", r)
@@ -313,10 +325,10 @@ func curatorRun(config *rest.Config, client clientv1.Client, clusterName string)
 
 	if jobChoice == "done" {
 		jobChoice = CuratorJob
-		msg = curator.Spec.CuratingJob + " DesiredCuration: " + curator.Spec.DesiredCuration
+		msg = curator.Spec.CuratingJob + " DesiredCuration: " + desiredCuration
 		condition = v1.ConditionTrue
 
-		if curator.Spec.DesiredCuration == "upgrade" {
+		if desiredCuration == "upgrade" {
 			msg = msg + " Version (" + utils.GetCurrentVersionInfo(curator) + ")"
 		}
 
@@ -337,26 +349,26 @@ func curatorRun(config *rest.Config, client clientv1.Client, clusterName string)
 
 func updateDoneClusterCurator(client clientv1.Client, curator *clustercuratorv1.ClusterCurator, clusterName string) {
 	if curator.Spec.DesiredCuration == "upgrade" {
-		patch := []byte(`{"spec":{"curatorJob": null},"status": null}`)
+		patch := []byte(`{"spec":{"curatorJob": null},"status": null, "operation": null}`)
 		err := client.Patch(context.Background(), curator, clientv1.RawPatch(types.MergePatchType, patch))
 		utils.CheckError(err)
 		return
 	}
 
-	patch := []byte(`{"spec":{"curatorJob": null, "desiredCuration": null},"status": null}`)
+	patch := []byte(`{"spec":{"curatorJob": null, "desiredCuration": null},"status": null, "operation": null}`)
 	err := client.Patch(context.Background(), curator, clientv1.RawPatch(types.MergePatchType, patch))
 	utils.CheckError(err)
 }
 
 func updateFailingClusterCurator(client clientv1.Client, curator *clustercuratorv1.ClusterCurator) {
 	if curator.Spec.DesiredCuration == "upgrade" {
-		patch := []byte(`{"spec":{"curatorJob": null}}`)
+		patch := []byte(`{"spec":{"curatorJob": null}, "operation": null}`)
 		err := client.Patch(context.Background(), curator, clientv1.RawPatch(types.MergePatchType, patch))
 		utils.CheckError(err)
 		return
 	}
 
-	patch := []byte(`{"spec":{"curatorJob": null, "desiredCuration": null}}`)
+	patch := []byte(`{"spec":{"curatorJob": null, "desiredCuration": null}, "operation": null}`)
 	err := client.Patch(context.Background(), curator, clientv1.RawPatch(types.MergePatchType, patch))
 	utils.CheckError(err)
 }
