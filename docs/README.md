@@ -50,5 +50,5 @@ Find the two image instances of the cluster-curator-controller and point to the 
 
 After some time the multicluster-engine-operator will reconcile and pick up the new image. If you scaled down the multicluster-engine-operator earlier, you need to scale up to two pods again.
 
-Once the new pods are deployed. If you also changed the CRD then you need to oc apply the new CRD. 
-### Note, you will need to re-apply the CRD every time the multicluster-engine-operator reconciles which means every time you point to a newer image.
+Once the new pods are deployed. If you also changed the CRD then you need to `oc apply` the new CRD. 
+#### Note, you will need to re-apply the CRD every time the multicluster-engine-operator reconciles which means every time you point to a newer image.
