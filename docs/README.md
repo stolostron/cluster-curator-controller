@@ -1,4 +1,4 @@
-# Debugging Cluster-Curator-Controller
+# Debugging the Cluster-Curator-Controller
 
 After you make your changes you actually need to build your own image because when the curator code creates a Job CR, the Job will load its own cluster-curator-controller image to run the curator binary. Make sure docker is started.
 
@@ -24,11 +24,11 @@ Example launch.json:
      "type": "go",
      "request": "launch",
      "mode": "debug",
-     "program": "${workspaceRoot}/cmd/manager",              // this is where the cluster curator manager main go is
+     "program": "${workspaceRoot}/cmd/manager",
      "env": {
        "WATCH_NAMESPACE": "",
        "IMAGE_URI": "quay.io/fxiang1/cluster-curator-controller@sha256:ce527566269f4bffad08ae8eb8533c9f829406d8bfc09299f4a84fe5492666b5"
-     },                         // set up additional env var here
+     },
      "args": [],
      "showLog": true
    }
@@ -37,3 +37,18 @@ Example launch.json:
 ```
 
 When using breakpoints in VSCode you can only debug up to https://github.com/stolostron/cluster-curator-controller/blob/main/pkg/controller/launcher/job.go. For the code after that point, you still need to do scaffolding ie. use log or printf statements to debug because that code is called by the Job CRs which we can’t step through using VSCode.
+
+## Patching the hub cluster
+To patch the hub cluster you need to find the multicluster-engine `clusterserviceversion` or CSV. The easiest way I find is to look at the installed operators in the OCP console. Click on the multicluster-engine and select the YAML tab.
+
+Find the two image instances of the cluster-curator-controller and point to the one you built.
+
+```
+- image: >-
+        quay.io/fxiang1/cluster-curator-controller@sha256:0df33edc4662906bed71a52301597774a420e0c51bd58ec70c5a7f7600380f18
+```
+
+After some time the multicluster-engine-operator will reconcile and pick up the new image. If you scaled down the multicluster-engine-operator earlier, you need to scale up to two pods again.
+
+Once the new pods are deployed. If you also changed the CRD then you need to oc apply the new CRD. 
+### Note, you will need to re-apply the CRD every time the multicluster-engine-operator reconciles which means every time you point to a newer image.
