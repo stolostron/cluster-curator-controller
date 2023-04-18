@@ -24,8 +24,6 @@ require (
 )
 
 require (
-	cloud.google.com/go/compute v1.14.0 // indirect
-	cloud.google.com/go/compute/metadata v0.2.3 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
@@ -124,7 +122,7 @@ replace (
 	github.com/openshift/hive/apis => github.com/openshift/hive/apis v0.0.0-20221110093336-443b7d70c311
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.24.3
 	k8s.io/cli-runtime => k8s.io/cli-runtime v0.24.3
-	k8s.io/client-go => k8s.io/client-go v0.24.11
+	k8s.io/client-go => k8s.io/client-go v0.26.2
 	k8s.io/cloud-provider => k8s.io/cloud-provider v0.24.3
 	k8s.io/cluster-bootstrap => k8s.io/cluster-bootstrap v0.24.3
 	k8s.io/code-generator => k8s.io/code-generator v0.24.3
