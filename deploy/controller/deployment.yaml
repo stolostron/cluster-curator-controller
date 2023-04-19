@@ -18,6 +18,9 @@ spec:
       - command:
         - "./manager"
         - "-enable-leader-election"
+        - "--leader-election-lease-duration=137s"
+        - "--leader-election-renew-deadline=107s"
+        - "--leader-election-retry-period=26s"
         image: registry.ci.openshift.org/stolostron/2.3:cluster-curator-controller
         env:
         - name: POD_NAME
