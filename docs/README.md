@@ -2,7 +2,7 @@
 
 After you make your changes you actually need to build your own image because when the curator code creates a Job CR, the Job will load its own cluster-curator-controller image to run the curator binary. Make sure docker is started.
 
-1. export REPO_URL=<your_quay_url> ie. quay.io/fxiang1
+1. export REPO_URL=<your_quay_url> ie. quay.io/<user_name>
 2. export VERSION=<image_tag>
 3. make build-curator
 4. docker push <REPO_URL>/cluster-curator-controller:<VERSION>
@@ -27,7 +27,7 @@ Example launch.json:
      "program": "${workspaceRoot}/cmd/manager",
      "env": {
        "WATCH_NAMESPACE": "",
-       "IMAGE_URI": "quay.io/fxiang1/cluster-curator-controller@sha256:ce527566269f4bffad08ae8eb8533c9f829406d8bfc09299f4a84fe5492666b5"
+       "IMAGE_URI": "quay.io/<user_name>/cluster-curator-controller@sha256:ce527566269f4bffad08ae8eb8533c9f829406d8bfc09299f4a84fe5492666b5"
      },
      "args": [],
      "showLog": true
@@ -45,7 +45,7 @@ Find the two image instances of the cluster-curator-controller and point to the 
 
 ```
 - image: >-
-        quay.io/fxiang1/cluster-curator-controller@sha256:0df33edc4662906bed71a52301597774a420e0c51bd58ec70c5a7f7600380f18
+        quay.io/<user_name>/cluster-curator-controller@sha256:0df33edc4662906bed71a52301597774a420e0c51bd58ec70c5a7f7600380f18
 ```
 
 After some time the multicluster-engine-operator will reconcile and pick up the new image. If you scaled down the multicluster-engine-operator earlier, you need to scale up to two pods again.
