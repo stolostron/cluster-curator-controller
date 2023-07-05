@@ -12,7 +12,7 @@ export ARCH_TYPE   = $(if $(patsubst x86_64,,$(ARCH)),$(ARCH),amd64)
 export BUILD_DATE  = $(shell date +%m/%d@%H:%M:%S)
 export VCS_REF     = $(if $(shell git status --porcelain),$(GIT_COMMIT)-$(BUILD_DATE),$(GIT_COMMIT))
 
-export CGO_ENABLED  = 0
+export CGO_ENABLED  = 1
 export GO111MODULE := on
 export GOPACKAGES   = $(shell go list ./... | grep -v /vendor | grep -v /internal | grep -v /build | grep -v /test | grep -v /controllers)
 
