@@ -14,8 +14,8 @@ require (
 	github.com/stretchr/testify v1.8.1
 	gopkg.in/yaml.v2 v2.4.0
 	gopkg.in/yaml.v3 v3.0.1
-	k8s.io/api v0.26.2
-	k8s.io/apimachinery v0.26.2
+	k8s.io/api v0.26.4
+	k8s.io/apimachinery v0.26.4
 	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/klog v1.0.0
 	k8s.io/klog/v2 v2.90.1
@@ -122,7 +122,7 @@ replace (
 	github.com/openshift/hive/apis => github.com/openshift/hive/apis v0.0.0-20230410203125-bb0124b40f86
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.26.2
 	k8s.io/cli-runtime => k8s.io/cli-runtime v0.26.2
-	k8s.io/client-go => k8s.io/client-go v0.26.2
+	k8s.io/client-go => k8s.io/client-go v0.26.4
 	k8s.io/cloud-provider => k8s.io/cloud-provider v0.26.2
 	k8s.io/cluster-bootstrap => k8s.io/cluster-bootstrap v0.26.2
 	k8s.io/code-generator => k8s.io/code-generator v0.26.2
