@@ -32,6 +32,11 @@ func getRole(clusterName string) *rbacv1.Role {
 				Verbs:     []string{"patch", "delete", "update"},
 			},
 			rbacv1.PolicyRule{
+				APIGroups: []string{"hypershift.openshift.io"},
+				Resources: []string{"hostedclusters", "nodepools"},
+				Verbs:     []string{"get", "patch", "delete", "update", "list"},
+			},
+			rbacv1.PolicyRule{
 				APIGroups: []string{"batch", "hive.openshift.io", "tower.ansible.com"},
 				Resources: []string{"jobs", "clusterdeployments", "ansiblejobs", "machinepools"},
 				Verbs:     []string{"get"},
@@ -48,8 +53,8 @@ func getRole(clusterName string) *rbacv1.Role {
 			},
 			rbacv1.PolicyRule{
 				APIGroups: []string{"cluster.open-cluster-management.io"},
-				Resources: []string{"clustercurators"},
-				Verbs:     []string{"get", "update", "patch"},
+				Resources: []string{"clustercurators", "managedclusters"},
+				Verbs:     []string{"get", "update", "patch", "delete"},
 			},
 			rbacv1.PolicyRule{
 				APIGroups: []string{"view.open-cluster-management.io"},
@@ -71,6 +76,67 @@ func getRole(clusterName string) *rbacv1.Role {
 		},
 	}
 	return curatorRole
+}
+
+func getClusterRole(clusterName string) *rbacv1.ClusterRole {
+	curatorClusterRole := &rbacv1.ClusterRole{
+		ObjectMeta: v1.ObjectMeta{Name: "curator"},
+		Rules: []rbacv1.PolicyRule{
+			rbacv1.PolicyRule{
+				APIGroups: []string{"tower.ansible.com", ""},
+				Resources: []string{"ansiblejobs", "secrets", "serviceaccounts"},
+				Verbs:     []string{"create"},
+			},
+			rbacv1.PolicyRule{
+				APIGroups: []string{"hive.openshift.io"},
+				Resources: []string{"clusterdeployments"},
+				Verbs:     []string{"patch", "delete", "update"},
+			},
+			rbacv1.PolicyRule{
+				APIGroups: []string{"hypershift.openshift.io"},
+				Resources: []string{"hostedclusters", "nodepools"},
+				Verbs:     []string{"get", "patch", "delete", "update", "list"},
+			},
+			rbacv1.PolicyRule{
+				APIGroups: []string{"batch", "hive.openshift.io", "tower.ansible.com"},
+				Resources: []string{"jobs", "clusterdeployments", "ansiblejobs", "machinepools"},
+				Verbs:     []string{"get"},
+			},
+			rbacv1.PolicyRule{
+				APIGroups: []string{""},
+				Resources: []string{"configmaps"},
+				Verbs:     []string{"update", "get", "patch"},
+			},
+			rbacv1.PolicyRule{
+				APIGroups: []string{"internal.open-cluster-management.io"},
+				Resources: []string{"managedclusterinfos"},
+				Verbs:     []string{"get"},
+			},
+			rbacv1.PolicyRule{
+				APIGroups: []string{"cluster.open-cluster-management.io"},
+				Resources: []string{"clustercurators", "managedclusters"},
+				Verbs:     []string{"get", "update", "patch", "delete"},
+			},
+			rbacv1.PolicyRule{
+				APIGroups: []string{"view.open-cluster-management.io"},
+				Resources: []string{"managedclusterviews"},
+				Verbs:     []string{"get", "create", "update", "delete"},
+			},
+			rbacv1.PolicyRule{
+				APIGroups: []string{"action.open-cluster-management.io"},
+				Resources: []string{"managedclusteractions"},
+				Verbs:     []string{"get", "create", "update", "delete"},
+			},
+			// To read the install-config secret
+			rbacv1.PolicyRule{
+				APIGroups: []string{""},
+				Resources: []string{"secrets"},
+				Verbs:     []string{"get"},
+			},
+		},
+	}
+
+	return curatorClusterRole
 }
 
 func getClusterInstallerRules() []rbacv1.PolicyRule {
@@ -115,12 +181,31 @@ func getRoleBinding(namespace string) *rbacv1.RoleBinding {
 			},
 		},
 		RoleRef: rbacv1.RoleRef{
-			Kind:     "Role",
+			Kind:     "ClusterRole",
 			Name:     "curator",
 			APIGroup: "rbac.authorization.k8s.io",
 		},
 	}
 	return clusterRoleBinding
+}
+
+func getClusterRoleBinding(namespace string) *rbacv1.ClusterRoleBinding {
+	crb := &rbacv1.ClusterRoleBinding{
+		ObjectMeta: v1.ObjectMeta{Name: "curator-crb"},
+		Subjects: []rbacv1.Subject{
+			rbacv1.Subject{
+				Kind:      "ServiceAccount",
+				Name:      clusterInstaller,
+				Namespace: namespace,
+			},
+		},
+		RoleRef: rbacv1.RoleRef{
+			Kind:     "ClusterRole",
+			Name:     "curator",
+			APIGroup: "rbac.authorization.k8s.io",
+		},
+	}
+	return crb
 }
 
 func getServiceAccount() *corev1.ServiceAccount {
@@ -146,14 +231,24 @@ func ApplyRBAC(kubeset kubernetes.Interface, namespace string) error {
 		klog.V(0).Info(" Created serviceAccount ✓")
 	}
 
-	klog.V(2).Info("Check if Role curator exists")
-	if _, err := kubeset.RbacV1().Roles(namespace).Get(context.TODO(), "curator", v1.GetOptions{}); err != nil {
-		klog.V(2).Info(" Creating Role curator")
-		_, err = kubeset.RbacV1().Roles(namespace).Create(context.TODO(), getRole(namespace), v1.CreateOptions{})
+	// klog.V(2).Info("Check if Role curator exists")
+	// if _, err := kubeset.RbacV1().Roles(namespace).Get(context.TODO(), "curator", v1.GetOptions{}); err != nil {
+	// 	klog.V(2).Info(" Creating Role curator")
+	// 	_, err = kubeset.RbacV1().Roles(namespace).Create(context.TODO(), getRole(namespace), v1.CreateOptions{})
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	klog.V(0).Info(" Created Role ✓")
+	// }
+
+	klog.V(2).Info("Check if ClusterRole curator exists")
+	if _, err := kubeset.RbacV1().ClusterRoles().Get(context.TODO(), "curator", v1.GetOptions{}); err != nil {
+		klog.V(2).Info(" Creating ClusterRole curator")
+		_, err = kubeset.RbacV1().ClusterRoles().Create(context.TODO(), getClusterRole(namespace), v1.CreateOptions{})
 		if err != nil {
 			return err
 		}
-		klog.V(0).Info(" Created Role ✓")
+		klog.V(0).Info(" Created ClusterRole ✓")
 	}
 
 	klog.V(2).Info("Check if RoleBinding cluster-installer exists")
@@ -164,6 +259,29 @@ func ApplyRBAC(kubeset kubernetes.Interface, namespace string) error {
 			return err
 		}
 		klog.V(0).Info(" Created RoleBinding ✓")
+	}
+	return nil
+}
+
+func ApplyRBACHypershift(kubeset kubernetes.Interface, namespace string, curatorNamespace string) error {
+	klog.V(2).Info("Check if RoleBinding cluster-installer exists in namespace " + namespace)
+	if _, err := kubeset.RbacV1().RoleBindings(namespace).Get(context.TODO(), "curator", v1.GetOptions{}); err != nil {
+		klog.V(2).Info(" Creating RoleBinding curator in namespace " + namespace)
+		_, err = kubeset.RbacV1().RoleBindings(namespace).Create(context.TODO(), getRoleBinding(curatorNamespace), v1.CreateOptions{})
+		if err != nil {
+			return err
+		}
+		klog.V(0).Info(" Created RoleBinding in cluster namespace ✓")
+	}
+
+	klog.V(2).Info("Check if ClusterRole curator-crb exists")
+	if _, err := kubeset.RbacV1().ClusterRoleBindings().Get(context.TODO(), "curator-crb", v1.GetOptions{}); err != nil {
+		klog.V(2).Info(" Creating ClusterRoleBinding curator-crb")
+		_, err = kubeset.RbacV1().ClusterRoleBindings().Create(context.TODO(), getClusterRoleBinding(curatorNamespace), v1.CreateOptions{})
+		if err != nil {
+			return err
+		}
+		klog.V(0).Info(" Created ClusterRoleBinding ✓")
 	}
 	return nil
 }

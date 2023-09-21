@@ -23,6 +23,7 @@ import (
 
 	ajv1 "github.com/open-cluster-management/ansiblejob-go-lib/api/v1alpha1"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
+	hiveclient "github.com/openshift/hive/pkg/client/clientset/versioned"
 	clustercuratorv1 "github.com/stolostron/cluster-curator-controller/pkg/api/v1beta1"
 	managedclusteractionv1beta1 "github.com/stolostron/cluster-lifecycle-api/action/v1beta1"
 	managedclusterinfov1beta1 "github.com/stolostron/cluster-lifecycle-api/clusterinfo/v1beta1"
@@ -51,6 +52,27 @@ const JobFailed = "Job_failed"
 
 const Installing = "provision"
 const Destroying = "uninstall"
+
+const StandaloneClusterType = "standalone"
+const HypershiftClusterType = "hypershift"
+
+var HCGVR = schema.GroupVersionResource{
+	Group:    "hypershift.openshift.io",
+	Version:  "v1beta1",
+	Resource: "hostedclusters",
+}
+
+var NPGVR = schema.GroupVersionResource{
+	Group:    "hypershift.openshift.io",
+	Version:  "v1beta1",
+	Resource: "nodepools",
+}
+
+var CCGVR = schema.GroupVersionResource{
+	Group:    "cluster.open-cluster-management.io",
+	Version:  "v1beta1",
+	Resource: "clustercurators",
+}
 
 type PatchStringValue struct {
 	Op    string `json:"op"`
@@ -105,11 +127,6 @@ func PathSplitterFromEnv(path string) (namespace string, resource string, err er
 	return values[0], values[1], nil
 }
 
-var CCGVR = schema.GroupVersionResource{
-	Group:    "cluster.open-cluster-management.io",
-	Version:  "v1beta1",
-	Resource: "clustercurators"}
-
 func RecordCuratorJob(clusterName, containerName string) error {
 	dynset, err := GetDynset(nil)
 	CheckError(err)
@@ -117,8 +134,8 @@ func RecordCuratorJob(clusterName, containerName string) error {
 	return patchDyn(dynset, clusterName, containerName, CurrentCuratorJob)
 }
 
-func RecordCuratorJobName(client clientv1.Client, clusterName string, curatorJobName string) error {
-	cc, err := GetClusterCurator(client, clusterName)
+func RecordCuratorJobName(client clientv1.Client, clusterName string, clusterNamespace string, curatorJobName string) error {
+	cc, err := GetClusterCurator(client, clusterName, clusterNamespace)
 	if err != nil {
 		return err
 	}
@@ -189,6 +206,7 @@ func GetKubeset() (kubernetes.Interface, error) {
 func RecordCurrentStatusCondition(
 	client clientv1.Client,
 	clusterName string,
+	clusterNamespace string,
 	containerName string,
 	conditionStatus v1.ConditionStatus,
 	message string) error {
@@ -196,6 +214,7 @@ func RecordCurrentStatusCondition(
 	return recordCuratedStatusCondition(
 		client,
 		clusterName,
+		clusterNamespace,
 		containerName,
 		conditionStatus,
 		JobHasFinished,
@@ -205,6 +224,7 @@ func RecordCurrentStatusCondition(
 func RecordAnsibleJobStatusUrlCondition(
 	client clientv1.Client,
 	clusterName string,
+	clusterNamespace string,
 	containerName string,
 	conditionStatus v1.ConditionStatus,
 	url string) error {
@@ -212,6 +232,7 @@ func RecordAnsibleJobStatusUrlCondition(
 	return recordCuratedStatusCondition(
 		client,
 		clusterName,
+		clusterNamespace,
 		containerName,
 		conditionStatus,
 		"ansiblejob_url",
@@ -221,12 +242,13 @@ func RecordAnsibleJobStatusUrlCondition(
 func recordCuratedStatusCondition(
 	client clientv1.Client,
 	clusterName string,
+	clusterNamespace string,
 	containerName string,
 	conditionStatus v1.ConditionStatus,
 	reason string,
 	message string) error {
 
-	curator, err := GetClusterCurator(client, clusterName)
+	curator, err := GetClusterCurator(client, clusterName, clusterNamespace)
 	if err != nil {
 		return err
 	}
@@ -250,6 +272,7 @@ func recordCuratedStatusCondition(
 func RecordFailedCuratorStatusCondition(
 	client clientv1.Client,
 	clusterName string,
+	clusterNamespace string,
 	containerName string,
 	conditionStatus v1.ConditionStatus,
 	message string) error {
@@ -257,17 +280,18 @@ func RecordFailedCuratorStatusCondition(
 	return recordCuratedStatusCondition(
 		client,
 		clusterName,
+		clusterNamespace,
 		containerName,
 		conditionStatus,
 		JobFailed,
 		message)
 }
 
-func GetClusterCurator(client clientv1.Client, clusterName string) (*clustercuratorv1.ClusterCurator, error) {
+func GetClusterCurator(client clientv1.Client, clusterName string, clusterNamespace string) (*clustercuratorv1.ClusterCurator, error) {
 
 	curator := &clustercuratorv1.ClusterCurator{}
 
-	if err := client.Get(context.TODO(), clientv1.ObjectKey{Namespace: clusterName, Name: clusterName},
+	if err := client.Get(context.TODO(), clientv1.ObjectKey{Namespace: clusterNamespace, Name: clusterName},
 		curator); err != nil {
 		return nil, err
 	}
@@ -464,4 +488,36 @@ func parseVersionInfo(msg string) (channel, upstream string, semversion semver.V
 	}
 
 	return channel, upstream, semversion, nil
+}
+
+func GetClusterType(hiveset hiveclient.Interface, dc dynamic.Interface, clusterName string, clusterNamespace string) (string, error) {
+	// shortcut for Hypershift cluster
+	if clusterName != clusterNamespace {
+		return HypershiftClusterType, nil
+	}
+
+	// if clusterName and clusterNamespace are equal we need more info
+	cluster, err := hiveset.HiveV1().ClusterDeployments(clusterName).Get(context.TODO(), clusterName, v1.GetOptions{})
+	if err == nil && cluster != nil {
+		return StandaloneClusterType, nil
+	}
+
+	hostedCluster, hcErr := dc.Resource(HCGVR).Namespace(clusterNamespace).Get(context.TODO(), clusterName, v1.GetOptions{})
+	if hcErr == nil && hostedCluster != nil {
+		return HypershiftClusterType, nil
+	}
+
+	return StandaloneClusterType, hcErr
+}
+
+func GetMonitorAttempts(jobType string, curator *clustercuratorv1.ClusterCurator) int {
+	monitorAttempts := GetRetryTimes(0, 5, PauseTwoSeconds)
+	switch jobType {
+	case Installing:
+		monitorAttempts = GetRetryTimes(curator.Spec.Install.JobMonitorTimeout, 5, PauseTwoSeconds)
+	case Destroying:
+		monitorAttempts = GetRetryTimes(curator.Spec.Destroy.JobMonitorTimeout, 5, PauseTwoSeconds)
+	}
+
+	return monitorAttempts
 }
