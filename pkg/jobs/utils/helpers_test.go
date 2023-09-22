@@ -153,6 +153,7 @@ func TestRecordCuratedStatusCondition(t *testing.T) {
 		recordCuratedStatusCondition(
 			client,
 			ClusterName,
+			ClusterName,
 			CurrentAnsibleJob,
 			v1.ConditionTrue,
 			JobHasFinished,
@@ -179,6 +180,7 @@ func TestRecordCurrentStatusConditionNoResource(t *testing.T) {
 
 	err := RecordCurrentStatusCondition(
 		client,
+		ClusterName,
 		ClusterName,
 		CurrentAnsibleJob,
 		v1.ConditionTrue,
@@ -648,4 +650,27 @@ func TestNeedToUpgrade(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGetMonitorAttempts(t *testing.T) {
+	attempts := GetMonitorAttempts("", &clustercuratorv1.ClusterCurator{})
+	assert.Equal(t, 150, attempts)
+
+	attempts = GetMonitorAttempts("provision", &clustercuratorv1.ClusterCurator{
+		Spec: clustercuratorv1.ClusterCuratorSpec{
+			Install: clustercuratorv1.Hooks{
+				JobMonitorTimeout: 6,
+			},
+		},
+	})
+	assert.Equal(t, 180, attempts)
+
+	attempts = GetMonitorAttempts("uninstall", &clustercuratorv1.ClusterCurator{
+		Spec: clustercuratorv1.ClusterCuratorSpec{
+			Destroy: clustercuratorv1.Hooks{
+				JobMonitorTimeout: 15,
+			},
+		},
+	})
+	assert.Equal(t, 450, attempts)
 }
