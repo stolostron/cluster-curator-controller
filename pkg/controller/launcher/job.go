@@ -53,7 +53,11 @@ func NewLauncher(
 	}
 }
 
-func getBatchJob(clusterName string, clusterNamespace string, imageURI string, curator clustercuratorv1.ClusterCurator) *batchv1.Job {
+func getBatchJob(
+	clusterName string,
+	clusterNamespace string,
+	imageURI string,
+	curator clustercuratorv1.ClusterCurator) *batchv1.Job {
 
 	var ttlf int32 = 3600
 

@@ -56,7 +56,11 @@ func ActivateDeploy(dc dynamic.Interface, clusterName string, namespace string) 
 	return nil
 }
 
-func removePausedUntil(dc dynamic.Interface, clusterName string, namespace string, resourceType schema.GroupVersionResource) error {
+func removePausedUntil(
+	dc dynamic.Interface,
+	clusterName string,
+	namespace string,
+	resourceType schema.GroupVersionResource) error {
 	klog.V(2).Infof("Looking up %v %v namespace %v", resourceType.Resource, clusterName, namespace)
 
 	err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
@@ -72,7 +76,8 @@ func removePausedUntil(dc dynamic.Interface, clusterName string, namespace strin
 		if resourceType.Resource == "nodepools" {
 			clusterName = metadata["name"].(string)
 		}
-		klog.V(2).Infof("Found %v %v in namespace %v ✓", resourceType.Resource, clusterName, metadata["namespace"].(string))
+		klog.V(2).Infof("Found %v %v in namespace %v ✓",
+			resourceType.Resource, clusterName, metadata["namespace"].(string))
 
 		spec := resource.Object["spec"].(map[string]interface{})
 		if spec["pausedUntil"] != nil && spec["pausedUntil"].(string) != "true" {
@@ -88,7 +93,8 @@ func removePausedUntil(dc dynamic.Interface, clusterName string, namespace strin
 
 		patchInBytes, _ := json.Marshal(patch)
 
-		klog.V(2).Infof("Patching %v %v in namespace %v ✓", resourceType.Resource, clusterName, metadata["namespace"].(string))
+		klog.V(2).Infof("Patching %v %v in namespace %v ✓",
+			resourceType.Resource, clusterName, metadata["namespace"].(string))
 		_, err = dc.Resource(resourceType).Namespace(namespace).Patch(
 			context.TODO(), clusterName, types.JSONPatchType, patchInBytes, v1.PatchOptions{})
 		if err != nil {
@@ -101,7 +107,13 @@ func removePausedUntil(dc dynamic.Interface, clusterName string, namespace strin
 	return err
 }
 
-func MonitorClusterStatus(dc dynamic.Interface, client clientv1.Client, clusterName string, namespace string, jobType string, monitorAttempts int) error {
+func MonitorClusterStatus(
+	dc dynamic.Interface,
+	client clientv1.Client,
+	clusterName string,
+	namespace string,
+	jobType string,
+	monitorAttempts int) error {
 	klog.V(0).Info("Waiting up to " + strconv.Itoa(monitorAttempts*5) + "s for Hypershift Provisioning job")
 	jobName := ""
 	var hostedCluster *unstructured.Unstructured
@@ -109,10 +121,8 @@ func MonitorClusterStatus(dc dynamic.Interface, client clientv1.Client, clusterN
 	for i := 1; i <= monitorAttempts; i++ {
 
 		// Refresh the hostedCluster resource
-		hostedCluster, err := dc.Resource(utils.HCGVR).Namespace(namespace).Get(context.TODO(), clusterName, v1.GetOptions{})
-		if err != nil {
-			return err
-		}
+		hostedCluster, err := dc.Resource(utils.HCGVR).Namespace(namespace).Get(
+			context.TODO(), clusterName, v1.GetOptions{})
 
 		// Destroy path
 		if err = utils.LogError(err); err != nil {
@@ -175,7 +185,8 @@ func MonitorClusterStatus(dc dynamic.Interface, client clientv1.Client, clusterN
 				elapsedTime++
 
 				// Reset hostedCluster, so we make sure we're getting clean data (not cached)
-				hostedCluster, err = dc.Resource(utils.HCGVR).Namespace(namespace).Get(context.TODO(), clusterName, v1.GetOptions{})
+				hostedCluster, err = dc.Resource(utils.HCGVR).Namespace(namespace).Get(
+					context.TODO(), clusterName, v1.GetOptions{})
 
 				if jobType == utils.Destroying && err != nil && k8serrors.IsNotFound(err) {
 					break
@@ -230,7 +241,8 @@ func isHostedReady(hostedCluster *unstructured.Unstructured, isUpgrade bool) boo
 		conditionType := condition.(map[string]interface{})["type"].(string)
 		conditionStatus := condition.(map[string]interface{})["status"].(string)
 
-		klog.V(4).Info("Type " + condition.(map[string]interface{})["type"].(string) + " Status " + condition.(map[string]interface{})["status"].(string))
+		klog.V(4).Info("Type " + condition.(map[string]interface{})["type"].(string) +
+			" Status " + condition.(map[string]interface{})["status"].(string))
 		switch conditionType {
 		case "Degraded":
 			degraded, _ = strconv.ParseBool(conditionStatus)
@@ -279,7 +291,11 @@ func isHostedReady(hostedCluster *unstructured.Unstructured, isUpgrade bool) boo
 	return true
 }
 
-func UpgradeCluster(client clientv1.Client, dc dynamic.Interface, clusterName string, curator *clustercuratorv1.ClusterCurator) error {
+func UpgradeCluster(
+	client clientv1.Client,
+	dc dynamic.Interface,
+	clusterName string,
+	curator *clustercuratorv1.ClusterCurator) error {
 	klog.V(0).Info("* Initiate Upgrade")
 	klog.V(2).Info("Looking up managedclusterinfo " + clusterName)
 
@@ -313,13 +329,18 @@ func UpgradeCluster(client clientv1.Client, dc dynamic.Interface, clusterName st
 	return nil
 }
 
-func MonitorUpgradeStatus(dc dynamic.Interface, client clientv1.Client, clusterName string, curator *clustercuratorv1.ClusterCurator) error {
+func MonitorUpgradeStatus(
+	dc dynamic.Interface,
+	client clientv1.Client,
+	clusterName string,
+	curator *clustercuratorv1.ClusterCurator) error {
 	upgradeAttempts := utils.GetRetryTimes(curator.Spec.Upgrade.MonitorTimeout, 120, utils.PauseSixtySeconds)
 	klog.V(0).Info("Monitoring up to " + strconv.Itoa(upgradeAttempts) + " attempts for Hypershift Upgrade job")
 	elapsedTime := 0
 
 	// Refresh the hostedCluster resource
-	hostedCluster, err := dc.Resource(utils.HCGVR).Namespace(curator.Namespace).Get(context.TODO(), clusterName, v1.GetOptions{})
+	hostedCluster, err := dc.Resource(utils.HCGVR).Namespace(curator.Namespace).Get(
+		context.TODO(), clusterName, v1.GetOptions{})
 	if err != nil {
 		return err
 	}
@@ -345,7 +366,8 @@ func MonitorUpgradeStatus(dc dynamic.Interface, client clientv1.Client, clusterN
 				elapsedTime++
 
 				// Reset hostedCluster, so we make sure we're getting clean data (not cached)
-				hostedCluster, err = dc.Resource(utils.HCGVR).Namespace(curator.Namespace).Get(context.TODO(), clusterName, v1.GetOptions{})
+				hostedCluster, err = dc.Resource(utils.HCGVR).Namespace(curator.Namespace).Get(
+					context.TODO(), clusterName, v1.GetOptions{})
 
 				if err != nil && k8serrors.IsNotFound(err) {
 					break
@@ -362,7 +384,12 @@ func MonitorUpgradeStatus(dc dynamic.Interface, client clientv1.Client, clusterN
 	return errors.New("Timed out waiting for job")
 }
 
-func patchUpgradeVersion(dc dynamic.Interface, clusterName string, namespace string, resourceType schema.GroupVersionResource, image string) error {
+func patchUpgradeVersion(
+	dc dynamic.Interface,
+	clusterName string,
+	namespace string,
+	resourceType schema.GroupVersionResource,
+	image string) error {
 	err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
 		// Update the image spec
 		patch := []utils.PatchStringValue{{
@@ -386,7 +413,11 @@ func patchUpgradeVersion(dc dynamic.Interface, clusterName string, namespace str
 	return err
 }
 
-func validateUpgradeVersion(client clientv1.Client, clusterName string, curator *clustercuratorv1.ClusterCurator, desiredUpdate string) error {
+func validateUpgradeVersion(
+	client clientv1.Client,
+	clusterName string,
+	curator *clustercuratorv1.ClusterCurator,
+	desiredUpdate string) error {
 	managedClusterInfo := managedclusterinfov1beta1.ManagedClusterInfo{}
 	if err := client.Get(context.TODO(), types.NamespacedName{
 		Namespace: clusterName,
@@ -455,7 +486,8 @@ func DetachAndMonitor(dc dynamic.Interface, clusterName string, curator *cluster
 	}
 	klog.V(0).Info("=> Monitoring ManagedCluster detach of " + clusterName)
 
-	hostedCluster, err := dc.Resource(utils.HCGVR).Namespace(curator.Namespace).Get(context.TODO(), clusterName, v1.GetOptions{})
+	hostedCluster, err := dc.Resource(utils.HCGVR).Namespace(curator.Namespace).Get(
+		context.TODO(), clusterName, v1.GetOptions{})
 	if err != nil {
 		return err
 	}
@@ -467,7 +499,7 @@ func DetachAndMonitor(dc dynamic.Interface, clusterName string, curator *cluster
 		return errors.New("Destroying HosterCluster type " + hcType + " is not supported. Use the HostedCluster CLI.")
 	}
 
-	retryCount := utils.GetRetryTimes(curator.Spec.Install.JobMonitorTimeout, 5, utils.PauseTwoSeconds)
+	retryCount := utils.GetRetryTimes(curator.Spec.Destroy.JobMonitorTimeout, 5, utils.PauseTwoSeconds)
 	_, err = dc.Resource(mcGVR).Get(context.TODO(), clusterName, v1.GetOptions{})
 
 	if err != nil && k8serrors.IsNotFound(err) {

@@ -231,16 +231,6 @@ func ApplyRBAC(kubeset kubernetes.Interface, namespace string) error {
 		klog.V(0).Info(" Created serviceAccount ✓")
 	}
 
-	// klog.V(2).Info("Check if Role curator exists")
-	// if _, err := kubeset.RbacV1().Roles(namespace).Get(context.TODO(), "curator", v1.GetOptions{}); err != nil {
-	// 	klog.V(2).Info(" Creating Role curator")
-	// 	_, err = kubeset.RbacV1().Roles(namespace).Create(context.TODO(), getRole(namespace), v1.CreateOptions{})
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// 	klog.V(0).Info(" Created Role ✓")
-	// }
-
 	klog.V(2).Info("Check if ClusterRole curator exists")
 	if _, err := kubeset.RbacV1().ClusterRoles().Get(context.TODO(), "curator", v1.GetOptions{}); err != nil {
 		klog.V(2).Info(" Creating ClusterRole curator")
@@ -267,7 +257,8 @@ func ApplyRBACHypershift(kubeset kubernetes.Interface, namespace string, curator
 	klog.V(2).Info("Check if RoleBinding cluster-installer exists in namespace " + namespace)
 	if _, err := kubeset.RbacV1().RoleBindings(namespace).Get(context.TODO(), "curator", v1.GetOptions{}); err != nil {
 		klog.V(2).Info(" Creating RoleBinding curator in namespace " + namespace)
-		_, err = kubeset.RbacV1().RoleBindings(namespace).Create(context.TODO(), getRoleBinding(curatorNamespace), v1.CreateOptions{})
+		_, err = kubeset.RbacV1().RoleBindings(namespace).Create(
+			context.TODO(), getRoleBinding(curatorNamespace), v1.CreateOptions{})
 		if err != nil {
 			return err
 		}
@@ -277,7 +268,8 @@ func ApplyRBACHypershift(kubeset kubernetes.Interface, namespace string, curator
 	klog.V(2).Info("Check if ClusterRole curator-crb exists")
 	if _, err := kubeset.RbacV1().ClusterRoleBindings().Get(context.TODO(), "curator-crb", v1.GetOptions{}); err != nil {
 		klog.V(2).Info(" Creating ClusterRoleBinding curator-crb")
-		_, err = kubeset.RbacV1().ClusterRoleBindings().Create(context.TODO(), getClusterRoleBinding(curatorNamespace), v1.CreateOptions{})
+		_, err = kubeset.RbacV1().ClusterRoleBindings().Create(
+			context.TODO(), getClusterRoleBinding(curatorNamespace), v1.CreateOptions{})
 		if err != nil {
 			return err
 		}

@@ -134,7 +134,11 @@ func RecordCuratorJob(clusterName, containerName string) error {
 	return patchDyn(dynset, clusterName, containerName, CurrentCuratorJob)
 }
 
-func RecordCuratorJobName(client clientv1.Client, clusterName string, clusterNamespace string, curatorJobName string) error {
+func RecordCuratorJobName(
+	client clientv1.Client,
+	clusterName string,
+	clusterNamespace string,
+	curatorJobName string) error {
 	cc, err := GetClusterCurator(client, clusterName, clusterNamespace)
 	if err != nil {
 		return err
@@ -287,7 +291,10 @@ func RecordFailedCuratorStatusCondition(
 		message)
 }
 
-func GetClusterCurator(client clientv1.Client, clusterName string, clusterNamespace string) (*clustercuratorv1.ClusterCurator, error) {
+func GetClusterCurator(
+	client clientv1.Client,
+	clusterName string,
+	clusterNamespace string) (*clustercuratorv1.ClusterCurator, error) {
 
 	curator := &clustercuratorv1.ClusterCurator{}
 
@@ -490,7 +497,11 @@ func parseVersionInfo(msg string) (channel, upstream string, semversion semver.V
 	return channel, upstream, semversion, nil
 }
 
-func GetClusterType(hiveset hiveclient.Interface, dc dynamic.Interface, clusterName string, clusterNamespace string) (string, error) {
+func GetClusterType(
+	hiveset hiveclient.Interface,
+	dc dynamic.Interface,
+	clusterName string,
+	clusterNamespace string) (string, error) {
 	// shortcut for Hypershift cluster
 	if clusterName != clusterNamespace {
 		return HypershiftClusterType, nil
@@ -502,7 +513,8 @@ func GetClusterType(hiveset hiveclient.Interface, dc dynamic.Interface, clusterN
 		return StandaloneClusterType, nil
 	}
 
-	hostedCluster, hcErr := dc.Resource(HCGVR).Namespace(clusterNamespace).Get(context.TODO(), clusterName, v1.GetOptions{})
+	hostedCluster, hcErr := dc.Resource(HCGVR).Namespace(clusterNamespace).Get(
+		context.TODO(), clusterName, v1.GetOptions{})
 	if hcErr == nil && hostedCluster != nil {
 		return HypershiftClusterType, nil
 	}
