@@ -9,13 +9,19 @@ import (
 
 	clustercuratorv1 "github.com/stolostron/cluster-curator-controller/pkg/api/v1beta1"
 	"github.com/stolostron/cluster-curator-controller/pkg/jobs/utils"
+	"github.com/stolostron/library-go/pkg/config"
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/kubernetes/scheme"
 	clientfake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 const ClusterName = "my-cluster"
+const ClusterNamespace = "clusters"
+const NodepoolName = "my-cluster-us-east-2"
+
+var s = scheme.Scheme
 
 func getClusterCurator() *clustercuratorv1.ClusterCurator {
 	return &clustercuratorv1.ClusterCurator{
@@ -55,6 +61,66 @@ func getClusterCuratorWithUpgradeOperation() *clustercuratorv1.ClusterCurator {
 		},
 		Spec: clustercuratorv1.ClusterCuratorSpec{
 			DesiredCuration: "upgrade",
+		},
+	}
+}
+
+func getHypershiftClusterCurator() *clustercuratorv1.ClusterCurator {
+	return &clustercuratorv1.ClusterCurator{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      ClusterName,
+			Namespace: ClusterNamespace,
+		},
+		Spec: clustercuratorv1.ClusterCuratorSpec{
+			DesiredCuration: "install",
+		},
+	}
+}
+
+func getHostedCluster(hcType string, hcConditions []interface{}) *unstructured.Unstructured {
+	return &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "hypershift.openshift.io/v1beta1",
+			"kind":       "HostedCluster",
+			"metadata": map[string]interface{}{
+				"name":      ClusterName,
+				"namespace": ClusterNamespace,
+				"labels": map[string]interface{}{
+					"hypershift.openshift.io/auto-created-for-infra": ClusterName + "-xyz",
+				},
+			},
+			"spec": map[string]interface{}{
+				"pausedUntil": "true",
+				"platform": map[string]interface{}{
+					"type": hcType,
+				},
+				"release": map[string]interface{}{
+					"image": "quay.io/openshift-release-dev/ocp-release:4.13.6-multi",
+				},
+			},
+			"status": map[string]interface{}{
+				"conditions": hcConditions,
+			},
+		},
+	}
+}
+
+func getNodepool(npName string, npNamespace string, npClusterName string) *unstructured.Unstructured {
+	return &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "hypershift.openshift.io/v1beta1",
+			"kind":       "NodePool",
+			"metadata": map[string]interface{}{
+				"name":      npName,
+				"namespace": npNamespace,
+			},
+			"spec": map[string]interface{}{
+				"pausedUntil": "true",
+				"clusterName": npClusterName,
+				"release": map[string]interface{}{
+					"image": "quay.io/openshift-release-dev/ocp-release:4.13.6-multi",
+				},
+			},
 		},
 	}
 }
@@ -278,4 +344,148 @@ func TestUpgradDone(t *testing.T) {
 	})
 
 	curatorRun(nil, client, ClusterName)
+}
+
+func TestHypershiftActivate(t *testing.T) {
+	// Test will fail because we can't pass in a fake dynamic client
+	// But that's ok, we just need to test the curator code
+	defer func() { // recover from not having a hub config object
+		if r := recover(); r == nil {
+			t.Fatal("expected recover, but failed")
+		}
+	}()
+
+	os.Args[1] = "activate-and-monitor"
+	os.Args[2] = ClusterName
+
+	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
+	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(
+		getHypershiftClusterCurator(),
+		getHostedCluster("AWS", []interface{}{}),
+		getNodepool(NodepoolName, ClusterNamespace, ClusterName),
+	).Build()
+
+	config, _ := config.LoadConfig("", "", "")
+
+	curatorRun(config, client, ClusterNamespace)
+}
+
+func TestHypershiftMonitor(t *testing.T) {
+	// Test will fail because we can't pass in a fake dynamic client
+	// But that's ok, we just need to test the curator code
+	defer func() { // recover from not having a hub config object
+		if r := recover(); r == nil {
+			t.Fatal("expected recover, but failed")
+		}
+	}()
+
+	os.Args[1] = "monitor"
+	os.Args[2] = ClusterName
+
+	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
+	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(
+		getHypershiftClusterCurator(),
+		getHostedCluster("AWS", []interface{}{}),
+		getNodepool(NodepoolName, ClusterNamespace, ClusterName),
+	).Build()
+
+	config, _ := config.LoadConfig("", "", "")
+
+	curatorRun(config, client, ClusterNamespace)
+}
+
+func TestHypershiftDestroyCluster(t *testing.T) {
+	// Test will fail because we can't pass in a fake dynamic client
+	// But that's ok, we just need to test the curator code
+	defer func() { // recover from not having a hub config object
+		if r := recover(); r == nil {
+			t.Fatal("expected recover, but failed")
+		}
+	}()
+
+	os.Args[1] = "destroy-cluster"
+	os.Args[2] = ClusterName
+
+	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
+	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(
+		getHypershiftClusterCurator(),
+		getHostedCluster("KubeVirt", []interface{}{}),
+		getNodepool(NodepoolName, ClusterNamespace, ClusterName),
+	).Build()
+
+	config, _ := config.LoadConfig("", "", "")
+
+	curatorRun(config, client, ClusterNamespace)
+}
+
+func TestHypershiftMonitorDestroy(t *testing.T) {
+	// Test will fail because we can't pass in a fake dynamic client
+	// But that's ok, we just need to test the curator code
+	defer func() { // recover from not having a hub config object
+		if r := recover(); r == nil {
+			t.Fatal("expected recover, but failed")
+		}
+	}()
+
+	os.Args[1] = "monitor-destroy"
+	os.Args[2] = ClusterName
+
+	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
+	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(
+		getHypershiftClusterCurator(),
+		getHostedCluster("KubeVirt", []interface{}{}),
+		getNodepool(NodepoolName, ClusterNamespace, ClusterName),
+	).Build()
+
+	config, _ := config.LoadConfig("", "", "")
+
+	curatorRun(config, client, ClusterNamespace)
+}
+
+func TestHypershiftUpgradeCluster(t *testing.T) {
+	// Test will fail because we can't pass in a fake dynamic client
+	// But that's ok, we just need to test the curator code
+	defer func() { // recover from not having a hub config object
+		if r := recover(); r == nil {
+			t.Fatal("expected recover, but failed")
+		}
+	}()
+
+	os.Args[1] = "upgrade-cluster"
+	os.Args[2] = ClusterName
+
+	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
+	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(
+		getHypershiftClusterCurator(),
+		getHostedCluster("AWS", []interface{}{}),
+		getNodepool(NodepoolName, ClusterNamespace, ClusterName),
+	).Build()
+
+	config, _ := config.LoadConfig("", "", "")
+
+	curatorRun(config, client, ClusterNamespace)
+}
+
+func TestHypershiftMonitorUpgrade(t *testing.T) {
+	// Test will fail because we can't pass in a fake dynamic client
+	// But that's ok, we just need to test the curator code
+	defer func() { // recover from not having a hub config object
+		if r := recover(); r == nil {
+			t.Fatal("expected recover, but failed")
+		}
+	}()
+
+	os.Args[1] = "monitor-upgrade"
+	os.Args[2] = ClusterName
+
+	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
+	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(
+		getHypershiftClusterCurator(),
+		getHostedCluster("AWS", []interface{}{}),
+		getNodepool(NodepoolName, ClusterNamespace, ClusterName),
+	).Build()
+
+	config, _ := config.LoadConfig("", "", "")
+
+	curatorRun(config, client, ClusterNamespace)
 }

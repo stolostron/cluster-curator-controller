@@ -14,6 +14,7 @@ import (
 )
 
 const ClusterName = "my-cluster"
+const ClusterNamespace = "clusters"
 
 func getRules(clusterName string) []rbacv1.PolicyRule {
 	return []rbacv1.PolicyRule{
@@ -26,6 +27,11 @@ func getRules(clusterName string) []rbacv1.PolicyRule {
 			APIGroups: []string{"hive.openshift.io"},
 			Resources: []string{"clusterdeployments"},
 			Verbs:     []string{"patch", "delete", "update"},
+		},
+		rbacv1.PolicyRule{
+			APIGroups: []string{"hypershift.openshift.io"},
+			Resources: []string{"hostedclusters", "nodepools"},
+			Verbs:     []string{"get", "patch", "delete", "update", "list"},
 		},
 		rbacv1.PolicyRule{
 			APIGroups: []string{"batch", "hive.openshift.io", "tower.ansible.com"},
@@ -44,8 +50,8 @@ func getRules(clusterName string) []rbacv1.PolicyRule {
 		},
 		rbacv1.PolicyRule{
 			APIGroups: []string{"cluster.open-cluster-management.io"},
-			Resources: []string{"clustercurators"},
-			Verbs:     []string{"get", "update", "patch"},
+			Resources: []string{"clustercurators", "managedclusters"},
+			Verbs:     []string{"get", "update", "patch", "delete"},
 		},
 		rbacv1.PolicyRule{
 			APIGroups: []string{"view.open-cluster-management.io"},
@@ -59,10 +65,9 @@ func getRules(clusterName string) []rbacv1.PolicyRule {
 		},
 		// To read the install-config secret
 		rbacv1.PolicyRule{
-			APIGroups:     []string{""},
-			Resources:     []string{"secrets"},
-			Verbs:         []string{"get"},
-			ResourceNames: []string{clusterName + "-install-config"},
+			APIGroups: []string{""},
+			Resources: []string{"secrets"},
+			Verbs:     []string{"get"},
 		},
 	}
 }
@@ -108,7 +113,7 @@ func TestApplyRbac(t *testing.T) {
 	}
 
 	roleRef := rbacv1.RoleRef{
-		Kind:     "Role",
+		Kind:     "ClusterRole",
 		Name:     "curator",
 		APIGroup: "rbac.authorization.k8s.io",
 	}
@@ -125,7 +130,7 @@ func TestApplyRbac(t *testing.T) {
 
 	t.Log("Validate Role")
 
-	role, err := kubeset.RbacV1().Roles(ClusterName).Get(context.TODO(), "curator", v1.GetOptions{})
+	role, err := kubeset.RbacV1().ClusterRoles().Get(context.TODO(), "curator", v1.GetOptions{})
 
 	assert.Nil(t, err, "err nil, when Role exists")
 	assert.ElementsMatch(t, getRules(ClusterName), role.Rules, "The rules should match")
@@ -183,4 +188,12 @@ func TestExtendClusterInstallerRoleTimeout(t *testing.T) {
 	assert.NotNil(t, err, "err not nil, when failure or timeout")
 	t.Log(err.Error())
 	assert.Contains(t, err.Error(), "Timeout waiting for role", "err.Error() should contain \"Timeout waiting for role\"")
+}
+
+func TestApplyRBACHypershift(t *testing.T) {
+	kubeset := fake.NewSimpleClientset()
+
+	_ = ApplyRBAC(kubeset, ClusterName)
+	err := ApplyRBACHypershift(kubeset, ClusterName, ClusterNamespace)
+	assert.Nil(t, err, "err nil, when ClusterRoles and RoleBindings are created")
 }
