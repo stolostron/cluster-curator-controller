@@ -194,6 +194,7 @@ For more details on job flow within our architecture see our [**swimlane chart**
           - name: Demo Job Template
         posthook:
           - name: Demo Job Template
+        towerAuthSecret: toweraccess
     ```
   Note: The `desiredCuration` commands are exactly the same as the Hive cluster since the controller will auto-detect the cluster type
 

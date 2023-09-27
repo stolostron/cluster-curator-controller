@@ -89,7 +89,8 @@ func (r *ClusterCuratorReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	// Hypershift clusters need additional RBAC
 	if curator.Name != curator.Namespace {
 		log.V(2).Info("Check if cluster namespace " + curator.Name + " exists")
-		if _, err := r.Kubeset.CoreV1().Namespaces().Get(context.TODO(), curator.Name, v1.GetOptions{}); k8serrors.IsNotFound(err) {
+		if _, err := r.Kubeset.CoreV1().Namespaces().Get(
+			context.TODO(), curator.Name, v1.GetOptions{}); k8serrors.IsNotFound(err) {
 			log.V(2).Info("Creating cluster namespace " + curator.Name)
 			clusterNS := &corev1.Namespace{
 				ObjectMeta: v1.ObjectMeta{Name: curator.Name},
