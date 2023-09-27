@@ -415,6 +415,7 @@ func MonitorAnsibleJob(
 
 	utils.CheckError(utils.RecordCurrentStatusCondition(
 		client,
+		curator.Name,
 		curator.Namespace,
 		"current-ansiblejob",
 		v1.ConditionFalse,
@@ -453,6 +454,7 @@ func MonitorAnsibleJob(
 			if !foundUrlOnce && jobStatusUrl != nil {
 				utils.CheckError(utils.RecordAnsibleJobStatusUrlCondition(
 					client,
+					curator.Name,
 					curator.Namespace,
 					jobResource.GetName(),
 					v1.ConditionTrue,
@@ -469,6 +471,7 @@ func MonitorAnsibleJob(
 
 				utils.CheckError(utils.RecordCurrentStatusCondition(
 					client,
+					curator.Name,
 					curator.Namespace,
 					"current-ansiblejob",
 					v1.ConditionTrue,

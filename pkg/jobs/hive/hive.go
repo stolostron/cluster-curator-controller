@@ -74,19 +74,7 @@ func MonitorClusterStatus(
 		return err
 	}
 
-	return monitorClusterStatus(client, hiveset, clusterName, jobType, getMonitorAttempts(jobType, curator))
-}
-
-func getMonitorAttempts(jobType string, curator *clustercuratorv1.ClusterCurator) int {
-	monitorAttempts := utils.GetRetryTimes(0, 5, utils.PauseTwoSeconds)
-	switch jobType {
-	case utils.Installing:
-		monitorAttempts = utils.GetRetryTimes(curator.Spec.Install.JobMonitorTimeout, 5, utils.PauseTwoSeconds)
-	case utils.Destroying:
-		monitorAttempts = utils.GetRetryTimes(curator.Spec.Destroy.JobMonitorTimeout, 5, utils.PauseTwoSeconds)
-	}
-
-	return monitorAttempts
+	return monitorClusterStatus(client, hiveset, clusterName, jobType, utils.GetMonitorAttempts(jobType, curator))
 }
 
 func DestroyClusterDeployment(hiveset hiveclient.Interface, clusterName string) error {
@@ -140,6 +128,7 @@ func monitorClusterStatus(client clientv1.Client, hiveset hiveclient.Interface, 
 				utils.CheckError(utils.RecordCurrentStatusCondition(
 					client,
 					clusterName,
+					clusterName,
 					"hive-provisioning-job",
 					v1.ConditionTrue,
 					jobName))
@@ -184,6 +173,7 @@ func monitorClusterStatus(client clientv1.Client, hiveset hiveclient.Interface, 
 			utils.CheckError(utils.RecordCurrentStatusCondition(
 				client,
 				clusterName,
+				clusterName,
 				"hive-"+jobType+"ing-job",
 				v1.ConditionFalse,
 				jobName))
@@ -214,6 +204,7 @@ func monitorClusterStatus(client clientv1.Client, hiveset hiveclient.Interface, 
 				klog.V(0).Info("Uninstall job complete")
 				utils.CheckError(utils.RecordCurrentStatusCondition(
 					client,
+					clusterName,
 					clusterName,
 					"hive-"+jobType+"ing-job",
 					v1.ConditionTrue,
@@ -483,6 +474,7 @@ func MonitorUpgradeStatus(client clientv1.Client, clusterName string, curator *c
 						strMessage := "Upgrade status - " + condition.(map[string]interface{})["message"].(string)
 						utils.CheckError(utils.RecordCurrentStatusCondition(
 							client,
+							clusterName,
 							clusterName,
 							"monitor-upgrade",
 							v1.ConditionFalse,

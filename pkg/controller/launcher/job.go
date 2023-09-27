@@ -53,7 +53,11 @@ func NewLauncher(
 	}
 }
 
-func getBatchJob(clusterName string, imageURI string, curator clustercuratorv1.ClusterCurator) *batchv1.Job {
+func getBatchJob(
+	clusterName string,
+	clusterNamespace string,
+	imageURI string,
+	curator clustercuratorv1.ClusterCurator) *batchv1.Job {
 
 	var ttlf int32 = 3600
 
@@ -87,7 +91,7 @@ func getBatchJob(clusterName string, imageURI string, curator clustercuratorv1.C
 		newJob = &batchv1.Job{
 			ObjectMeta: v1.ObjectMeta{
 				GenerateName: "curator-job-",
-				Namespace:    clusterName,
+				Namespace:    clusterNamespace,
 				Labels: map[string]string{
 					"open-cluster-management": "curator-job",
 				},
@@ -108,14 +112,14 @@ func getBatchJob(clusterName string, imageURI string, curator clustercuratorv1.C
 							corev1.Container{
 								Name:            ActivateAndMonitor,
 								Image:           imageURI,
-								Command:         append([]string{CurCmd, ActivateAndMonitor}),
+								Command:         append([]string{CurCmd, ActivateAndMonitor, clusterName}),
 								ImagePullPolicy: corev1.PullAlways,
 								Resources:       resourceSettings,
 							},
 							corev1.Container{
 								Name:            MonImport,
 								Image:           imageURI,
-								Command:         append([]string{CurCmd, MonImport}),
+								Command:         append([]string{CurCmd, MonImport, clusterName}),
 								ImagePullPolicy: corev1.PullAlways,
 								Resources:       resourceSettings,
 							},
@@ -124,7 +128,7 @@ func getBatchJob(clusterName string, imageURI string, curator clustercuratorv1.C
 							corev1.Container{
 								Name:    DoneDoneDone,
 								Image:   imageURI,
-								Command: append([]string{CurCmd, DoneDoneDone}),
+								Command: append([]string{CurCmd, DoneDoneDone, clusterName}),
 							},
 						},
 					},
@@ -145,7 +149,7 @@ func getBatchJob(clusterName string, imageURI string, curator clustercuratorv1.C
 		newJob = &batchv1.Job{
 			ObjectMeta: v1.ObjectMeta{
 				GenerateName: "curator-job-",
-				Namespace:    clusterName,
+				Namespace:    clusterNamespace,
 				Labels: map[string]string{
 					"open-cluster-management": "curator-job",
 				},
@@ -166,14 +170,14 @@ func getBatchJob(clusterName string, imageURI string, curator clustercuratorv1.C
 							corev1.Container{
 								Name:            UpgradeCluster,
 								Image:           imageURI,
-								Command:         append([]string{CurCmd, UpgradeCluster}),
+								Command:         append([]string{CurCmd, UpgradeCluster, clusterName}),
 								ImagePullPolicy: corev1.PullAlways,
 								Resources:       resourceSettings,
 							},
 							corev1.Container{
 								Name:            MonUpgrade,
 								Image:           imageURI,
-								Command:         append([]string{CurCmd, MonUpgrade}),
+								Command:         append([]string{CurCmd, MonUpgrade, clusterName}),
 								ImagePullPolicy: corev1.PullAlways,
 								Resources:       resourceSettings,
 							},
@@ -182,7 +186,7 @@ func getBatchJob(clusterName string, imageURI string, curator clustercuratorv1.C
 							corev1.Container{
 								Name:    DoneDoneDone,
 								Image:   imageURI,
-								Command: append([]string{CurCmd, DoneDoneDone}),
+								Command: append([]string{CurCmd, DoneDoneDone, clusterName}),
 							},
 						},
 					},
@@ -199,7 +203,7 @@ func getBatchJob(clusterName string, imageURI string, curator clustercuratorv1.C
 		newJob = &batchv1.Job{
 			ObjectMeta: v1.ObjectMeta{
 				GenerateName: "curator-job-",
-				Namespace:    clusterName,
+				Namespace:    clusterNamespace,
 				Labels: map[string]string{
 					"open-cluster-management": "curator-job",
 				},
@@ -220,14 +224,14 @@ func getBatchJob(clusterName string, imageURI string, curator clustercuratorv1.C
 							corev1.Container{
 								Name:            DeleteClusterDeployment,
 								Image:           imageURI,
-								Command:         append([]string{CurCmd, DeleteClusterDeployment}),
+								Command:         append([]string{CurCmd, DeleteClusterDeployment, clusterName}),
 								ImagePullPolicy: corev1.PullIfNotPresent,
 								Resources:       resourceSettings,
 							},
 							corev1.Container{
 								Name:            MonitorDestroy,
 								Image:           imageURI,
-								Command:         append([]string{CurCmd, MonitorDestroy}),
+								Command:         append([]string{CurCmd, MonitorDestroy, clusterName}),
 								ImagePullPolicy: corev1.PullIfNotPresent,
 								Resources:       resourceSettings,
 							},
@@ -236,7 +240,7 @@ func getBatchJob(clusterName string, imageURI string, curator clustercuratorv1.C
 							corev1.Container{
 								Name:    DoneDoneDone,
 								Image:   imageURI,
-								Command: append([]string{CurCmd, DoneDoneDone}),
+								Command: append([]string{CurCmd, DoneDoneDone, clusterName}),
 							},
 						},
 					},
@@ -250,7 +254,7 @@ func getBatchJob(clusterName string, imageURI string, curator clustercuratorv1.C
 		newJob = &batchv1.Job{
 			ObjectMeta: v1.ObjectMeta{
 				GenerateName: "curator-job-",
-				Namespace:    clusterName,
+				Namespace:    clusterNamespace,
 				Labels: map[string]string{
 					"open-cluster-management": "curator-job",
 				},
@@ -271,7 +275,7 @@ func getBatchJob(clusterName string, imageURI string, curator clustercuratorv1.C
 							corev1.Container{
 								Name:    DoneDoneDone,
 								Image:   imageURI,
-								Command: append([]string{CurCmd, DoneDoneDone}),
+								Command: append([]string{CurCmd, DoneDoneDone, clusterName}),
 							},
 						},
 					},
@@ -286,7 +290,7 @@ func getBatchJob(clusterName string, imageURI string, curator clustercuratorv1.C
 			corev1.Container{
 				Name:            PreAJob,
 				Image:           imageURI,
-				Command:         append([]string{CurCmd, PreAJob}),
+				Command:         append([]string{CurCmd, PreAJob, clusterName}),
 				ImagePullPolicy: corev1.PullIfNotPresent,
 				Env: []corev1.EnvVar{
 					corev1.EnvVar{
@@ -310,7 +314,7 @@ func getBatchJob(clusterName string, imageURI string, curator clustercuratorv1.C
 		newJob.Spec.Template.Spec.InitContainers = append(newJob.Spec.Template.Spec.InitContainers, corev1.Container{
 			Name:            PostAJob,
 			Image:           imageURI,
-			Command:         append([]string{CurCmd, PostAJob}),
+			Command:         append([]string{CurCmd, PostAJob, clusterName}),
 			ImagePullPolicy: corev1.PullIfNotPresent,
 			Env: []corev1.EnvVar{
 				corev1.EnvVar{
@@ -326,12 +330,13 @@ func getBatchJob(clusterName string, imageURI string, curator clustercuratorv1.C
 
 func (I *Launcher) CreateJob() error {
 	kubeset := I.kubeset
-	clusterName := I.clusterCurator.Namespace
+	clusterName := I.clusterCurator.Name
+	clusterNamespace := I.clusterCurator.Namespace
 
-	newJob := getBatchJob(I.clusterCurator.Name, I.imageURI, I.clusterCurator)
+	newJob := getBatchJob(clusterName, clusterNamespace, I.imageURI, I.clusterCurator)
 
 	// Allow us to override the job in the Cluster Curator
-	klog.V(0).Info("Creating Curator job curator-job in namespace " + clusterName)
+	klog.V(0).Info("Creating Curator job curator-job in namespace " + clusterNamespace)
 	var err error
 	if I.clusterCurator.Spec.Install.OverrideJob != nil {
 		klog.V(0).Info(" Overriding the Curator job with overrideJob from the " + clusterName + " ClusterCurator resource")
@@ -352,10 +357,10 @@ func (I *Launcher) CreateJob() error {
 		}
 	}
 	if err == nil {
-		curatorJob, err := kubeset.BatchV1().Jobs(clusterName).Create(context.TODO(), newJob, v1.CreateOptions{})
+		curatorJob, err := kubeset.BatchV1().Jobs(clusterNamespace).Create(context.TODO(), newJob, v1.CreateOptions{})
 		if err == nil {
 			klog.V(0).Infof(" Created Curator job  ✓ (%v)", curatorJob.Name)
-			err = utils.RecordCuratorJobName(I.client, clusterName, curatorJob.Name)
+			err = utils.RecordCuratorJobName(I.client, clusterName, clusterNamespace, curatorJob.Name)
 			if err != nil {
 				return err
 			}

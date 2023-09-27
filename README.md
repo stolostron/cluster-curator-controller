@@ -3,7 +3,7 @@
 [![License](https://img.shields.io/:license-apache-blue.svg)](http://www.apache.org/licenses/LICENSE-2.0.html)
 
 ## What is cluster-curator-controller
-This project contains jobs and controllers for curating work around Cluster Provisioning. It is designed to extend the capabilities already present within Hive `ClusterDeployment` and Open Cluster Management `ManagedCluster` kinds.
+This project contains jobs and controllers for curating work around Cluster Provisioning. It is designed to extend the capabilities already present within Hive `ClusterDeployment` and Open Cluster Management `ManagedCluster` kinds. Hosted cluster support was added as well so now the controller also handles `HostedCluster` and `NodePool` kinds. The controller will automatically detect between Hive and Hosted clusters and will handle each type accordingly.
 
 ## Architecture
 The controller found here, monitors for `ClusterCurator` kind.  When new instances of the resource are created, this controller creates a Kubernetes Job (curator job) that runs: `pre-hook Ansible`, `activate-and-monitor` and `posthook Ansible`.  The Job can be overridden with your own job flow.
@@ -69,7 +69,7 @@ For more details on job flow within our architecture see our [**swimlane chart**
 
 ---
 
-- ### Cluster provisioning example: _(AWS)_
+- ### Hive cluster provisioning example: _(AWS)_
 
   * In the Red Hat Advanced Cluster Management console, create a NEW cluster. Before you press the button to create the button, flip the YAML switch.  Add the annotation `hive.openshift.io/reconcile-pause=true`, then press **Create**
 
@@ -133,6 +133,72 @@ For more details on job flow within our architecture see our [**swimlane chart**
   
     ```
 
+### Hosted cluster provisioning example: _(KubeVirt)_
+
+  * When creating the `HostedCluster` and `NodePool` resource add the `spec.pausedUntil` field with value `true` to both resources. If using the `hcp create cluster` CLI you can specify the flag `--pausedUntil true`.
+
+    ```yaml
+    apiVersion: hypershift.openshift.io/v1beta1
+    kind: HostedCluster
+    metadata:
+      name: my-cluster
+      namespace: clusters
+    spec:
+      pausedUntil: 'true'
+    ...
+    ```
+
+    ```yaml
+    apiVersion: hypershift.openshift.io/v1beta1
+    kind: NodePool
+    metadata:
+      name: my-cluster-us-east-2
+      namespace: clusters
+    spec:
+      pausedUntil: 'true'
+    ...
+    ```
+
+  * The cluster will show in the console as Creating, but it is waiting for curation. If you will be using Ansible, create a secret in the same namespace as the `HostedCluster` resource. Here is a an example:
+
+    ```yaml
+    ---
+    apiVersion: v1
+    kind: Secret
+    metadata:
+      name: toweraccess
+      namespace: HOSTED_CLUSTER_NAMESPACE
+    stringData:
+      host: https://my-tower-domain.io
+      token: ANSIBLE_TOKEN_FOR_admin  
+    ```
+
+  * Now create the ClusterCurator resource kind in the `HostedCluster` namespace. The ClusterCurator name is required to be the same as the `HostedCluster` name. This will begin curation of your cluster provisioning by removing the `spec.pausedUntil` field in all the `HostedCluster` and `NodePool` resources.
+    ```yaml
+    ---
+    apiVersion: cluster.open-cluster-management.io/v1beta1
+    kind: ClusterCurator
+    metadata:
+      name: HOSTED_CLUSTER_NAME
+      namespace: HOSTED_CLUSTER_NAMESPACE
+      labels:
+        open-cluster-management: curator
+    spec:
+      desiredCuration: install
+      install:
+        prehook:
+          - name: Demo Job Template
+            extra_vars:
+              variable1: something-interesting
+              variable2: 2
+          - name: Demo Job Template
+        posthook:
+          - name: Demo Job Template
+        towerAuthSecret: toweraccess
+    ```
+  Note: The `desiredCuration` commands are exactly the same as the Hive cluster since the controller will auto-detect the cluster type
+
+  * To monitor the status of the provision you can look at either the `ClusterCurator` status or look at the job logs from the `HostedCluster` namespace.
 ---
 
 - ### Diagnostic steps:

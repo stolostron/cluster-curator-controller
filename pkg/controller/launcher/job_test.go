@@ -47,7 +47,7 @@ func TestGetBatchJobImageSHA(t *testing.T) {
 			},
 		},
 	}
-	batchJobObj := getBatchJob(clusterName, imageURI, clusterCurator)
+	batchJobObj := getBatchJob(clusterName, clusterName, imageURI, clusterCurator)
 
 	t.Log("Test count initContainers in job")
 	foundInitContainers := len(batchJobObj.Spec.Template.Spec.InitContainers)
@@ -185,7 +185,7 @@ func TestGetBatchJobImageDefault(t *testing.T) {
 	}
 
 	for _, c := range testcases {
-		c.verify(getBatchJob(clusterName, imageURI, c.clusterCurator))
+		c.verify(getBatchJob(clusterName, clusterName, imageURI, c.clusterCurator))
 	}
 }
 
@@ -213,7 +213,7 @@ func TestGetBatchJobRetryInstallPosthook(t *testing.T) {
 		},
 	}
 
-	batchJobObj := getBatchJob(clusterName, imageURI, clusterCurator)
+	batchJobObj := getBatchJob(clusterName, clusterName, imageURI, clusterCurator)
 
 	t.Log("Test count initContainers in job")
 	foundInitContainers := len(batchJobObj.Spec.Template.Spec.InitContainers)
@@ -257,7 +257,7 @@ func TestGetBatchJobRetryUpgradePosthook(t *testing.T) {
 		},
 	}
 
-	batchJobObj := getBatchJob(clusterName, imageURI, clusterCurator)
+	batchJobObj := getBatchJob(clusterName, clusterName, imageURI, clusterCurator)
 
 	t.Log("Test count initContainers in job")
 	foundInitContainers := len(batchJobObj.Spec.Template.Spec.InitContainers)

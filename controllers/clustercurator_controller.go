@@ -7,6 +7,7 @@ import (
 	"reflect"
 
 	"github.com/go-logr/logr"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -18,6 +19,8 @@ import (
 	"github.com/stolostron/cluster-curator-controller/pkg/controller/launcher"
 	"github.com/stolostron/cluster-curator-controller/pkg/jobs/rbac"
 	"github.com/stolostron/cluster-curator-controller/pkg/jobs/utils"
+	corev1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
 const DeleteNamespace = "delete-cluster-namespace"
@@ -81,6 +84,30 @@ func (r *ClusterCuratorReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	err := rbac.ApplyRBAC(r.Kubeset, req.Namespace)
 	if err := utils.LogError(err); err != nil {
 		return ctrl.Result{}, err
+	}
+
+	// Hypershift clusters need additional RBAC
+	if curator.Name != curator.Namespace {
+		log.V(2).Info("Check if cluster namespace " + curator.Name + " exists")
+		if _, err := r.Kubeset.CoreV1().Namespaces().Get(
+			context.TODO(), curator.Name, v1.GetOptions{}); k8serrors.IsNotFound(err) {
+			log.V(2).Info("Creating cluster namespace " + curator.Name)
+			clusterNS := &corev1.Namespace{
+				ObjectMeta: v1.ObjectMeta{Name: curator.Name},
+			}
+			_, err = r.Kubeset.CoreV1().Namespaces().Create(context.TODO(), clusterNS, v1.CreateOptions{})
+			if err := utils.LogError(err); err != nil {
+				return ctrl.Result{}, err
+			}
+			log.V(0).Info(" Created cluster namespace ✓")
+		} else if err != nil {
+			return ctrl.Result{}, err
+		}
+
+		err = rbac.ApplyRBACHypershift(r.Kubeset, curator.Name, curator.Namespace)
+		if err := utils.LogError(err); err != nil {
+			return ctrl.Result{}, err
+		}
 	}
 
 	// Launch the curation job
