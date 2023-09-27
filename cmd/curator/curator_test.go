@@ -140,7 +140,7 @@ func TestCuratorRunNoParam(t *testing.T) {
 
 	os.Args[1] = ""
 
-	curatorRun(nil, nil, ClusterName)
+	curatorRun(nil, nil, ClusterName, ClusterName)
 }
 
 func TestCuratorRunWrongParam(t *testing.T) {
@@ -158,7 +158,7 @@ func TestCuratorRunWrongParam(t *testing.T) {
 
 	os.Args[1] = "something-wrong"
 
-	curatorRun(nil, nil, ClusterName)
+	curatorRun(nil, nil, ClusterName, ClusterName)
 }
 
 func TestCuratorRunNoClusterCurator(t *testing.T) {
@@ -180,7 +180,7 @@ func TestCuratorRunNoClusterCurator(t *testing.T) {
 
 	os.Args[1] = "SKIP_ALL_TESTING"
 
-	curatorRun(nil, client, ClusterName)
+	curatorRun(nil, client, ClusterName, ClusterName)
 }
 
 func TestCuratorRunClusterCurator(t *testing.T) {
@@ -192,7 +192,7 @@ func TestCuratorRunClusterCurator(t *testing.T) {
 
 	os.Args[1] = "SKIP_ALL_TESTING"
 
-	assert.NotPanics(t, func() { curatorRun(nil, client, ClusterName) }, "no panic when ClusterCurator found and skip test")
+	assert.NotPanics(t, func() { curatorRun(nil, client, ClusterName, ClusterName) }, "no panic when ClusterCurator found and skip test")
 }
 
 func TestCuratorRunClusterCuratorInstallUpgradeOperation(t *testing.T) {
@@ -202,11 +202,11 @@ func TestCuratorRunClusterCuratorInstallUpgradeOperation(t *testing.T) {
 
 	os.Args[1] = "SKIP_ALL_TESTING"
 
-	assert.NotPanics(t, func() { curatorRun(nil, client, ClusterName) }, "no panic when ClusterCurator found and skip test")
+	assert.NotPanics(t, func() { curatorRun(nil, client, ClusterName, ClusterName) }, "no panic when ClusterCurator found and skip test")
 
 	client = clientfake.NewFakeClientWithScheme(s, getClusterCuratorWithUpgradeOperation())
 
-	assert.NotPanics(t, func() { curatorRun(nil, client, ClusterName) }, "no panic when ClusterCurator found and skip test")
+	assert.NotPanics(t, func() { curatorRun(nil, client, ClusterName, ClusterName) }, "no panic when ClusterCurator found and skip test")
 }
 
 func TestCuratorRunNoProviderCredentialPath(t *testing.T) {
@@ -228,7 +228,7 @@ func TestCuratorRunNoProviderCredentialPath(t *testing.T) {
 
 	os.Args[1] = "applycloudprovider-ansible"
 
-	curatorRun(nil, client, ClusterName)
+	curatorRun(nil, client, ClusterName, ClusterName)
 }
 
 func TestCuratorRunProviderCredentialPathEnv(t *testing.T) {
@@ -248,7 +248,7 @@ func TestCuratorRunProviderCredentialPathEnv(t *testing.T) {
 
 	os.Args[1] = "applycloudprovider-ansible"
 
-	curatorRun(nil, client, ClusterName)
+	curatorRun(nil, client, ClusterName, ClusterName)
 }
 
 func TestInvokeMonitor(t *testing.T) {
@@ -261,7 +261,7 @@ func TestInvokeMonitor(t *testing.T) {
 	os.Setenv("PROVIDER_CREDENTIAL_PATH", "namespace/secretname")
 	os.Args[1] = "monitor"
 
-	curatorRun(nil, clientfake.NewFakeClient(), ClusterName)
+	curatorRun(nil, clientfake.NewFakeClient(), ClusterName, ClusterName)
 }
 
 func TestInvokeMonitorImport(t *testing.T) {
@@ -274,7 +274,7 @@ func TestInvokeMonitorImport(t *testing.T) {
 	os.Setenv("PROVIDER_CREDENTIAL_PATH", "namespace/secretname")
 	os.Args[1] = "monitor-import"
 
-	curatorRun(nil, clientfake.NewFakeClient(), ClusterName)
+	curatorRun(nil, clientfake.NewFakeClient(), ClusterName, ClusterName)
 }
 
 func TestInvokeMonitorDestroy(t *testing.T) {
@@ -287,7 +287,7 @@ func TestInvokeMonitorDestroy(t *testing.T) {
 	os.Setenv("PROVIDER_CREDENTIAL_PATH", "namespace/secretname")
 	os.Args[1] = "monitor-destroy"
 
-	curatorRun(nil, clientfake.NewFakeClient(), ClusterName)
+	curatorRun(nil, clientfake.NewFakeClient(), ClusterName, ClusterName)
 }
 
 func TestUpgradFailed(t *testing.T) {
@@ -315,7 +315,7 @@ func TestUpgradFailed(t *testing.T) {
 		},
 	})
 
-	curatorRun(nil, client, ClusterName)
+	curatorRun(nil, client, ClusterName, ClusterName)
 }
 
 func TestUpgradDone(t *testing.T) {
@@ -343,7 +343,7 @@ func TestUpgradDone(t *testing.T) {
 		},
 	})
 
-	curatorRun(nil, client, ClusterName)
+	curatorRun(nil, client, ClusterName, ClusterName)
 }
 
 func TestHypershiftActivate(t *testing.T) {
@@ -367,7 +367,7 @@ func TestHypershiftActivate(t *testing.T) {
 
 	config, _ := config.LoadConfig("", "", "")
 
-	curatorRun(config, client, ClusterNamespace)
+	curatorRun(config, client, ClusterNamespace, ClusterName)
 }
 
 func TestHypershiftMonitor(t *testing.T) {
@@ -391,7 +391,7 @@ func TestHypershiftMonitor(t *testing.T) {
 
 	config, _ := config.LoadConfig("", "", "")
 
-	curatorRun(config, client, ClusterNamespace)
+	curatorRun(config, client, ClusterNamespace, ClusterName)
 }
 
 func TestHypershiftDestroyCluster(t *testing.T) {
@@ -415,7 +415,7 @@ func TestHypershiftDestroyCluster(t *testing.T) {
 
 	config, _ := config.LoadConfig("", "", "")
 
-	curatorRun(config, client, ClusterNamespace)
+	curatorRun(config, client, ClusterNamespace, ClusterName)
 }
 
 func TestHypershiftMonitorDestroy(t *testing.T) {
@@ -439,7 +439,7 @@ func TestHypershiftMonitorDestroy(t *testing.T) {
 
 	config, _ := config.LoadConfig("", "", "")
 
-	curatorRun(config, client, ClusterNamespace)
+	curatorRun(config, client, ClusterNamespace, ClusterName)
 }
 
 func TestHypershiftUpgradeCluster(t *testing.T) {
@@ -463,7 +463,7 @@ func TestHypershiftUpgradeCluster(t *testing.T) {
 
 	config, _ := config.LoadConfig("", "", "")
 
-	curatorRun(config, client, ClusterNamespace)
+	curatorRun(config, client, ClusterNamespace, ClusterName)
 }
 
 func TestHypershiftMonitorUpgrade(t *testing.T) {
@@ -487,5 +487,5 @@ func TestHypershiftMonitorUpgrade(t *testing.T) {
 
 	config, _ := config.LoadConfig("", "", "")
 
-	curatorRun(config, client, ClusterNamespace)
+	curatorRun(config, client, ClusterNamespace, ClusterName)
 }

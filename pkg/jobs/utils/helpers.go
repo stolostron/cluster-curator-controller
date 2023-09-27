@@ -511,12 +511,20 @@ func GetClusterType(
 	cluster, err := hiveset.HiveV1().ClusterDeployments(clusterName).Get(context.TODO(), clusterName, v1.GetOptions{})
 	if err == nil && cluster != nil {
 		return StandaloneClusterType, nil
+	} else if !k8serrors.IsNotFound(err) {
+		return "", err
 	}
 
 	hostedCluster, hcErr := dc.Resource(HCGVR).Namespace(clusterNamespace).Get(
 		context.TODO(), clusterName, v1.GetOptions{})
 	if hcErr == nil && hostedCluster != nil {
 		return HypershiftClusterType, nil
+	} else if !k8serrors.IsNotFound(err) {
+		return "", err
+	}
+
+	if cluster == nil && hostedCluster == nil {
+		return "", errors.New("Failed to determine the cluster type, cannot find ClusterDeployment or HostedCluster")
 	}
 
 	return StandaloneClusterType, hcErr

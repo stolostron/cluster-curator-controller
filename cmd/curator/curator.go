@@ -49,6 +49,13 @@ func main() {
 		clusterName = string(data)
 	}
 
+	clusterNamespace := clusterName
+	// Hypershift clusters name != namespace
+	// The code in main sets clusterName = namespace but this doesn't work for Hypershift
+	if len(os.Args) == 3 {
+		clusterName = os.Args[2]
+	}
+
 	// Build a connection to the Hub OCP
 	config, err := config.LoadConfig("", "", "")
 	utils.CheckError(err)
@@ -56,10 +63,10 @@ func main() {
 	client, err := utils.GetClient()
 	utils.CheckError(err)
 
-	curatorRun(config, client, clusterName)
+	curatorRun(config, client, clusterName, clusterNamespace)
 }
 
-func curatorRun(config *rest.Config, client clientv1.Client, clusterName string) {
+func curatorRun(config *rest.Config, client clientv1.Client, clusterName string, clusterNamespace string) {
 
 	var err error
 	var cmdErrorMsg = errors.New("Invalid Parameter: \"" + os.Args[1] +
@@ -81,12 +88,6 @@ func curatorRun(config *rest.Config, client clientv1.Client, clusterName string)
 		utils.CheckError(cmdErrorMsg)
 	}
 	jobChoice := os.Args[1]
-	clusterNamespace := clusterName
-	// Hypershift clusters name != namespace
-	// The code in main sets clusterName = namespace but this doesn't work for Hypershift
-	if len(os.Args) == 3 {
-		clusterName = os.Args[2]
-	}
 
 	providerCredentialPath := os.Getenv("PROVIDER_CREDENTIAL_PATH")
 

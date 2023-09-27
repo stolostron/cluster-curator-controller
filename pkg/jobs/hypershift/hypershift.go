@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/blang/semver/v4"
 	clustercuratorv1 "github.com/stolostron/cluster-curator-controller/pkg/api/v1beta1"
 	"github.com/stolostron/cluster-curator-controller/pkg/jobs/utils"
 	managedclusterinfov1beta1 "github.com/stolostron/cluster-lifecycle-api/clusterinfo/v1beta1"
@@ -34,9 +35,7 @@ func ActivateDeploy(dc dynamic.Interface, clusterName string, namespace string) 
 
 	// Update HostedCluster
 	err := removePausedUntil(dc, clusterName, namespace, utils.HCGVR)
-	if err != nil {
-		return err
-	}
+	utils.CheckError(err)
 
 	// Update NodePool
 	// Need to account for 0 or multiple NodePools
@@ -45,11 +44,13 @@ func ActivateDeploy(dc dynamic.Interface, clusterName string, namespace string) 
 
 	for _, np := range nodePools.Items {
 		spec := np.Object["spec"].(map[string]interface{})
-		npClusterName := spec["clusterName"].(string)
-		if npClusterName == clusterName {
-			npName := np.Object["metadata"].(map[string]interface{})["name"].(string)
-			err = removePausedUntil(dc, npName, namespace, utils.NPGVR)
-			utils.CheckError(err)
+		if spec["clusterName"] != nil {
+			npClusterName := spec["clusterName"].(string)
+			if npClusterName == clusterName {
+				npName := np.Object["metadata"].(map[string]interface{})["name"].(string)
+				err = removePausedUntil(dc, npName, namespace, utils.NPGVR)
+				utils.CheckError(err)
+			}
 		}
 	}
 
@@ -81,7 +82,7 @@ func removePausedUntil(
 
 		spec := resource.Object["spec"].(map[string]interface{})
 		if spec["pausedUntil"] != nil && spec["pausedUntil"].(string) != "true" {
-			log.Println("Handle " + resourceType.Resource + " directly")
+			klog.V(2).Info("Handle " + resourceType.Resource + " directly")
 			return nil
 		}
 
@@ -91,7 +92,10 @@ func removePausedUntil(
 			Path: "/spec/pausedUntil",
 		}}
 
-		patchInBytes, _ := json.Marshal(patch)
+		patchInBytes, err := json.Marshal(patch)
+		if err != nil {
+			return err
+		}
 
 		klog.V(2).Infof("Patching %v %v in namespace %v ✓",
 			resourceType.Resource, clusterName, metadata["namespace"].(string))
@@ -100,7 +104,7 @@ func removePausedUntil(
 		if err != nil {
 			return err
 		}
-		log.Println("Updated " + resourceType.Resource + " ✓")
+		klog.V(2).Info("Updated " + resourceType.Resource + " ✓")
 		return nil
 	})
 
@@ -220,22 +224,34 @@ func MonitorClusterStatus(
 		}
 	}
 
-	if hostedCluster != nil {
+	if hostedCluster != nil && hostedCluster.Object["status"] != nil {
 		klog.Warning(hostedCluster.Object["status"].(map[string]interface{})["conditions"])
 	}
 	return errors.New("Timed out waiting for job")
 }
 
+/*
+Unlike Hive where there's a single status, Hypershift has multiple conditions to determine whether
+the cluster provision is successful or ongoing. There's no fail state as the operator will keep trying.
+Degraded - False provision succeeded, True provision ongoing
+ClusterVersionProgressing - False provision succeeded, True provision ongoing
+ClusterVersionAvailable - False provision ongoing, True provision succeeded
+Available - False provision ongoing, True provision succeeded
+Progressing - False provision succeeded, True provision ongoing (Upgrade only)
+
+All these conditions need to by in provision succeeded state for the cluster to be ready
+*/
 func isHostedReady(hostedCluster *unstructured.Unstructured, isUpgrade bool) bool {
+	if hostedCluster.Object["status"] == nil {
+		return false
+	}
 	status := hostedCluster.Object["status"].(map[string]interface{})
 	conditions := status["conditions"].([]interface{})
-	degraded := true
-	clusterVersionProgressing := true
-	clusterVersionProgressingMsg := ""
-	clusterVersionAvailable := false
-	clusterVersionAvailableMsg := ""
-	available := false
-	progressing := false
+	var degradedCond *v1.Condition
+	var clusterVersionProgressingCond *v1.Condition
+	var clusterVersionAvailableCond *v1.Condition
+	var availableCond *v1.Condition
+	var progressingCond *v1.Condition
 
 	for _, condition := range conditions {
 		conditionType := condition.(map[string]interface{})["type"].(string)
@@ -245,50 +261,97 @@ func isHostedReady(hostedCluster *unstructured.Unstructured, isUpgrade bool) boo
 			" Status " + condition.(map[string]interface{})["status"].(string))
 		switch conditionType {
 		case "Degraded":
-			degraded, _ = strconv.ParseBool(conditionStatus)
+			degradedCond = &v1.Condition{
+				Type:   conditionType,
+				Status: parseConditionStatus(conditionStatus),
+			}
 		case "ClusterVersionAvailable":
-			clusterVersionAvailable, _ = strconv.ParseBool(conditionStatus)
-			clusterVersionAvailableMsg = condition.(map[string]interface{})["message"].(string)
+			clusterVersionAvailableCond = &v1.Condition{
+				Type:    conditionType,
+				Status:  parseConditionStatus(conditionStatus),
+				Message: condition.(map[string]interface{})["message"].(string),
+			}
 		case "ClusterVersionProgressing":
-			clusterVersionProgressing, _ = strconv.ParseBool(conditionStatus)
-			clusterVersionProgressingMsg = condition.(map[string]interface{})["message"].(string)
+			clusterVersionProgressingCond = &v1.Condition{
+				Type:    conditionType,
+				Status:  parseConditionStatus(conditionStatus),
+				Message: condition.(map[string]interface{})["message"].(string),
+			}
 		case "Available":
-			available, _ = strconv.ParseBool(conditionStatus)
+			availableCond = &v1.Condition{
+				Type:   conditionType,
+				Status: parseConditionStatus(conditionStatus),
+			}
 		case "Progressing":
-			progressing, _ = strconv.ParseBool(conditionStatus)
+			progressingCond = &v1.Condition{
+				Type:   conditionType,
+				Status: parseConditionStatus(conditionStatus),
+			}
 		}
 	}
 
-	klog.V(4).Info("Available " + strconv.FormatBool(available))
-	if !available {
+	if !isUpgrade {
+		if degradedCond == nil ||
+			clusterVersionAvailableCond == nil ||
+			clusterVersionProgressingCond == nil ||
+			availableCond == nil {
+			return false
+		}
+	} else {
+		if degradedCond == nil ||
+			clusterVersionAvailableCond == nil ||
+			clusterVersionProgressingCond == nil ||
+			availableCond == nil ||
+			progressingCond == nil {
+			return false
+		}
+	}
+
+	klog.V(4).Info("Available " + availableCond.Status)
+	if availableCond.Status == v1.ConditionFalse {
 		return false
 	}
-	klog.V(4).Info("degraded " + strconv.FormatBool(degraded))
-	if degraded {
+	klog.V(4).Info("degraded " + degradedCond.Status)
+	if degradedCond.Status == v1.ConditionTrue {
 		return false
 	}
-	klog.V(4).Info("clusterVersionProgressing " + strconv.FormatBool(clusterVersionProgressing))
-	if clusterVersionProgressing {
+	klog.V(4).Info("clusterVersionProgressing " + clusterVersionProgressingCond.Status)
+	if clusterVersionProgressingCond.Status == v1.ConditionTrue {
 		return false
 	}
-	klog.V(4).Info("clusterVersionAvailable " + strconv.FormatBool(clusterVersionAvailable))
-	if !clusterVersionAvailable {
+	klog.V(4).Info("clusterVersionAvailable " + clusterVersionAvailableCond.Status)
+	if clusterVersionAvailableCond.Status == v1.ConditionFalse {
 		return false
 	}
-	klog.V(4).Info("clusterVersionProgressingMsg " + clusterVersionProgressingMsg)
-	if !strings.Contains(clusterVersionProgressingMsg, "Cluster version is") {
+	klog.V(4).Info("clusterVersionProgressingMsg " + clusterVersionProgressingCond.Message)
+	if !strings.Contains(clusterVersionProgressingCond.Message, "Cluster version is") {
 		return false
 	}
-	klog.V(4).Info("clusterVersionAvailableMsg " + clusterVersionAvailableMsg)
-	if !strings.Contains(clusterVersionAvailableMsg, "Done applying") {
+	klog.V(4).Info("clusterVersionAvailableMsg " + clusterVersionAvailableCond.Message)
+	if !strings.Contains(clusterVersionAvailableCond.Message, "Done applying") {
 		return false
 	}
-	klog.V(4).Info("progressing " + strconv.FormatBool(progressing))
-	if isUpgrade && progressing {
+	if isUpgrade && progressingCond.Status == v1.ConditionTrue {
+		klog.V(4).Info("progressing " + progressingCond.Status)
 		return false
 	}
 
 	return true
+}
+
+func parseConditionStatus(conditionStatus string) v1.ConditionStatus {
+	if conditionStatus == "Unknown" {
+		return v1.ConditionUnknown
+	}
+	status, err := strconv.ParseBool(conditionStatus)
+	if err != nil {
+		return v1.ConditionFalse
+	}
+	if status {
+		return v1.ConditionTrue
+	} else {
+		return v1.ConditionFalse
+	}
 }
 
 func UpgradeCluster(
@@ -357,7 +420,7 @@ func MonitorUpgradeStatus(
 				"upgrade-job"))
 
 			return nil
-		} else if !isHostedReady(hostedCluster, true) {
+		} else {
 			for !isHostedReady(hostedCluster, true) {
 				if elapsedTime%6 == 0 {
 					klog.V(0).Info("Upgrade Job:  - " + strconv.Itoa(elapsedTime/6) + "min")
@@ -426,33 +489,16 @@ func validateUpgradeVersion(
 		return err
 	}
 
-	if managedClusterInfo.Status.DistributionInfo.OCP.Version == desiredUpdate {
+	desiredSemver, err := semver.Make(desiredUpdate)
+	if err != nil {
+		return err
+	}
+	currentSemver, err := semver.Make(managedClusterInfo.Status.DistributionInfo.OCP.Version)
+	if err != nil {
+		return err
+	}
+	if desiredSemver.Equals(currentSemver) {
 		return errors.New("Cannot upgrade to the same version")
-	}
-
-	desiredUpdateSplit := strings.Split(desiredUpdate, ".")
-	currentVersionSplit := strings.Split(managedClusterInfo.Status.DistributionInfo.OCP.Version, ".")
-	desiredUpdateMajor, _ := strconv.Atoi(desiredUpdateSplit[0])
-	desiredUpdateMinor, _ := strconv.Atoi(desiredUpdateSplit[1])
-	desiredUpdatePatch, _ := strconv.Atoi(desiredUpdateSplit[2])
-	currentVersionMajor, _ := strconv.Atoi(currentVersionSplit[0])
-	currentVersionMinor, _ := strconv.Atoi(currentVersionSplit[1])
-	currentVersionPatch, _ := strconv.Atoi(currentVersionSplit[2])
-
-	lowerDesiredUpdateVersionErrMsg := "Cannot upgrade to an earlier version"
-
-	if desiredUpdateMajor < currentVersionMajor {
-		return errors.New(lowerDesiredUpdateVersionErrMsg)
-	}
-
-	if desiredUpdateMajor == currentVersionMajor && desiredUpdateMinor < currentVersionMinor {
-		return errors.New(lowerDesiredUpdateVersionErrMsg)
-	}
-
-	if desiredUpdateMajor == currentVersionMajor &&
-		desiredUpdateMinor == currentVersionMinor &&
-		desiredUpdatePatch < currentVersionPatch {
-		return errors.New(lowerDesiredUpdateVersionErrMsg)
 	}
 
 	return nil
@@ -463,10 +509,11 @@ func DestroyHostedCluster(dc dynamic.Interface, clusterName string, namespace st
 
 	_, err := dc.Resource(utils.HCGVR).Namespace(namespace).Get(context.TODO(), clusterName, v1.GetOptions{})
 
-	if err != nil && k8serrors.IsNotFound(err) {
-		klog.Warning("Could not retreive hosted cluster " + clusterName + " may have already been deleted")
-		return nil
-	} else if err != nil {
+	if err != nil {
+		if k8serrors.IsNotFound(err) {
+			klog.Warning("Could not retreive hosted cluster " + clusterName + " may have already been deleted")
+			return nil
+		}
 		return err
 	}
 
@@ -489,10 +536,17 @@ func DetachAndMonitor(dc dynamic.Interface, clusterName string, curator *cluster
 	hostedCluster, err := dc.Resource(utils.HCGVR).Namespace(curator.Namespace).Get(
 		context.TODO(), clusterName, v1.GetOptions{})
 	if err != nil {
-		return err
+		if k8serrors.IsNotFound(err) {
+			klog.Warning("Could not retreive hosted cluster " + clusterName + " may have been deleted")
+		} else {
+			return err
+		}
 	}
 
 	spec := hostedCluster.Object["spec"].(map[string]interface{})
+	if spec["platform"] == nil {
+		return errors.New("Not able to find HostedCluster platform type")
+	}
 	hcType := spec["platform"].(map[string]interface{})["type"].(string)
 
 	if hcType != "KubeVirt" && hcType != "Agent" {

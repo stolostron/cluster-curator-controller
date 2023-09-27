@@ -134,6 +134,11 @@ func getManagedCluster() *unstructured.Unstructured {
 }
 
 func TestActivateDeployNoHC(t *testing.T) {
+	defer func() { // recover from not having a hub config object
+		if r := recover(); r == nil {
+			t.Fatal("expected recover, but failed")
+		}
+	}()
 	dynfake := dynfake.NewSimpleDynamicClient(runtime.NewScheme())
 	assert.NotNil(t, ActivateDeploy(
 		dynfake, ClusterName, ClusterNamespace), "err not nil, when HostedCluster resource is not present")
@@ -409,51 +414,6 @@ func TestUpgradeClusterSameVersion(t *testing.T) {
 		t,
 		UpgradeCluster(client, dynfake, ClusterName, clusterCurator),
 		"err is not nil, when HC and NPs are upgrading to the same version",
-	)
-}
-
-func TestUpgradeClusterEarlierVersion(t *testing.T) {
-	clusterCurator := getUpgradeClusterCurator("4.13.5")
-	managedClusterInfo := getManagedClusterInfo()
-	dynfake := dynfake.NewSimpleDynamicClient(
-		runtime.NewScheme(),
-		getHostedCluster("AWS", []interface{}{
-			map[string]interface{}{
-				"type":    "Degraded",
-				"status":  "False",
-				"message": "The hosted cluster is not degraded",
-			},
-			map[string]interface{}{
-				"type":    "ClusterVersionAvailable",
-				"status":  "True",
-				"message": "Done applying 4.13.6",
-			},
-			map[string]interface{}{
-				"type":    "Available",
-				"status":  "False",
-				"message": "The hosted control plane is available",
-			},
-			map[string]interface{}{
-				"type":    "ClusterVersionProgressing",
-				"status":  "False",
-				"message": "Cluster version is 4.13.6",
-			},
-			map[string]interface{}{
-				"type":    "Progressing",
-				"status":  "False",
-				"message": "HostedCluster is at expected version",
-			},
-		}),
-		getNodepool(NodepoolName, ClusterNamespace, ClusterName),
-	)
-	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
-	s.AddKnownTypes(managedclusterinfov1beta1.SchemeGroupVersion, &managedclusterinfov1beta1.ManagedClusterInfo{})
-	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(clusterCurator, managedClusterInfo).Build()
-
-	assert.NotNil(
-		t,
-		UpgradeCluster(client, dynfake, ClusterName, clusterCurator),
-		"err is not nil, when HC and NPs are upgrading to an earlier version",
 	)
 }
 
