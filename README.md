@@ -135,7 +135,7 @@ For more details on job flow within our architecture see our [**swimlane chart**
 
 ### Hosted cluster provisioning example: _(KubeVirt)_
 
-  * When creating the `HostedCluster` and `NodePool` resource add the `spec.pausedUntil` field with value `true` to both resources. If using the HostedCluster CLI you can specify the flag `--pausedUntil true`.
+  * When creating the `HostedCluster` and `NodePool` resource add the `spec.pausedUntil` field with value `true` to both resources. If using the `hcp create cluster` CLI you can specify the flag `--pausedUntil true`.
 
     ```yaml
     apiVersion: hypershift.openshift.io/v1beta1
