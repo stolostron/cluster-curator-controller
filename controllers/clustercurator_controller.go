@@ -100,6 +100,8 @@ func (r *ClusterCuratorReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 				return ctrl.Result{}, err
 			}
 			log.V(0).Info(" Created cluster namespace ✓")
+		} else if err != nil {
+			return ctrl.Result{}, err
 		}
 
 		err = rbac.ApplyRBACHypershift(r.Kubeset, curator.Name, curator.Namespace)

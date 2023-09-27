@@ -256,7 +256,8 @@ func ApplyRBAC(kubeset kubernetes.Interface, namespace string) error {
 
 func ApplyRBACHypershift(kubeset kubernetes.Interface, namespace string, curatorNamespace string) error {
 	klog.V(2).Info("Check if RoleBinding curator exists in namespace " + namespace)
-	if _, err := kubeset.RbacV1().RoleBindings(namespace).Get(
+	var err error
+	if _, err = kubeset.RbacV1().RoleBindings(namespace).Get(
 		context.TODO(), "curator", v1.GetOptions{}); k8serrors.IsNotFound(err) {
 		klog.V(2).Info(" Creating RoleBinding curator in namespace " + namespace)
 		_, err = kubeset.RbacV1().RoleBindings(namespace).Create(
@@ -265,10 +266,12 @@ func ApplyRBACHypershift(kubeset kubernetes.Interface, namespace string, curator
 			return err
 		}
 		klog.V(0).Info(" Created RoleBinding in cluster namespace ✓")
+	} else if err != nil {
+		return err
 	}
 
 	klog.V(2).Info("Check if ClusterRole curator-crb exists")
-	if _, err := kubeset.RbacV1().ClusterRoleBindings().Get(
+	if _, err = kubeset.RbacV1().ClusterRoleBindings().Get(
 		context.TODO(), "curator-crb", v1.GetOptions{}); k8serrors.IsNotFound(err) {
 		klog.V(2).Info(" Creating ClusterRoleBinding curator-crb")
 		_, err = kubeset.RbacV1().ClusterRoleBindings().Create(
@@ -278,7 +281,7 @@ func ApplyRBACHypershift(kubeset kubernetes.Interface, namespace string, curator
 		}
 		klog.V(0).Info(" Created ClusterRoleBinding ✓")
 	}
-	return nil
+	return err
 }
 
 func ExtendClusterInstallerRole(kubeset kubernetes.Interface, namespace string) error {
