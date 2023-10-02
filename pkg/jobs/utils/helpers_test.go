@@ -153,6 +153,7 @@ func TestRecordCuratedStatusCondition(t *testing.T) {
 		recordCuratedStatusCondition(
 			client,
 			ClusterName,
+			ClusterName,
 			CurrentAnsibleJob,
 			v1.ConditionTrue,
 			JobHasFinished,
@@ -180,6 +181,7 @@ func TestRecordCurrentStatusConditionNoResource(t *testing.T) {
 	err := RecordCurrentStatusCondition(
 		client,
 		ClusterName,
+		ClusterName,
 		CurrentAnsibleJob,
 		v1.ConditionTrue,
 		"Almost finished")
@@ -196,7 +198,7 @@ func TestGetClusterCurator(t *testing.T) {
 
 	client := clientfake.NewFakeClientWithScheme(s, cc)
 
-	_, err := GetClusterCurator(client, ClusterName)
+	_, err := GetClusterCurator(client, ClusterName, ClusterName)
 	assert.Nil(t, err, "err is nil, when ClusterCurator resource is retrieved")
 }
 
@@ -207,7 +209,7 @@ func TestGetClusterCuratorNoResource(t *testing.T) {
 
 	client := clientfake.NewFakeClientWithScheme(s)
 
-	cc, err := GetClusterCurator(client, ClusterName)
+	cc, err := GetClusterCurator(client, ClusterName, ClusterName)
 	assert.Nil(t, cc, "cc is nil, when ClusterCurator resource is not found")
 	assert.NotNil(t, err, "err is not nil, when ClusterCurator is not found")
 	t.Logf("err: %v", err)
@@ -221,7 +223,7 @@ func TestRecordCuratorJobName(t *testing.T) {
 	s.AddKnownTypes(CCGVR.GroupVersion(), &clustercuratorv1.ClusterCurator{})
 	client := clientfake.NewFakeClientWithScheme(s, cc)
 
-	err := RecordCuratorJobName(client, ClusterName, "my-job-ABCDE")
+	err := RecordCuratorJobName(client, ClusterName, ClusterName, "my-job-ABCDE")
 
 	assert.Nil(t, err, "err nil, when Job name written to ClusterCurator.Spec.curatorJob")
 
@@ -233,7 +235,7 @@ func TestRecordCuratorJobNameInvalidCurator(t *testing.T) {
 	s.AddKnownTypes(CCGVR.GroupVersion(), &clustercuratorv1.ClusterCurator{})
 	client := clientfake.NewFakeClientWithScheme(s)
 
-	err := RecordCuratorJobName(client, ClusterName, "my-job-ABCDE")
+	err := RecordCuratorJobName(client, ClusterName, ClusterName, "my-job-ABCDE")
 
 	assert.NotNil(t, err, "err nil, when Job name written to ClusterCurator.Spec.curatorJob")
 	t.Logf("Detected Errror: %v", err.Error())
@@ -648,4 +650,27 @@ func TestNeedToUpgrade(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGetMonitorAttempts(t *testing.T) {
+	attempts := GetMonitorAttempts("", &clustercuratorv1.ClusterCurator{})
+	assert.Equal(t, 150, attempts)
+
+	attempts = GetMonitorAttempts("provision", &clustercuratorv1.ClusterCurator{
+		Spec: clustercuratorv1.ClusterCuratorSpec{
+			Install: clustercuratorv1.Hooks{
+				JobMonitorTimeout: 6,
+			},
+		},
+	})
+	assert.Equal(t, 180, attempts)
+
+	attempts = GetMonitorAttempts("uninstall", &clustercuratorv1.ClusterCurator{
+		Spec: clustercuratorv1.ClusterCuratorSpec{
+			Destroy: clustercuratorv1.Hooks{
+				JobMonitorTimeout: 15,
+			},
+		},
+	})
+	assert.Equal(t, 450, attempts)
 }

@@ -1000,26 +1000,3 @@ func TestMonitorUpgradeStatusJobComplete(t *testing.T) {
 
 	assert.Nil(t, MonitorUpgradeStatus(client, ClusterName, cc), "err is nil, when cluster upgrade is successful")
 }
-
-func TestGetMonitorAttempts(t *testing.T) {
-	attempts := getMonitorAttempts("", &clustercuratorv1.ClusterCurator{})
-	assert.Equal(t, 150, attempts)
-
-	attempts = getMonitorAttempts("provision", &clustercuratorv1.ClusterCurator{
-		Spec: clustercuratorv1.ClusterCuratorSpec{
-			Install: clustercuratorv1.Hooks{
-				JobMonitorTimeout: 6,
-			},
-		},
-	})
-	assert.Equal(t, 180, attempts)
-
-	attempts = getMonitorAttempts("uninstall", &clustercuratorv1.ClusterCurator{
-		Spec: clustercuratorv1.ClusterCuratorSpec{
-			Destroy: clustercuratorv1.Hooks{
-				JobMonitorTimeout: 15,
-			},
-		},
-	})
-	assert.Equal(t, 450, attempts)
-}

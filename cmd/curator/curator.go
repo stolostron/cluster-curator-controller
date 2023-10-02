@@ -17,6 +17,7 @@ import (
 	"github.com/stolostron/cluster-curator-controller/pkg/controller/launcher"
 	"github.com/stolostron/cluster-curator-controller/pkg/jobs/ansible"
 	"github.com/stolostron/cluster-curator-controller/pkg/jobs/hive"
+	"github.com/stolostron/cluster-curator-controller/pkg/jobs/hypershift"
 	"github.com/stolostron/cluster-curator-controller/pkg/jobs/importer"
 	"github.com/stolostron/cluster-curator-controller/pkg/jobs/secrets"
 	"github.com/stolostron/cluster-curator-controller/pkg/jobs/utils"
@@ -48,6 +49,13 @@ func main() {
 		clusterName = string(data)
 	}
 
+	clusterNamespace := clusterName
+	// Hypershift clusters name != namespace
+	// The code in main sets clusterName = namespace but this doesn't work for Hypershift
+	if len(os.Args) == 3 {
+		clusterName = os.Args[2]
+	}
+
 	// Build a connection to the Hub OCP
 	config, err := config.LoadConfig("", "", "")
 	utils.CheckError(err)
@@ -55,10 +63,10 @@ func main() {
 	client, err := utils.GetClient()
 	utils.CheckError(err)
 
-	curatorRun(config, client, clusterName)
+	curatorRun(config, client, clusterName, clusterNamespace)
 }
 
-func curatorRun(config *rest.Config, client clientv1.Client, clusterName string) {
+func curatorRun(config *rest.Config, client clientv1.Client, clusterName string, clusterNamespace string) {
 
 	var err error
 	var cmdErrorMsg = errors.New("Invalid Parameter: \"" + os.Args[1] +
@@ -84,7 +92,7 @@ func curatorRun(config *rest.Config, client clientv1.Client, clusterName string)
 	providerCredentialPath := os.Getenv("PROVIDER_CREDENTIAL_PATH")
 
 	// Gets the Cluster Configuration overrides
-	curator, err := utils.GetClusterCurator(client, clusterName)
+	curator, err := utils.GetClusterCurator(client, clusterName, clusterNamespace)
 	var desiredCuration string
 	if curator != nil {
 		desiredCuration = curator.Spec.DesiredCuration
@@ -105,6 +113,7 @@ func curatorRun(config *rest.Config, client clientv1.Client, clusterName string)
 		utils.CheckError(utils.RecordCurrentStatusCondition(
 			client,
 			clusterName,
+			clusterNamespace,
 			CuratorJob,
 			v1.ConditionFalse,
 			curator.Spec.CuratingJob+" DesiredCuration: "+desiredCuration))
@@ -114,6 +123,7 @@ func curatorRun(config *rest.Config, client clientv1.Client, clusterName string)
 			utils.CheckError(utils.RecordCurrentStatusCondition(
 				client,
 				clusterName,
+				clusterNamespace,
 				jobChoice,
 				v1.ConditionFalse,
 				"Executing init container "+jobChoice))
@@ -131,6 +141,7 @@ func curatorRun(config *rest.Config, client clientv1.Client, clusterName string)
 				utils.CheckError(utils.RecordFailedCuratorStatusCondition(
 					client,
 					clusterName,
+					clusterNamespace,
 					CuratorJob,
 					v1.ConditionTrue,
 					message))
@@ -178,29 +189,75 @@ func curatorRun(config *rest.Config, client clientv1.Client, clusterName string)
 	if jobChoice == "activate-and-monitor" {
 		hiveset, err := hiveclient.NewForConfig(config)
 		utils.CheckError(err)
+		dynclient, dErr := utils.GetDynset(nil)
+		utils.CheckError(dErr)
 
-		if err = hive.ActivateDeploy(hiveset, clusterName); err != nil {
-			utils.CheckError(utils.RecordFailedCuratorStatusCondition(
-				client,
-				clusterName,
-				jobChoice,
-				v1.ConditionTrue,
-				err.Error()))
-			klog.Error(err.Error())
-			panic(err)
+		clusterType, ctErr := utils.GetClusterType(hiveset, dynclient, clusterName, clusterNamespace)
+		utils.CheckError(ctErr)
+
+		if clusterType == utils.StandaloneClusterType {
+			if err = hive.ActivateDeploy(hiveset, clusterName); err != nil {
+				utils.CheckError(utils.RecordFailedCuratorStatusCondition(
+					client,
+					clusterName,
+					clusterNamespace,
+					jobChoice,
+					v1.ConditionTrue,
+					err.Error()))
+				klog.Error(err.Error())
+				panic(err)
+			}
+		} else if clusterType == utils.HypershiftClusterType {
+			if err = hypershift.ActivateDeploy(dynclient, clusterName, clusterNamespace); err != nil {
+				utils.CheckError(utils.RecordFailedCuratorStatusCondition(
+					client,
+					clusterName,
+					clusterNamespace,
+					jobChoice,
+					v1.ConditionTrue,
+					err.Error()))
+				klog.Error(err.Error())
+				panic(err)
+			}
 		}
 	}
 
 	if jobChoice == "monitor" || jobChoice == "activate-and-monitor" {
-		if err := hive.MonitorClusterStatus(config, clusterName, utils.Installing, curator); err != nil {
-			utils.CheckError(utils.RecordFailedCuratorStatusCondition(
+		hiveset, err := hiveclient.NewForConfig(config)
+		utils.CheckError(err)
+		dynclient, dErr := utils.GetDynset(nil)
+		utils.CheckError(dErr)
+
+		clusterType, ctErr := utils.GetClusterType(hiveset, dynclient, clusterName, clusterNamespace)
+		utils.CheckError(ctErr)
+
+		if clusterType == utils.StandaloneClusterType {
+			if err := hive.MonitorClusterStatus(config, clusterName, utils.Installing, curator); err != nil {
+				utils.CheckError(utils.RecordFailedCuratorStatusCondition(
+					client,
+					clusterName,
+					clusterNamespace,
+					jobChoice,
+					v1.ConditionTrue,
+					err.Error()))
+				klog.Error(err.Error())
+				panic(err)
+			}
+		} else if clusterType == utils.HypershiftClusterType {
+			if err = hypershift.MonitorClusterStatus(dynclient,
 				client,
 				clusterName,
-				jobChoice,
-				v1.ConditionTrue,
-				err.Error()))
-			klog.Error(err.Error())
-			panic(err)
+				clusterNamespace, utils.Installing, utils.GetMonitorAttempts(utils.Installing, curator)); err != nil {
+				utils.CheckError(utils.RecordFailedCuratorStatusCondition(
+					client,
+					clusterName,
+					clusterNamespace,
+					jobChoice,
+					v1.ConditionTrue,
+					err.Error()))
+				klog.Error(err.Error())
+				panic(err)
+			}
 		}
 	}
 
@@ -213,6 +270,7 @@ func curatorRun(config *rest.Config, client clientv1.Client, clusterName string)
 			utils.CheckError(utils.RecordFailedCuratorStatusCondition(
 				client,
 				clusterName,
+				clusterNamespace,
 				jobChoice,
 				v1.ConditionTrue,
 				err.Error()))
@@ -224,29 +282,90 @@ func curatorRun(config *rest.Config, client clientv1.Client, clusterName string)
 	if jobChoice == "destroy-cluster" {
 		hiveset, err := hiveclient.NewForConfig(config)
 		utils.CheckError(err)
+		dynclient, dErr := utils.GetDynset(nil)
+		utils.CheckError(dErr)
 
-		if err = hive.DestroyClusterDeployment(hiveset, clusterName); err != nil {
-			utils.CheckError(utils.RecordFailedCuratorStatusCondition(
-				client,
-				clusterName,
-				jobChoice,
-				v1.ConditionTrue,
-				err.Error()))
-			klog.Error(err.Error())
-			panic(err)
+		clusterType, ctErr := utils.GetClusterType(hiveset, dynclient, clusterName, clusterNamespace)
+		utils.CheckError(ctErr)
+
+		if clusterType == utils.StandaloneClusterType {
+			if err = hive.DestroyClusterDeployment(hiveset, clusterName); err != nil {
+				utils.CheckError(utils.RecordFailedCuratorStatusCondition(
+					client,
+					clusterName,
+					clusterNamespace,
+					jobChoice,
+					v1.ConditionTrue,
+					err.Error()))
+				klog.Error(err.Error())
+				panic(err)
+			}
+		} else if clusterType == utils.HypershiftClusterType {
+			if err = hypershift.DetachAndMonitor(dynclient, clusterName, curator); err != nil {
+				utils.CheckError(utils.RecordFailedCuratorStatusCondition(
+					client,
+					clusterName,
+					clusterNamespace,
+					jobChoice,
+					v1.ConditionTrue,
+					err.Error()))
+				klog.Error(err.Error())
+				panic(err)
+			}
+
+			if err = hypershift.DestroyHostedCluster(dynclient, clusterName, clusterNamespace); err != nil {
+				utils.CheckError(utils.RecordFailedCuratorStatusCondition(
+					client,
+					clusterName,
+					clusterNamespace,
+					jobChoice,
+					v1.ConditionTrue,
+					err.Error()))
+				klog.Error(err.Error())
+				panic(err)
+			}
 		}
 	}
 
 	if jobChoice == "monitor-destroy" {
-		if err := hive.MonitorClusterStatus(config, clusterName, utils.Destroying, curator); err != nil {
-			utils.CheckError(utils.RecordFailedCuratorStatusCondition(
+		hiveset, err := hiveclient.NewForConfig(config)
+		utils.CheckError(err)
+		dynclient, dErr := utils.GetDynset(nil)
+		utils.CheckError(dErr)
+
+		clusterType, ctErr := utils.GetClusterType(hiveset, dynclient, clusterName, clusterNamespace)
+		utils.CheckError(ctErr)
+
+		if clusterType == utils.StandaloneClusterType {
+			if err := hive.MonitorClusterStatus(config, clusterName, utils.Destroying, curator); err != nil {
+				utils.CheckError(utils.RecordFailedCuratorStatusCondition(
+					client,
+					clusterName,
+					clusterNamespace,
+					jobChoice,
+					v1.ConditionTrue,
+					err.Error()))
+				klog.Error(err.Error())
+				panic(err)
+			}
+		} else if clusterType == utils.HypershiftClusterType {
+			if err = hypershift.MonitorClusterStatus(
+				dynclient,
 				client,
 				clusterName,
-				jobChoice,
-				v1.ConditionTrue,
-				err.Error()))
-			klog.Error(err.Error())
-			panic(err)
+				clusterNamespace,
+				utils.Destroying,
+				utils.GetMonitorAttempts(utils.Installing, curator)); err != nil {
+				utils.CheckError(utils.RecordFailedCuratorStatusCondition(
+					client,
+					clusterName,
+					clusterNamespace,
+					jobChoice,
+					v1.ConditionTrue,
+					err.Error()))
+				klog.Error(err.Error())
+				panic(err)
+			}
 		}
 	}
 
@@ -258,6 +377,7 @@ func curatorRun(config *rest.Config, client clientv1.Client, clusterName string)
 			utils.CheckError(utils.RecordFailedCuratorStatusCondition(
 				client,
 				clusterName,
+				clusterNamespace,
 				jobChoice,
 				v1.ConditionTrue,
 				err.Error()))
@@ -267,28 +387,74 @@ func curatorRun(config *rest.Config, client clientv1.Client, clusterName string)
 	}
 
 	if jobChoice == "upgrade-cluster" {
-		if err = hive.UpgradeCluster(client, clusterName, curator); err != nil {
-			utils.CheckError(utils.RecordFailedCuratorStatusCondition(
-				client,
-				clusterName,
-				jobChoice,
-				v1.ConditionTrue,
-				err.Error()))
-			klog.Error(err.Error())
-			panic(err)
+		hiveset, err := hiveclient.NewForConfig(config)
+		utils.CheckError(err)
+		dynclient, dErr := utils.GetDynset(nil)
+		utils.CheckError(dErr)
+
+		clusterType, ctErr := utils.GetClusterType(hiveset, dynclient, clusterName, clusterNamespace)
+		utils.CheckError(ctErr)
+
+		if clusterType == utils.StandaloneClusterType {
+			if err = hive.UpgradeCluster(client, clusterName, curator); err != nil {
+				utils.CheckError(utils.RecordFailedCuratorStatusCondition(
+					client,
+					clusterName,
+					clusterNamespace,
+					jobChoice,
+					v1.ConditionTrue,
+					err.Error()))
+				klog.Error(err.Error())
+				panic(err)
+			}
+		} else if clusterType == utils.HypershiftClusterType {
+			if err = hypershift.UpgradeCluster(client, dynclient, clusterName, curator); err != nil {
+				utils.CheckError(utils.RecordFailedCuratorStatusCondition(
+					client,
+					clusterName,
+					clusterNamespace,
+					jobChoice,
+					v1.ConditionTrue,
+					err.Error()))
+				klog.Error(err.Error())
+				panic(err)
+			}
 		}
 	}
 
 	if jobChoice == "monitor-upgrade" {
-		if err = hive.MonitorUpgradeStatus(client, clusterName, curator); err != nil {
-			utils.CheckError(utils.RecordFailedCuratorStatusCondition(
-				client,
-				clusterName,
-				jobChoice,
-				v1.ConditionTrue,
-				err.Error()))
-			klog.Error(err.Error())
-			panic(err)
+		hiveset, err := hiveclient.NewForConfig(config)
+		utils.CheckError(err)
+		dynclient, dErr := utils.GetDynset(nil)
+		utils.CheckError(dErr)
+
+		clusterType, ctErr := utils.GetClusterType(hiveset, dynclient, clusterName, clusterNamespace)
+		utils.CheckError(ctErr)
+
+		if clusterType == utils.StandaloneClusterType {
+			if err = hive.MonitorUpgradeStatus(client, clusterName, curator); err != nil {
+				utils.CheckError(utils.RecordFailedCuratorStatusCondition(
+					client,
+					clusterName,
+					clusterNamespace,
+					jobChoice,
+					v1.ConditionTrue,
+					err.Error()))
+				klog.Error(err.Error())
+				panic(err)
+			}
+		} else if clusterType == utils.HypershiftClusterType {
+			if err = hypershift.MonitorUpgradeStatus(dynclient, client, clusterName, curator); err != nil {
+				utils.CheckError(utils.RecordFailedCuratorStatusCondition(
+					client,
+					clusterName,
+					clusterNamespace,
+					jobChoice,
+					v1.ConditionTrue,
+					err.Error()))
+				klog.Error(err.Error())
+				panic(err)
+			}
 		}
 	}
 
@@ -298,6 +464,7 @@ func curatorRun(config *rest.Config, client clientv1.Client, clusterName string)
 			utils.CheckError(utils.RecordFailedCuratorStatusCondition(
 				client,
 				clusterName,
+				clusterNamespace,
 				jobChoice,
 				v1.ConditionTrue,
 				err.Error()))
@@ -311,6 +478,7 @@ func curatorRun(config *rest.Config, client clientv1.Client, clusterName string)
 			utils.CheckError(utils.RecordFailedCuratorStatusCondition(
 				client,
 				clusterName,
+				clusterNamespace,
 				jobChoice,
 				v1.ConditionTrue,
 				err.Error()))
@@ -340,6 +508,7 @@ func curatorRun(config *rest.Config, client clientv1.Client, clusterName string)
 	utils.CheckError(utils.RecordCurrentStatusCondition(
 		client,
 		clusterName,
+		clusterNamespace,
 		jobChoice,
 		condition,
 		msg))
