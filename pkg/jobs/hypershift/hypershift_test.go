@@ -54,6 +54,31 @@ func getHostedCluster(hcType string, hcConditions []interface{}) *unstructured.U
 	}
 }
 
+func getHostedClusterNoLabel(hcType string, hcConditions []interface{}) *unstructured.Unstructured {
+	return &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "hypershift.openshift.io/v1beta1",
+			"kind":       "HostedCluster",
+			"metadata": map[string]interface{}{
+				"name":      ClusterName,
+				"namespace": ClusterNamespace,
+			},
+			"spec": map[string]interface{}{
+				"pausedUntil": "true",
+				"platform": map[string]interface{}{
+					"type": hcType,
+				},
+				"release": map[string]interface{}{
+					"image": "quay.io/openshift-release-dev/ocp-release:4.13.6-multi",
+				},
+			},
+			"status": map[string]interface{}{
+				"conditions": hcConditions,
+			},
+		},
+	}
+}
+
 func getNodepool(npName string, npNamespace string, npClusterName string) *unstructured.Unstructured {
 	return &unstructured.Unstructured{
 		Object: map[string]interface{}{
@@ -185,6 +210,43 @@ func TestMonitorClusterStatusInstallComplete(t *testing.T) {
 	dynfake := dynfake.NewSimpleDynamicClient(
 		runtime.NewScheme(),
 		getHostedCluster("AWS", []interface{}{
+			map[string]interface{}{
+				"type":    "Degraded",
+				"status":  "False",
+				"message": "The hosted cluster is not degraded",
+			},
+			map[string]interface{}{
+				"type":    "ClusterVersionAvailable",
+				"status":  "True",
+				"message": "Done applying 4.13.6",
+			},
+			map[string]interface{}{
+				"type":    "Available",
+				"status":  "True",
+				"message": "The hosted control plane is available",
+			},
+			map[string]interface{}{
+				"type":    "ClusterVersionProgressing",
+				"status":  "False",
+				"message": "Cluster version is 4.13.6",
+			},
+		},
+		))
+	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
+	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(clusterCurator).Build()
+
+	assert.Nil(
+		t,
+		MonitorClusterStatus(dynfake, client, ClusterName, ClusterNamespace, utils.Installing, testTimeout),
+		"err is nil, when HostedCluster install is complete",
+	)
+}
+
+func TestMonitorClusterStatusInstallCompleteHCNoLabel(t *testing.T) {
+	clusterCurator := &clustercuratorv1.ClusterCurator{}
+	dynfake := dynfake.NewSimpleDynamicClient(
+		runtime.NewScheme(),
+		getHostedClusterNoLabel("AWS", []interface{}{
 			map[string]interface{}{
 				"type":    "Degraded",
 				"status":  "False",
