@@ -161,8 +161,13 @@ func MonitorClusterStatus(
 			} else {
 				// No ProvisionRef in HostedCluster, we use infra-id instead
 				metadata := hostedCluster.Object["metadata"].(map[string]interface{})
-				labels := metadata["labels"].(map[string]interface{})
-				jobName = labels["hypershift.openshift.io/auto-created-for-infra"].(string) + "-provision"
+				if metadata["labels"] != nil {
+					labels := metadata["labels"].(map[string]interface{})
+					jobName = labels["hypershift.openshift.io/auto-created-for-infra"].(string) + "-provision"
+				} else {
+					// For HC types without the auto-created-for-infra label
+					jobName = clusterName + "-provision"
+				}
 			}
 
 			jobPath := namespace + "/" + jobName
