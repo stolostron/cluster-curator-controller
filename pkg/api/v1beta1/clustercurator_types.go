@@ -162,9 +162,9 @@ type Operation struct {
 	RetryPosthook string `json:"retryPosthook,omitempty"`
 }
 
-// ClusterCurator is the Schema for the clustercurators API
-// This kind allows for prehook and posthook jobs to be executed prior to Hive provisioning
-// and import of a cluster.
+// ClusterCurator is the custom resource for the clustercurators API.
+// This kind allows for Ansible prehook and posthook jobs to be run prior to Hive or HyperShift provisioning
+// and import of a cluster. Additionally cluster upgrade and destroy operations are supported as well.
 type ClusterCurator struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
