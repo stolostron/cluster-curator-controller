@@ -7,6 +7,18 @@ After you make your changes you actually need to build your own image because wh
 3. make build-curator
 4. docker push <REPO_URL>/cluster-curator-controller:\<VERSION>
 
+## Building with docker
+
+Docker changed the `FROM` command to pull images based on your machine arch ie. for Mac it will use arm64. This will cause the docker build to fail because it will try to look for a arm64 arch in a linux image. To build locally, you need to modify the `Dockerfile.prow` `FROM` commands with this `--platform=linux/amd64`. For example:
+
+```
+FROM --platform=linux/amd64 registry.ci.openshift.org/stolostron/builder:go1.20-linux as builder
+
+...
+
+FROM --platform=linux/amd64 registry.access.redhat.com/ubi8/ubi-minimal:latest
+```
+
 ## Debugging locally in VSCode
 
 If you are debugging locally then you need to do the following:

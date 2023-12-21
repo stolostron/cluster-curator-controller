@@ -192,7 +192,7 @@ func curatorRun(config *rest.Config, client clientv1.Client, clusterName string,
 		dynclient, dErr := utils.GetDynset(nil)
 		utils.CheckError(dErr)
 
-		clusterType, ctErr := utils.GetClusterType(hiveset, dynclient, clusterName, clusterNamespace)
+		clusterType, ctErr := utils.GetClusterType(hiveset, dynclient, clusterName, clusterNamespace, false)
 		utils.CheckError(ctErr)
 
 		if clusterType == utils.StandaloneClusterType {
@@ -228,7 +228,7 @@ func curatorRun(config *rest.Config, client clientv1.Client, clusterName string,
 		dynclient, dErr := utils.GetDynset(nil)
 		utils.CheckError(dErr)
 
-		clusterType, ctErr := utils.GetClusterType(hiveset, dynclient, clusterName, clusterNamespace)
+		clusterType, ctErr := utils.GetClusterType(hiveset, dynclient, clusterName, clusterNamespace, false)
 		utils.CheckError(ctErr)
 
 		if clusterType == utils.StandaloneClusterType {
@@ -285,7 +285,7 @@ func curatorRun(config *rest.Config, client clientv1.Client, clusterName string,
 		dynclient, dErr := utils.GetDynset(nil)
 		utils.CheckError(dErr)
 
-		clusterType, ctErr := utils.GetClusterType(hiveset, dynclient, clusterName, clusterNamespace)
+		clusterType, ctErr := utils.GetClusterType(hiveset, dynclient, clusterName, clusterNamespace, false)
 		utils.CheckError(ctErr)
 
 		if clusterType == utils.StandaloneClusterType {
@@ -333,7 +333,7 @@ func curatorRun(config *rest.Config, client clientv1.Client, clusterName string,
 		dynclient, dErr := utils.GetDynset(nil)
 		utils.CheckError(dErr)
 
-		clusterType, ctErr := utils.GetClusterType(hiveset, dynclient, clusterName, clusterNamespace)
+		clusterType, ctErr := utils.GetClusterType(hiveset, dynclient, clusterName, clusterNamespace, false)
 		utils.CheckError(ctErr)
 
 		if clusterType == utils.StandaloneClusterType {
@@ -392,7 +392,7 @@ func curatorRun(config *rest.Config, client clientv1.Client, clusterName string,
 		dynclient, dErr := utils.GetDynset(nil)
 		utils.CheckError(dErr)
 
-		clusterType, ctErr := utils.GetClusterType(hiveset, dynclient, clusterName, clusterNamespace)
+		clusterType, ctErr := utils.GetClusterType(hiveset, dynclient, clusterName, clusterNamespace, true)
 		utils.CheckError(ctErr)
 
 		if clusterType == utils.StandaloneClusterType {
@@ -428,7 +428,7 @@ func curatorRun(config *rest.Config, client clientv1.Client, clusterName string,
 		dynclient, dErr := utils.GetDynset(nil)
 		utils.CheckError(dErr)
 
-		clusterType, ctErr := utils.GetClusterType(hiveset, dynclient, clusterName, clusterNamespace)
+		clusterType, ctErr := utils.GetClusterType(hiveset, dynclient, clusterName, clusterNamespace, true)
 		utils.CheckError(ctErr)
 
 		if clusterType == utils.StandaloneClusterType {
