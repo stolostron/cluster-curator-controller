@@ -501,7 +501,8 @@ func GetClusterType(
 	hiveset hiveclient.Interface,
 	dc dynamic.Interface,
 	clusterName string,
-	clusterNamespace string) (string, error) {
+	clusterNamespace string,
+	isUpgrade bool) (string, error) {
 	// shortcut for Hypershift cluster
 	if clusterName != clusterNamespace {
 		return HypershiftClusterType, nil
@@ -519,11 +520,17 @@ func GetClusterType(
 		context.TODO(), clusterName, v1.GetOptions{})
 	if hcErr == nil && hostedCluster != nil {
 		return HypershiftClusterType, nil
-	} else if !k8serrors.IsNotFound(err) {
-		return "", err
+	} else if !strings.Contains(hcErr.Error(), "not found") {
+		return "", hcErr
 	}
 
-	if cluster == nil && hostedCluster == nil {
+	if err != nil && hcErr != nil {
+		if isUpgrade {
+			// default to standalone type for upgrading imported clusters
+			// as we cannot get managedclusters at the cluster scope
+			klog.V(0).Info("No ClusterDeployment or HostedCluster found. Since this is upgrade, will treat it as an imported cluster")
+			return StandaloneClusterType, nil
+		}
 		return "", errors.New("Failed to determine the cluster type, cannot find ClusterDeployment or HostedCluster")
 	}
 
