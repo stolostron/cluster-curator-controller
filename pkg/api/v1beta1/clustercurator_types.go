@@ -164,7 +164,7 @@ type Operation struct {
 
 // ClusterCurator is the custom resource for the clustercurators API.
 // This kind allows you to run Ansible prehook and posthook jobs before provisioning Hive or HyperShift
-// and importing a cluster. Additionally cluster upgrade and destroy operations are supported as well.
+// and importing a cluster. Additionally, cluster upgrade and destroy operations are supported as well.
 type ClusterCurator struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
