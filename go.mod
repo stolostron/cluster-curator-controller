@@ -119,7 +119,7 @@ replace (
 )
 
 replace (
-	github.com/openshift/hive/apis => github.com/openshift/hive/apis v0.0.0-20230410203125-bb0124b40f86
+	github.com/openshift/hive/apis => github.com/openshift/hive/apis v0.0.0-20240123053920-35373d831d5b
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.26.2
 	k8s.io/cli-runtime => k8s.io/cli-runtime v0.26.2
 	k8s.io/client-go => k8s.io/client-go v0.28.3
