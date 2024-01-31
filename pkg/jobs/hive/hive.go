@@ -342,10 +342,11 @@ func UpgradeCluster(client clientv1.Client, clusterName string, curator *cluster
 		// Usually when the desired version is in availableUpates we use the image hash from there
 		// but for non-recommended images we don't have the hash so we have to use the image with
 		// a version tag instead
-		if clusterVersion["spec"].(map[string]interface{})["desiredUpdate"] != nil {
-			clusterVersion["spec"].(map[string]interface{})["desiredUpdate"].(map[string]interface{})["version"] = desiredUpdate
-			clusterVersion["spec"].(map[string]interface{})["desiredUpdate"].(map[string]interface{})["force"] = true
-			clusterVersion["spec"].(map[string]interface{})["desiredUpdate"].(map[string]interface{})["image"] =
+		cvDesiredUpdate := clusterVersion["spec"].(map[string]interface{})["desiredUpdate"]
+		if cvDesiredUpdate != nil {
+			cvDesiredUpdate.(map[string]interface{})["version"] = desiredUpdate
+			cvDesiredUpdate.(map[string]interface{})["force"] = true
+			cvDesiredUpdate.(map[string]interface{})["image"] =
 				"quay.io/openshift-release-dev/ocp-release:" + desiredUpdate + "-multi"
 		} else {
 			// For when desiredUpdate does not exist
