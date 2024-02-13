@@ -520,7 +520,9 @@ func GetClusterType(
 		context.TODO(), clusterName, v1.GetOptions{})
 	if hcErr == nil && hostedCluster != nil {
 		return HypershiftClusterType, nil
-	} else if !strings.Contains(hcErr.Error(), "not found") {
+	} else if !strings.Contains(hcErr.Error(), "not found") &&
+		!strings.Contains(hcErr.Error(), "could not find") &&
+		!strings.Contains(hcErr.Error(), "is forbidden") {
 		return "", hcErr
 	}
 
