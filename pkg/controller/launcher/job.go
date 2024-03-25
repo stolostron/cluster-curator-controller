@@ -325,7 +325,9 @@ func getBatchJob(
 			Resources: resourceSettings,
 		})
 	}
+	newJob.Spec.Template.Labels = curator.Labels
 	return newJob
+
 }
 
 func (I *Launcher) CreateJob() error {
