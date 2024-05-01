@@ -1001,6 +1001,236 @@ func TestMonitorUpgradeStatusJobComplete(t *testing.T) {
 	assert.Nil(t, MonitorUpgradeStatus(client, ClusterName, cc), "err is nil, when cluster upgrade is successful")
 }
 
+func TestUpgradeClusterForceUpgradeCSVHasDesiredUpdate(t *testing.T) {
+
+	s := scheme.Scheme
+	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
+	s.AddKnownTypes(managedclusterinfov1beta1.SchemeGroupVersion, &managedclusterinfov1beta1.ManagedClusterInfo{})
+	s.AddKnownTypes(managedclusteractionv1beta1.SchemeGroupVersion, &managedclusteractionv1beta1.ManagedClusterAction{})
+	s.AddKnownTypes(managedclusterviewv1beta1.SchemeGroupVersion, &managedclusterviewv1beta1.ManagedClusterView{})
+
+	clustercurator := &clustercuratorv1.ClusterCurator{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      ClusterName,
+			Namespace: ClusterName,
+			Annotations: map[string]string{
+				"cluster.open-cluster-management.io/upgrade-allow-not-recommended-versions": "true",
+			},
+		},
+		Spec: clustercuratorv1.ClusterCuratorSpec{
+			DesiredCuration: "upgrade",
+			Upgrade: clustercuratorv1.UpgradeHooks{
+				DesiredUpdate: "4.5.14",
+			},
+		},
+	}
+
+	currentClusterVersion := &clusterversionv1.ClusterVersion{
+		TypeMeta: v1.TypeMeta{
+			APIVersion: "config.openshift.io/v1",
+			Kind:       "ClusterVersion",
+		},
+		ObjectMeta: v1.ObjectMeta{
+			Name: "version",
+		},
+		Spec: clusterversionv1.ClusterVersionSpec{
+			Channel:   "stable-4.5",
+			ClusterID: "201ad26c-67d6-416a",
+			Upstream:  "https://api.openshift.com/api",
+			DesiredUpdate: &clusterversionv1.Update{
+				Image:   "quay.io/openshift-release-dev/ocp-release@sha256:71e158c6173ad6aa6e356c119a87459196bbe70e89c0db1e35c1f63a87d90676",
+				Version: "4.5.10",
+			},
+		},
+		Status: clusterversionv1.ClusterVersionStatus{
+			AvailableUpdates: []clusterversionv1.Update{
+				{
+					Version: "4.5.10",
+					Image:   "quay.io/openshift-release-dev/ocp-release@sha256:71e158c6173ad6aa6e356c119a87459196bbe70e89c0db1e35c1f63a87d90676",
+				},
+			},
+		},
+	}
+
+	b, _ := json.Marshal(currentClusterVersion)
+
+	client := clientfake.NewFakeClientWithScheme(s, []runtime.Object{
+		clustercurator, getManagedClusterInfo(),
+	}...)
+
+	go func() {
+		for i := 0; i < 10; i++ {
+			time.Sleep(1 * time.Second)
+			resultmcview := managedclusterviewv1beta1.ManagedClusterView{}
+			err := client.Get(context.TODO(), types.NamespacedName{
+				Namespace: ClusterName,
+				Name:      ClusterName,
+			}, &resultmcview)
+			if err != nil {
+				klog.Error("failed to get managedClusterview.", err)
+				continue
+			}
+			resultmcview.Status.Result.Raw = b
+			err = client.Update(context.TODO(), &resultmcview)
+			if err != nil {
+				klog.Error("failed to update managedClusterview.", err)
+				continue
+			}
+			updatedresultmcview := managedclusterviewv1beta1.ManagedClusterView{}
+			err = client.Get(context.TODO(), types.NamespacedName{
+				Namespace: ClusterName,
+				Name:      ClusterName,
+			}, &updatedresultmcview)
+			if err != nil {
+				klog.Error("failed to get managedClusterview.", err)
+				continue
+			}
+			if updatedresultmcview.Status.Result.Raw != nil {
+				break
+			}
+		}
+	}()
+
+	go func() {
+		for i := 0; i < 10; i++ {
+			time.Sleep(1 * time.Second)
+			resultmca := managedclusteractionv1beta1.ManagedClusterAction{}
+			err := client.Get(context.TODO(), types.NamespacedName{
+				Namespace: ClusterName,
+				Name:      ClusterName,
+			}, &resultmca)
+
+			if err == nil {
+				patch := []byte(`{"status":{"conditions":[
+							{
+								"lastTransitionTime": "2021-04-28T16:19:38Z",
+								"message": " Resource action is done.",
+								"reason": "ActionDone",
+								"status": "True",
+								"type": "Completed"
+							}]}}`)
+				client.Patch(context.Background(), &resultmca, clientv1.RawPatch(types.MergePatchType, patch))
+				break
+			}
+		}
+	}()
+
+	assert.Nil(t, UpgradeCluster(client, ClusterName, clustercurator), "Upgrade started successfully to non-recommended version")
+}
+
+func TestUpgradeClusterForceUpgradeCSVNoDesiredUpdate(t *testing.T) {
+
+	s := scheme.Scheme
+	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
+	s.AddKnownTypes(managedclusterinfov1beta1.SchemeGroupVersion, &managedclusterinfov1beta1.ManagedClusterInfo{})
+	s.AddKnownTypes(managedclusteractionv1beta1.SchemeGroupVersion, &managedclusteractionv1beta1.ManagedClusterAction{})
+	s.AddKnownTypes(managedclusterviewv1beta1.SchemeGroupVersion, &managedclusterviewv1beta1.ManagedClusterView{})
+
+	clustercurator := &clustercuratorv1.ClusterCurator{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      ClusterName,
+			Namespace: ClusterName,
+			Annotations: map[string]string{
+				"cluster.open-cluster-management.io/upgrade-allow-not-recommended-versions": "true",
+			},
+		},
+		Spec: clustercuratorv1.ClusterCuratorSpec{
+			DesiredCuration: "upgrade",
+			Upgrade: clustercuratorv1.UpgradeHooks{
+				DesiredUpdate: "4.5.14",
+			},
+		},
+	}
+
+	currentClusterVersion := &clusterversionv1.ClusterVersion{
+		TypeMeta: v1.TypeMeta{
+			APIVersion: "config.openshift.io/v1",
+			Kind:       "ClusterVersion",
+		},
+		ObjectMeta: v1.ObjectMeta{
+			Name: "version",
+		},
+		Spec: clusterversionv1.ClusterVersionSpec{
+			Channel:   "stable-4.5",
+			ClusterID: "201ad26c-67d6-416a",
+			Upstream:  "https://api.openshift.com/api",
+		},
+		Status: clusterversionv1.ClusterVersionStatus{
+			AvailableUpdates: []clusterversionv1.Update{
+				{
+					Version: "4.5.10",
+					Image:   "quay.io/openshift-release-dev/ocp-release@sha256:71e158c6173ad6aa6e356c119a87459196bbe70e89c0db1e35c1f63a87d90676",
+				},
+			},
+		},
+	}
+
+	b, _ := json.Marshal(currentClusterVersion)
+
+	client := clientfake.NewFakeClientWithScheme(s, []runtime.Object{
+		clustercurator, getManagedClusterInfo(),
+	}...)
+
+	go func() {
+		for i := 0; i < 10; i++ {
+			time.Sleep(1 * time.Second)
+			resultmcview := managedclusterviewv1beta1.ManagedClusterView{}
+			err := client.Get(context.TODO(), types.NamespacedName{
+				Namespace: ClusterName,
+				Name:      ClusterName,
+			}, &resultmcview)
+			if err != nil {
+				klog.Error("failed to get managedClusterview.", err)
+				continue
+			}
+			resultmcview.Status.Result.Raw = b
+			err = client.Update(context.TODO(), &resultmcview)
+			if err != nil {
+				klog.Error("failed to update managedClusterview.", err)
+				continue
+			}
+			updatedresultmcview := managedclusterviewv1beta1.ManagedClusterView{}
+			err = client.Get(context.TODO(), types.NamespacedName{
+				Namespace: ClusterName,
+				Name:      ClusterName,
+			}, &updatedresultmcview)
+			if err != nil {
+				klog.Error("failed to get managedClusterview.", err)
+				continue
+			}
+			if updatedresultmcview.Status.Result.Raw != nil {
+				break
+			}
+		}
+	}()
+
+	go func() {
+		for i := 0; i < 10; i++ {
+			time.Sleep(1 * time.Second)
+			resultmca := managedclusteractionv1beta1.ManagedClusterAction{}
+			err := client.Get(context.TODO(), types.NamespacedName{
+				Namespace: ClusterName,
+				Name:      ClusterName,
+			}, &resultmca)
+
+			if err == nil {
+				patch := []byte(`{"status":{"conditions":[
+							{
+								"lastTransitionTime": "2021-04-28T16:19:38Z",
+								"message": " Resource action is done.",
+								"reason": "ActionDone",
+								"status": "True",
+								"type": "Completed"
+							}]}}`)
+				client.Patch(context.Background(), &resultmca, clientv1.RawPatch(types.MergePatchType, patch))
+				break
+			}
+		}
+	}()
+
+	assert.Nil(t, UpgradeCluster(client, ClusterName, clustercurator), "Upgrade started successfully to non-recommended version")
+}
+
 func TestGetMonitorAttempts(t *testing.T) {
 	attempts := getMonitorAttempts("", &clustercuratorv1.ClusterCurator{})
 	assert.Equal(t, 150, attempts)
