@@ -31,6 +31,7 @@ import (
 )
 
 const MCVUpgradeLabel = "cluster-curator-upgrade"
+const ForceUpgradeAnnotation = "cluster.open-cluster-management.io/upgrade-allow-not-recommended-versions"
 
 func ActivateDeploy(hiveset hiveclient.Interface, clusterName string) error {
 	klog.V(0).Info("* Initiate Provisioning")
@@ -298,13 +299,11 @@ func UpgradeCluster(client clientv1.Client, clusterName string, curator *cluster
 		Namespace: clusterName,
 		Name:      clusterName,
 	}, &mcview); err != nil {
-
 		klog.V(2).Info("Create managedclusterview " + clusterName)
 		if err := client.Create(context.TODO(), managedclusterview); err != nil {
 			return err
 		}
 	}
-
 	getErr := errors.New("Failed to get remote clusterversion")
 	resultmcview := managedclusterviewv1beta1.ManagedClusterView{}
 	for i := 1; i <= 5; i++ {
@@ -344,11 +343,33 @@ func UpgradeCluster(client clientv1.Client, clusterName string, curator *cluster
 		return getErr
 	}
 
-	if cvAvailableUpdates, ok := clusterVersion["status"].(map[string]interface{})["availableUpdates"].([]interface{}); ok {
-		for _, version := range cvAvailableUpdates {
-			if version.(map[string]interface{})["version"] == desiredUpdate {
-				clusterVersion["spec"].(map[string]interface{})["desiredUpdate"] = version
-				break
+	curatorAnnotations := curator.GetAnnotations()
+
+	if curatorAnnotations != nil && curatorAnnotations[ForceUpgradeAnnotation] == "true" {
+		// Usually when the desired version is in availableUpates we use the image hash from there
+		// but for non-recommended images we don't have the hash so we have to use the image with
+		// a version tag instead
+		cvDesiredUpdate := clusterVersion["spec"].(map[string]interface{})["desiredUpdate"]
+		if cvDesiredUpdate != nil {
+			cvDesiredUpdate.(map[string]interface{})["version"] = desiredUpdate
+			cvDesiredUpdate.(map[string]interface{})["force"] = true
+			cvDesiredUpdate.(map[string]interface{})["image"] =
+				"quay.io/openshift-release-dev/ocp-release:" + desiredUpdate + "-multi"
+		} else {
+			// For when desiredUpdate does not exist
+			clusterVersion["spec"].(map[string]interface{})["desiredUpdate"] = map[string]interface{}{
+				"version": desiredUpdate,
+				"force":   true,
+				"image":   "quay.io/openshift-release-dev/ocp-release:" + desiredUpdate + "-multi",
+			}
+		}
+	} else {
+		if cvAvailableUpdates, ok := clusterVersion["status"].(map[string]interface{})["availableUpdates"].([]interface{}); ok {
+			for _, version := range cvAvailableUpdates {
+				if version.(map[string]interface{})["version"] == desiredUpdate {
+					clusterVersion["spec"].(map[string]interface{})["desiredUpdate"] = version
+					break
+				}
 			}
 		}
 	}
@@ -544,11 +565,19 @@ func validateUpgradeVersion(client clientv1.Client, clusterName string, curator 
 		return errors.New("Provide valid upgrade version or channel or upstream")
 	}
 
+	curatorAnnotations := curator.GetAnnotations()
+
 	isValidVersion := false
-	if desiredUpdate != "" && managedClusterInfo.Status.DistributionInfo.OCP.AvailableUpdates != nil {
-		for _, version := range managedClusterInfo.Status.DistributionInfo.OCP.AvailableUpdates {
-			if version == desiredUpdate {
-				isValidVersion = true
+
+	if curatorAnnotations != nil && curatorAnnotations[ForceUpgradeAnnotation] == "true" {
+		klog.V(2).Info("Force upgrade option used, version validation disabled")
+		isValidVersion = true
+	} else {
+		if desiredUpdate != "" && managedClusterInfo.Status.DistributionInfo.OCP.AvailableUpdates != nil {
+			for _, version := range managedClusterInfo.Status.DistributionInfo.OCP.AvailableUpdates {
+				if version == desiredUpdate {
+					isValidVersion = true
+				}
 			}
 		}
 	}
