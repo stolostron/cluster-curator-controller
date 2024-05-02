@@ -32,6 +32,7 @@ import (
 
 const MCVUpgradeLabel = "cluster-curator-upgrade"
 const ForceUpgradeAnnotation = "cluster.open-cluster-management.io/upgrade-allow-not-recommended-versions"
+const UpgradeClusterversionBackoffLimit = "cluster.open-cluster-management.io/upgrade-clusterversion-backoffLimit"
 
 func ActivateDeploy(hiveset hiveclient.Interface, clusterName string) error {
 	klog.V(0).Info("* Initiate Provisioning")
@@ -258,7 +259,22 @@ func UpgradeCluster(client clientv1.Client, clusterName string, curator *cluster
 	klog.V(0).Info("* Initiate Upgrade")
 	klog.V(2).Info("Looking up managedclusterinfo " + clusterName)
 
-	const retries = 10
+	var retries = 1
+	curatorAnnotations := curator.GetAnnotations()
+
+	if curatorAnnotations != nil && curatorAnnotations[UpgradeClusterversionBackoffLimit] != "" {
+		backoffLimit, err := strconv.Atoi(curatorAnnotations[UpgradeClusterversionBackoffLimit])
+		if err == nil {
+			if backoffLimit > 0 && backoffLimit <= 100 {
+				retries = backoffLimit
+			} else if backoffLimit > 100 {
+				retries = 100
+			}
+		}
+	}
+
+	klog.V(0).Info("Retries set to: " + strconv.Itoa(retries))
+
 	desiredUpdate := curator.Spec.Upgrade.DesiredUpdate
 
 	if err := validateUpgradeVersion(client, clusterName, curator); err != nil {
