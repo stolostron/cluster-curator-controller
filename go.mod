@@ -6,7 +6,7 @@ require (
 	github.com/blang/semver/v4 v4.0.0
 	github.com/go-logr/logr v1.4.1
 	github.com/openshift/api v3.9.1-0.20191111211345-a27ff30ebf09+incompatible
-	github.com/openshift/hive v1.0.0
+	github.com/openshift/hive v1.1.17-0.20240503201730-e11a23b88b31
 	github.com/openshift/hive/apis v0.0.0
 	github.com/stolostron/cluster-lifecycle-api v0.0.0-20220714081119-eae2fe1f05fd
 	github.com/stolostron/library-go v0.0.0-20220727113621-f74e0852408a
@@ -15,7 +15,7 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.29.2
 	k8s.io/apimachinery v0.29.2
-	k8s.io/client-go v0.29.1
+	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/klog v1.0.0
 	k8s.io/klog/v2 v2.120.1
 	open-cluster-management.io/api v0.8.0
@@ -90,9 +90,12 @@ replace (
 replace (
 	github.com/IBM-Cloud/terraform-provider-ibm => github.com/openshift/terraform-provider-ibm v1.26.2-openshift-2
 	github.com/kubevirt/terraform-provider-kubevirt => github.com/nirarg/terraform-provider-kubevirt v0.0.0-20201222125919-101cee051ed3
-	github.com/metal3-io/baremetal-operator => github.com/openshift/baremetal-operator v0.0.0-20211201170610-92ffa60c683d
-	github.com/metal3-io/baremetal-operator/apis => github.com/openshift/baremetal-operator/apis v0.0.0-20211201170610-92ffa60c683d
-	github.com/metal3-io/baremetal-operator/pkg/hardwareutils => github.com/openshift/baremetal-operator/pkg/hardwareutils v0.0.0-20211201170610-92ffa60c683d
+	github.com/metal3-io/baremetal-operator => github.com/openshift/baremetal-operator v0.0.0-20231128154154-6736c9b9c6c8
+	github.com/metal3-io/baremetal-operator/apis => github.com/openshift/baremetal-operator/apis v0.0.0-20231128154154-6736c9b9c6c8
+	github.com/metal3-io/baremetal-operator/pkg/hardwareutils => github.com/openshift/baremetal-operator/pkg/hardwareutils v0.0.0-20231128154154-6736c9b9c6c8
+	//github.com/metal3-io/baremetal-operator => github.com/openshift/baremetal-operator v0.0.0-20211201170610-92ffa60c683d
+	//github.com/metal3-io/baremetal-operator/apis => github.com/openshift/baremetal-operator/apis v0.0.0-20211201170610-92ffa60c683d
+	//github.com/metal3-io/baremetal-operator/pkg/hardwareutils => github.com/openshift/baremetal-operator/pkg/hardwareutils v0.0.0-20211201170610-92ffa60c683d
 	github.com/terraform-providers/terraform-provider-aws => github.com/openshift/terraform-provider-aws v1.60.1-0.20211215220004-24df6d73af46
 	github.com/terraform-providers/terraform-provider-azurerm => github.com/openshift/terraform-provider-azurerm v1.44.1-0.20210224232508-7509319df0f4
 	github.com/terraform-providers/terraform-provider-azurestack => github.com/openshift/terraform-provider-azurestack v0.10.0-openshift
@@ -119,9 +122,9 @@ replace (
 
 replace (
 	github.com/openshift/hive/apis => github.com/openshift/hive/apis v0.0.0-20240123053920-35373d831d5b
-	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.26.2
-	k8s.io/cli-runtime => k8s.io/cli-runtime v0.26.2
-	k8s.io/client-go => k8s.io/client-go v0.28.3
+	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.29.2
+	k8s.io/cli-runtime => k8s.io/cli-runtime v0.29.1
+	k8s.io/client-go => k8s.io/client-go v0.29.2
 	k8s.io/cloud-provider => k8s.io/cloud-provider v0.26.2
 	k8s.io/cluster-bootstrap => k8s.io/cluster-bootstrap v0.26.2
 	k8s.io/code-generator => k8s.io/code-generator v0.26.2
@@ -132,7 +135,7 @@ replace (
 	k8s.io/kube-controller-manager => k8s.io/kube-controller-manager v0.26.2
 	k8s.io/kube-proxy => k8s.io/kube-proxy v0.26.2
 	k8s.io/kube-scheduler => k8s.io/kube-scheduler v0.26.2
-	k8s.io/kubectl => k8s.io/kubectl v0.26.2
+	k8s.io/kubectl => k8s.io/kubectl v0.29.1
 	k8s.io/kubelet => k8s.io/kubelet v0.26.2
 	k8s.io/legacy-cloud-providers => k8s.io/legacy-cloud-providers v0.26.2
 	k8s.io/metrics => k8s.io/metrics v0.26.2
