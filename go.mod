@@ -5,9 +5,8 @@ go 1.21
 require (
 	github.com/blang/semver/v4 v4.0.0
 	github.com/go-logr/logr v1.4.1
-	github.com/open-cluster-management/ansiblejob-go-lib v0.1.12
 	github.com/openshift/api v3.9.1-0.20191111211345-a27ff30ebf09+incompatible
-	github.com/openshift/hive v1.1.17-0.20240503201730-e11a23b88b31
+	github.com/openshift/hive v1.0.0
 	github.com/openshift/hive/apis v0.0.0
 	github.com/stolostron/cluster-lifecycle-api v0.0.0-20220714081119-eae2fe1f05fd
 	github.com/stolostron/library-go v0.0.0-20220727113621-f74e0852408a
@@ -16,7 +15,7 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.29.2
 	k8s.io/apimachinery v0.29.2
-	k8s.io/client-go v12.0.0+incompatible
+	k8s.io/client-go v0.29.1
 	k8s.io/klog v1.0.0
 	k8s.io/klog/v2 v2.120.1
 	open-cluster-management.io/api v0.8.0
