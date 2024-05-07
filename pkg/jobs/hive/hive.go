@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"strconv"
 	"strings"
@@ -22,6 +23,7 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
+	"github.com/blang/semver/v4"
 	batchv1 "k8s.io/api/batch/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
@@ -32,6 +34,7 @@ import (
 
 const MCVUpgradeLabel = "cluster-curator-upgrade"
 const ForceUpgradeAnnotation = "cluster.open-cluster-management.io/upgrade-allow-not-recommended-versions"
+const currentNVersion = "4.16.0" // Need to update every ACM release to new N version
 
 func ActivateDeploy(hiveset hiveclient.Interface, clusterName string) error {
 	klog.V(0).Info("* Initiate Provisioning")
@@ -440,8 +443,331 @@ func UpgradeCluster(client clientv1.Client, clusterName string, curator *cluster
 	return nil
 }
 
-func MonitorUpgradeStatus(client clientv1.Client, clusterName string, curator *clustercuratorv1.ClusterCurator) error {
+func EUSUpgradeCluster(client clientv1.Client, clusterName string, curator *clustercuratorv1.ClusterCurator, isInterVersion bool) error {
+	updateVersion := curator.Spec.Upgrade.IntermediateUpdate
+	if !isInterVersion {
+		updateVersion = curator.Spec.Upgrade.DesiredUpdate
+	}
+
+	if isInterVersion {
+		klog.V(0).Info("* Initiate EUS to EUS Intermediate Upgrade to " + updateVersion)
+	} else {
+		klog.V(0).Info("* Initiate EUS to EUS Final Upgrade to " + updateVersion)
+	}
+
+	if err := validateEUSUpgradeVersion(client, clusterName, curator, isInterVersion); err != nil {
+		return err
+	}
+
+	klog.V(2).Info("Check if managedclusterview exists " + clusterName)
+
+	// For OCP/Kubenetes versions that removed APIs, need to acknowledge this
+	// before upgrading or else upgrade will be blocked.
+	ocpConfigMCV := &managedclusterviewv1beta1.ManagedClusterView{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      clusterName + "admack",
+			Namespace: clusterName,
+			Labels: map[string]string{
+				MCVUpgradeLabel: clusterName,
+			},
+		},
+		Spec: managedclusterviewv1beta1.ViewSpec{
+			Scope: managedclusterviewv1beta1.ViewScope{
+				Kind:      "ConfigMap",
+				Name:      "admin-acks",
+				Namespace: "openshift-config",
+				Version:   "v1",
+			},
+		},
+	}
+
+	ocpConfigView := managedclusterviewv1beta1.ManagedClusterView{}
+	if err := client.Get(context.TODO(), types.NamespacedName{
+		Name:      clusterName + "admack",
+		Namespace: clusterName,
+	}, &ocpConfigView); err != nil {
+		// check if mcv exists before creating
+
+		klog.V(2).Info("Create managedclusterview " + clusterName + "admack")
+		if err := client.Create(context.TODO(), ocpConfigMCV); err != nil {
+			return err
+		}
+	}
+
+	ocpConfigGetErr := errors.New("Failed to get remote admin-ack configmap")
+	resultOCPConfigMCV := managedclusterviewv1beta1.ManagedClusterView{}
+	if err := waitForMCV(client, clusterName+"admack", clusterName, &resultOCPConfigMCV, ocpConfigGetErr); err != nil {
+		return err
+	}
+
+	resultConfigMap := resultOCPConfigMCV.Status.Result
+	configMap := map[string]interface{}{}
+
+	if resultConfigMap.Raw != nil {
+		err := json.Unmarshal(resultConfigMap.Raw, &configMap)
+		utils.CheckError(err)
+	} else {
+		return ocpConfigGetErr
+	}
+
+	// Get clusterversion from managed cluster to initiate upgrade
+	managedclusterview := &managedclusterviewv1beta1.ManagedClusterView{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      clusterName,
+			Namespace: clusterName,
+			Labels: map[string]string{
+				MCVUpgradeLabel: clusterName,
+			},
+		},
+		Spec: managedclusterviewv1beta1.ViewSpec{
+			Scope: managedclusterviewv1beta1.ViewScope{
+				Group:     "config.openshift.io",
+				Kind:      "ClusterVersion",
+				Name:      "version",
+				Namespace: "",
+				Version:   "v1",
+			},
+		},
+	}
+
+	mcview := managedclusterviewv1beta1.ManagedClusterView{}
+	if err := client.Get(context.TODO(), types.NamespacedName{
+		Namespace: clusterName,
+		Name:      clusterName,
+	}, &mcview); err != nil {
+
+		klog.V(2).Info("Create managedclusterview " + clusterName)
+		if err := client.Create(context.TODO(), managedclusterview); err != nil {
+			return err
+		}
+	}
+
+	getErr := errors.New("Failed to get remote clusterversion")
+	resultmcview := managedclusterviewv1beta1.ManagedClusterView{}
+	if err := waitForMCV(client, clusterName, clusterName, &resultmcview, getErr); err != nil {
+		return err
+	}
+
+	resultClusterVersion := resultmcview.Status.Result
+	clusterVersion := map[string]interface{}{}
+
+	if resultClusterVersion.Raw != nil {
+		err := json.Unmarshal(resultClusterVersion.Raw, &clusterVersion)
+		utils.CheckError(err)
+	} else {
+		return getErr
+	}
+
+	currentOCPVer := clusterVersion["status"].(map[string]interface{})["desired"].(map[string]interface{})["version"].(string)
+	desiredSemVer, err := semver.Make(currentOCPVer)
+	if err != nil {
+		return err
+	}
+
+	ackString := "ack-" + strconv.Itoa(int(desiredSemVer.Major)) + "." + strconv.Itoa(int(desiredSemVer.Minor)) +
+		"-kube-1." + strconv.Itoa(int(desiredSemVer.Minor+14)) + "-api-removals-in-" +
+		strconv.Itoa(int(desiredSemVer.Major)) + "." + strconv.Itoa(int(desiredSemVer.Minor+1))
+
+	cmData := configMap["data"]
+	if cmData != nil {
+		// "kube-1.{{ '%02d' | format((ocp_minor_version.split('.')[1] | int) + 14"
+		cmData.(map[string]interface{})[ackString] = "true"
+	} else {
+		configMap["data"] = map[string]interface{}{
+			ackString: "true",
+		}
+	}
+
+	// update managed cluster with acknowledge config to allow upgrade
+	var updateConfigMap runtime.RawExtension
+	if configMap != nil {
+		b, err := json.Marshal(configMap)
+		utils.CheckError(err)
+		updateConfigMap.Raw = b
+	}
+	klog.V(2).Info("Create managedclusteraction to update configmap " + clusterName + "admack")
+	ocpConfigMCA := &managedclusteractionv1beta1.ManagedClusterAction{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      clusterName + "admack",
+			Namespace: clusterName,
+		},
+		Spec: managedclusteractionv1beta1.ActionSpec{
+			ActionType: managedclusteractionv1beta1.UpdateActionType,
+			KubeWork: &managedclusteractionv1beta1.KubeWorkSpec{
+				Resource:       "configmaps",
+				Name:           "admin-acks",
+				Namespace:      "openshift-config",
+				ObjectTemplate: updateConfigMap,
+			},
+		},
+	}
+	if err := client.Create(context.TODO(), ocpConfigMCA); err != nil {
+		return err
+	}
+
+	// wait for managedclusteraction results
+	ocpConfigMCAStatus := managedclusteractionv1beta1.ManagedClusterAction{}
+	for i := 1; i <= 5; i++ {
+		time.Sleep(utils.PauseFiveSeconds)
+		if err := client.Get(context.TODO(), types.NamespacedName{
+			Name:      clusterName + "admack",
+			Namespace: clusterName,
+		}, &ocpConfigMCAStatus); err != nil {
+			if i == 5 {
+				return err
+			}
+			klog.Warning(err)
+			continue
+		}
+		if ocpConfigMCAStatus.Status.Conditions != nil {
+			break
+		}
+	}
+
+	if ocpConfigMCAStatus.Status.Conditions != nil {
+		for _, condition := range ocpConfigMCAStatus.Status.Conditions {
+			if condition.Status == v1.ConditionFalse && condition.Reason == managedclusteractionv1beta1.ReasonUpdateResourceFailed {
+				klog.Warning("ManagedClusterAction failed to update remote clusterversion", ocpConfigMCAStatus.Status.Conditions)
+				return errors.New("Remote confimap update failed")
+			}
+			if condition.Status == v1.ConditionTrue && condition.Type == managedclusteractionv1beta1.ConditionActionCompleted {
+				klog.V(2).Info("Remote configmap updated successfully " + clusterName + "admack")
+			}
+		}
+	} else {
+		return errors.New("Remote configmap update failed")
+	}
+
+	if err := client.Delete(context.TODO(), &ocpConfigMCAStatus); err != nil {
+		return err
+	}
+
+	// After updating the OCP ack configmap it takes some time for clusterversion to pick up the change
+	klog.V(0).Info("Pause 60 seconds for clusterversion to update")
+	time.Sleep(utils.PauseSixtySeconds)
+
+	// Get latest clusterversion or else the object might be stale
+	if err := client.Get(context.TODO(), types.NamespacedName{
+		Namespace: clusterName,
+		Name:      clusterName,
+	}, &mcview); err != nil {
+
+		klog.V(2).Info("Create managedclusterview " + clusterName)
+		if err := client.Create(context.TODO(), managedclusterview); err != nil {
+			return err
+		}
+	}
+
+	if err = waitForMCV(client, clusterName, clusterName, &resultmcview, getErr); err != nil {
+		return err
+	}
+	resultClusterVersion = resultmcview.Status.Result
+
+	if resultClusterVersion.Raw != nil {
+		err := json.Unmarshal(resultClusterVersion.Raw, &clusterVersion)
+		utils.CheckError(err)
+	} else {
+		return getErr
+	}
+
+	cvDesiredUpdate := clusterVersion["spec"].(map[string]interface{})["desiredUpdate"]
+
+	// Always use 'force' option since we cannot get the image hash for EUS to EUS upgrade
+	// Using the version image tag to upgrade will be blocked
+	if cvDesiredUpdate != nil {
+		cvDesiredUpdate.(map[string]interface{})["version"] = updateVersion
+		cvDesiredUpdate.(map[string]interface{})["force"] = true
+		cvDesiredUpdate.(map[string]interface{})["image"] =
+			"quay.io/openshift-release-dev/ocp-release:" + updateVersion + "-multi"
+	} else {
+		// For when desiredUpdate does not exist
+		clusterVersion["spec"].(map[string]interface{})["desiredUpdate"] = map[string]interface{}{
+			"version": updateVersion,
+			"force":   true,
+			"image":   "quay.io/openshift-release-dev/ocp-release:" + updateVersion + "-multi",
+		}
+	}
+
+	// set channel when upgrading to final EUS version
+	if !isInterVersion {
+		finalSemVer, err := semver.Make(updateVersion)
+		if err != nil {
+			return err
+		}
+		clusterVersion["spec"].(map[string]interface{})["channel"] = "stable-" + strconv.Itoa(int(finalSemVer.Major)) +
+			"." + strconv.Itoa(int(finalSemVer.Minor))
+	}
+
+	var updateClusterVersion runtime.RawExtension
+	if clusterVersion != nil {
+		b, err := json.Marshal(clusterVersion)
+		utils.CheckError(err)
+		updateClusterVersion.Raw = b
+	}
+	klog.V(2).Info("Create managedclusteraction to update clusterversion " + clusterName)
+	managedclusteraction := &managedclusteractionv1beta1.ManagedClusterAction{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      clusterName,
+			Namespace: clusterName,
+		},
+		Spec: managedclusteractionv1beta1.ActionSpec{
+			ActionType: managedclusteractionv1beta1.UpdateActionType,
+			KubeWork: &managedclusteractionv1beta1.KubeWorkSpec{
+				Resource:       "clusterversions",
+				Name:           "version",
+				Namespace:      "",
+				ObjectTemplate: updateClusterVersion,
+			},
+		},
+	}
+	if err := client.Create(context.TODO(), managedclusteraction); err != nil {
+		return err
+	}
+
+	mcaStatus := managedclusteractionv1beta1.ManagedClusterAction{}
+	for i := 1; i <= 5; i++ {
+		time.Sleep(utils.PauseFiveSeconds)
+		if err := client.Get(context.TODO(), types.NamespacedName{
+			Namespace: clusterName,
+			Name:      clusterName,
+		}, &mcaStatus); err != nil {
+			if i == 5 {
+				return err
+			}
+			klog.Warning(err)
+			continue
+		}
+		if mcaStatus.Status.Conditions != nil {
+			break
+		}
+	}
+
+	if mcaStatus.Status.Conditions != nil {
+		for _, condition := range mcaStatus.Status.Conditions {
+			if condition.Status == v1.ConditionFalse && condition.Reason == managedclusteractionv1beta1.ReasonUpdateResourceFailed {
+				klog.Warning("ManagedClusterAction failed to update remote clusterversion", mcaStatus.Status.Conditions)
+				return errors.New("Remote clusterversion update failed")
+			}
+			if condition.Status == v1.ConditionTrue && condition.Type == managedclusteractionv1beta1.ConditionActionCompleted {
+				klog.V(2).Info("Remote clusterversion updated successfully " + clusterName)
+			}
+		}
+	} else {
+		return errors.New("Remote clusterversion update failed")
+	}
+
+	if err := client.Delete(context.TODO(), &mcaStatus); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func MonitorUpgradeStatus(client clientv1.Client, clusterName string, curator *clustercuratorv1.ClusterCurator, isInterUpdate bool) error {
 	desiredUpdate := curator.Spec.Upgrade.DesiredUpdate
+	if isInterUpdate {
+		desiredUpdate = curator.Spec.Upgrade.IntermediateUpdate
+	}
 	channel := curator.Spec.Upgrade.Channel
 	upstream := curator.Spec.Upgrade.Upstream
 	resultmcview := managedclusterviewv1beta1.ManagedClusterView{}
@@ -468,7 +794,6 @@ func MonitorUpgradeStatus(client clientv1.Client, clusterName string, curator *c
 		if _, ok := labels[MCVUpgradeLabel]; !ok {
 			return errors.New("Failed to get managedclusterview")
 		}
-
 		resultClusterVersion := resultmcview.Status.Result
 
 		clusterVersion := map[string]interface{}{}
@@ -591,6 +916,100 @@ func validateUpgradeVersion(client clientv1.Client, clusterName string, curator 
 	}
 	if channel != "" && !isValidChannel {
 		return errors.New("Provided channel is not valid")
+	}
+
+	return nil
+}
+
+func waitForMCV(client clientv1.Client, clusterName string, clusterNamespace string, mcv *managedclusterviewv1beta1.ManagedClusterView, errMsg error) error {
+	for i := 1; i <= 5; i++ {
+		time.Sleep(utils.PauseFiveSeconds)
+		if err := client.Get(context.TODO(), types.NamespacedName{
+			Name:      clusterName,
+			Namespace: clusterNamespace,
+		}, mcv); err != nil {
+			if i == 5 {
+				klog.Warning(err)
+				return errMsg
+			}
+			klog.Warning(err)
+			continue
+		}
+		labels := mcv.ObjectMeta.GetLabels()
+		if len(labels) == 0 {
+			return errMsg
+		}
+		if _, ok := labels[MCVUpgradeLabel]; ok {
+			if mcv.Status.Result.Raw != nil {
+				break
+			}
+		} else {
+			return errMsg
+		}
+	}
+
+	return nil
+}
+
+func validateEUSUpgradeVersion(client clientv1.Client, clusterName string, curator *clustercuratorv1.ClusterCurator, isInterVersion bool) error {
+	if curator.Spec.Upgrade.DesiredUpdate == "" {
+		return errors.New(fmt.Sprintf("DesiredUpdate is required to run EUS to EUS upgrade for Curator %q", curator.Name))
+	}
+	desiredVersion, err := semver.Make(curator.Spec.Upgrade.DesiredUpdate)
+	if err != nil {
+		return err
+	}
+
+	intermediateVersion, err := semver.Make(curator.Spec.Upgrade.IntermediateUpdate)
+	if err != nil {
+		return err
+	}
+
+	nVersion, err := semver.Make(currentNVersion)
+	if err != nil {
+		return err
+	}
+
+	managedClusterInfo := managedclusterinfov1beta1.ManagedClusterInfo{}
+	if err := client.Get(context.TODO(), types.NamespacedName{
+		Namespace: clusterName,
+		Name:      clusterName,
+	}, &managedClusterInfo); err != nil {
+		return err
+	}
+
+	klog.V(2).Info("kubevendor: ", managedClusterInfo.Status.KubeVendor)
+
+	if managedClusterInfo.Status.KubeVendor != "OpenShift" {
+		return errors.New("can not upgrade non openshift cluster")
+	}
+
+	currentVersion, err := semver.Make(managedClusterInfo.Status.DistributionInfo.OCP.Version)
+	if err != nil {
+		return err
+	}
+
+	if isInterVersion && (intermediateVersion.Compare(currentVersion) == 0 || intermediateVersion.Compare(currentVersion) == -1) {
+		return errors.New(fmt.Sprintf("IntermediateUpdate %v must be greater than current version %v to run EUS to EUS upgrade for Curator %q",
+			intermediateVersion, currentVersion, curator.Name))
+	}
+
+	// desiredVersion == targeted final EUS version
+	if desiredVersion.Compare(intermediateVersion) == 0 || desiredVersion.Compare(intermediateVersion) == -1 {
+		return errors.New(fmt.Sprintf("DesiredUpdate %v must be greater than IntermediateUpdate %v to run EUS to EUS upgrade for Curator %q",
+			desiredVersion, intermediateVersion, curator.Name))
+	}
+
+	if intermediateVersion.Major != currentVersion.Major || desiredVersion.Major != currentVersion.Major {
+		return errors.New(fmt.Sprintf("Major version EUS to EUS upgrade in not supported for Curator %q", curator.Name))
+	}
+
+	if isInterVersion && (intermediateVersion.Minor != (currentVersion.Minor+1) || desiredVersion.Minor != (currentVersion.Minor+2)) {
+		return errors.New(fmt.Sprintf("Minor version EUS to EUS upgrade must be continuous for Curator %q", curator.Name))
+	}
+
+	if desiredVersion.Minor > (nVersion.Minor + 1) {
+		return errors.New(fmt.Sprintf("Minor version EUS to EUS upgrade cannot go above N+1 for Curator %q", curator.Name))
 	}
 
 	return nil

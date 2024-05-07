@@ -99,9 +99,19 @@ type UpgradeHooks struct {
 	// +kubebuilder:validation:Required
 	TowerAuthSecret string `json:"towerAuthSecret,omitempty"`
 
+	// IntermediateUpdate indicates the desired value of
+	// the intermediate cluster version when performing EUS to EUS upgrades.
+	// Setting both this value and DesiredUpdate will trigger an EUS to EUS upgrade.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="Value is immutable"
+	// +kubebuilder:validation:MaxLength=512
+	IntermediateUpdate string `json:"intermediateUpdate,omitempty"`
+
 	// DesiredUpdate indicates the desired value of
 	// the cluster version. Setting this value will trigger an upgrade (if
-	// the current version does not match the desired version).
+	// the current version does not match the desired version). During
+	// an EUS to EUS upgrade, this value becomes the final cluster version
+	// (the target version that ClusterCurator will upgrade the cluster to).
 	// +optional
 	DesiredUpdate string `json:"desiredUpdate,omitempty"`
 

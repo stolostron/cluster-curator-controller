@@ -71,15 +71,16 @@ func curatorRun(config *rest.Config, client clientv1.Client, clusterName string,
 	var err error
 	var cmdErrorMsg = errors.New("Invalid Parameter: \"" + os.Args[1] +
 		"\"\nCommand: ./curator [monitor-import|monitor|activate-and-monitor|applycloudprovider-aws|" +
-		"applycloudprovider-gcp|applycloudprovider-azure|upgrade-cluster|monitor-upgrade|" +
-		"prehook-ansiblejob|posthook-ansiblejob|done]")
+		"applycloudprovider-gcp|applycloudprovider-azure|upgrade-cluster|intermediate-upgrade-cluster|" +
+		"final-upgrade-cluster|monitor-upgrade|intermediate-monitor-upgrade|prehook-ansiblejob|posthook-ansiblejob|done]")
 
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
 		case "applycloudprovider-aws", "applycloudprovider-ansible", "monitor-import", "monitor",
-			"applycloudprovider-gcp", "applycloudprovider-azure", "activate-and-monitor", "upgrade-cluster", "monitor-upgrade",
-			"SKIP_ALL_TESTING", "prehook-ansiblejob", "posthook-ansiblejob", "done", "destroy-cluster",
-			"monitor-destroy", "detach-nowait", "delete-cluster-namespace":
+			"applycloudprovider-gcp", "applycloudprovider-azure", "activate-and-monitor", "upgrade-cluster",
+			"intermediate-upgrade-cluster", "final-upgrade-cluster", "monitor-upgrade", "intermediate-monitor-upgrade",
+			"SKIP_ALL_TESTING", "prehook-ansiblejob", "posthook-ansiblejob", "done", "destroy-cluster", "monitor-destroy",
+			"detach-nowait", "delete-cluster-namespace":
 		default:
 			utils.CheckError(cmdErrorMsg)
 		}
@@ -422,6 +423,40 @@ func curatorRun(config *rest.Config, client clientv1.Client, clusterName string,
 		}
 	}
 
+	if jobChoice == "intermediate-upgrade-cluster" || jobChoice == "final-upgrade-cluster" {
+		// no need to check cluster type, only hive EUS upgrade supported for now
+		isInterVersion := true
+		if jobChoice == "final-upgrade-cluster" {
+			isInterVersion = false
+		}
+
+		if err := hive.EUSUpgradeCluster(client, clusterName, curator, isInterVersion); err != nil {
+			utils.CheckError(utils.RecordFailedCuratorStatusCondition(
+				client,
+				clusterName,
+				clusterNamespace,
+				jobChoice,
+				v1.ConditionTrue,
+				err.Error()))
+			klog.Error(err.Error())
+			panic(err)
+		}
+	}
+
+	if jobChoice == "intermediate-monitor-upgrade" {
+		if err = hive.MonitorUpgradeStatus(client, clusterName, curator, true); err != nil {
+			utils.CheckError(utils.RecordFailedCuratorStatusCondition(
+				client,
+				clusterName,
+				clusterNamespace,
+				jobChoice,
+				v1.ConditionTrue,
+				err.Error()))
+			klog.Error(err.Error())
+			panic(err)
+		}
+	}
+
 	if jobChoice == "monitor-upgrade" {
 		hiveset, err := hiveclient.NewForConfig(config)
 		utils.CheckError(err)
@@ -432,7 +467,7 @@ func curatorRun(config *rest.Config, client clientv1.Client, clusterName string,
 		utils.CheckError(ctErr)
 
 		if clusterType == utils.StandaloneClusterType {
-			if err = hive.MonitorUpgradeStatus(client, clusterName, curator); err != nil {
+			if err = hive.MonitorUpgradeStatus(client, clusterName, curator, false); err != nil {
 				utils.CheckError(utils.RecordFailedCuratorStatusCondition(
 					client,
 					clusterName,

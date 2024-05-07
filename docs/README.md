@@ -4,7 +4,9 @@ After you make your changes you actually need to build your own image because wh
 
 1. export REPO_URL=<your_quay_url> ie. quay.io/<user_name>
 2. export VERSION=<image_tag>
-3. make build-curator
+3. make build-curator<br>
+   For podman users:<br>
+   `podman build -f Dockerfile.prow . -t ${REPO_URL}/cluster-curator-controller:${VERSION}`
 4. docker push <REPO_URL>/cluster-curator-controller:\<VERSION>
 
 ## Building with docker

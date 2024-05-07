@@ -998,7 +998,7 @@ func TestMonitorUpgradeStatusJobComplete(t *testing.T) {
 		client.Update(context.TODO(), &resultmcview)
 	}()
 
-	assert.Nil(t, MonitorUpgradeStatus(client, ClusterName, cc), "err is nil, when cluster upgrade is successful")
+	assert.Nil(t, MonitorUpgradeStatus(client, ClusterName, cc, false), "err is nil, when cluster upgrade is successful")
 }
 
 func TestUpgradeClusterForceUpgradeCSVHasDesiredUpdate(t *testing.T) {
