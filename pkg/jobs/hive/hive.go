@@ -11,7 +11,6 @@ import (
 	"time"
 
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
-	hiveclient "github.com/openshift/hive/pkg/client/clientset/versioned"
 	hiveconstants "github.com/openshift/hive/pkg/constants"
 	clustercuratorv1 "github.com/stolostron/cluster-curator-controller/pkg/api/v1beta1"
 	"github.com/stolostron/cluster-curator-controller/pkg/jobs/utils"
@@ -34,12 +33,17 @@ const MCVUpgradeLabel = "cluster-curator-upgrade"
 const ForceUpgradeAnnotation = "cluster.open-cluster-management.io/upgrade-allow-not-recommended-versions"
 const UpgradeClusterversionBackoffLimit = "cluster.open-cluster-management.io/upgrade-clusterversion-backoff-limit"
 
-func ActivateDeploy(hiveset hiveclient.Interface, clusterName string) error {
+func ActivateDeploy(hiveset clientv1.Client, clusterName string) error {
 	klog.V(0).Info("* Initiate Provisioning")
 	klog.V(2).Info("Looking up cluster " + clusterName)
 
 	err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
-		cluster, err := hiveset.HiveV1().ClusterDeployments(clusterName).Get(context.TODO(), clusterName, v1.GetOptions{})
+		//cluster, err := hiveset.HiveV1().ClusterDeployments(clusterName).Get(context.TODO(), clusterName, v1.GetOptions{})
+		cluster := &hivev1.ClusterDeployment{}
+		err := hiveset.Get(context.TODO(), types.NamespacedName{
+			Name:      clusterName,
+			Namespace: clusterName,
+		}, cluster)
 		if err != nil {
 			return err
 		}
@@ -54,36 +58,43 @@ func ActivateDeploy(hiveset hiveclient.Interface, clusterName string) error {
 		// Update the pause annotation
 		delete(annotations, hiveconstants.ReconcilePauseAnnotation)
 		cluster.SetAnnotations(annotations)
-		_, err = hiveset.HiveV1().ClusterDeployments(clusterName).Update(
-			context.TODO(), cluster, v1.UpdateOptions{})
-		if err != nil {
-			return err
-		}
-		log.Println("Updated ClusterDeployment ✓")
-		return nil
+		return hiveset.Update(context.TODO(), cluster)
+		// _, err = hiveset.HiveV1().ClusterDeployments(clusterName).Update(
+		// 	context.TODO(), cluster, v1.UpdateOptions{})
+		// if err != nil {
+		// 	return err
+		// }
+		// log.Println("Updated ClusterDeployment ✓")
+		// return nil
 	})
 	return err
 }
 
 func MonitorClusterStatus(
 	config *rest.Config, clusterName string, jobType string, curator *clustercuratorv1.ClusterCurator) error {
-	hiveset, err := hiveclient.NewForConfig(config)
-	if err = utils.LogError(err); err != nil {
-		return err
-	}
+	// hiveset, err := hiveclient.NewForConfig(config)
+	// if err = utils.LogError(err); err != nil {
+	// 	return err
+	// }
 	client, err := utils.GetClient()
 	if err = utils.LogError(err); err != nil {
 		return err
 	}
 
-	return monitorClusterStatus(client, hiveset, clusterName, jobType, utils.GetMonitorAttempts(jobType, curator))
+	return monitorClusterStatus(client, client, clusterName, jobType, utils.GetMonitorAttempts(jobType, curator))
 }
 
-func DestroyClusterDeployment(hiveset hiveclient.Interface, clusterName string) error {
+func DestroyClusterDeployment(hiveset clientv1.Client, clusterName string) error {
 	klog.V(0).Infof("Deleting Cluster Deployment for %v\n", clusterName)
 
-	cluster, err := hiveset.HiveV1().ClusterDeployments(clusterName).Get(
-		context.TODO(), clusterName, v1.GetOptions{})
+	// cluster, err := hiveset.HiveV1().ClusterDeployments(clusterName).Get(
+	// 	context.TODO(), clusterName, v1.GetOptions{})
+
+	cluster := &hivev1.ClusterDeployment{}
+	err := hiveset.Get(context.TODO(), types.NamespacedName{
+		Name:      clusterName,
+		Namespace: clusterName,
+	}, cluster)
 
 	if err != nil && k8serrors.IsNotFound(err) {
 		klog.Warning("Could not retreive cluster " + clusterName + " may have already been deleted")
@@ -92,7 +103,13 @@ func DestroyClusterDeployment(hiveset hiveclient.Interface, clusterName string) 
 		return err
 	}
 
-	err = hiveset.HiveV1().ClusterDeployments(clusterName).Delete(context.Background(), cluster.Name, v1.DeleteOptions{})
+	//err = hiveset.HiveV1().ClusterDeployments(clusterName).Delete(context.Background(), cluster.Name, v1.DeleteOptions{})
+	err = hiveset.Delete(context.TODO(), &hivev1.ClusterDeployment{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      cluster.Name,
+			Namespace: cluster.Namespace,
+		},
+	})
 
 	if err != nil {
 		return err
@@ -101,8 +118,7 @@ func DestroyClusterDeployment(hiveset hiveclient.Interface, clusterName string) 
 	return nil
 }
 
-func monitorClusterStatus(client clientv1.Client, hiveset hiveclient.Interface, clusterName string, jobType string, monitorAttempts int) error {
-
+func monitorClusterStatus(client clientv1.Client, hiveset clientv1.Client, clusterName string, jobType string, monitorAttempts int) error {
 	klog.V(0).Info("Waiting up to " + strconv.Itoa(monitorAttempts*5) + "s for Hive Provisioning job")
 	jobName := ""
 	var cluster *hivev1.ClusterDeployment
@@ -110,8 +126,19 @@ func monitorClusterStatus(client clientv1.Client, hiveset hiveclient.Interface, 
 	for i := 1; i <= monitorAttempts; i++ {
 
 		// Refresh the clusterDeployment resource
-		cluster, err := hiveset.HiveV1().ClusterDeployments(clusterName).Get(
-			context.TODO(), clusterName, v1.GetOptions{})
+		cluster := &hivev1.ClusterDeployment{}
+		err := hiveset.Get(context.TODO(), types.NamespacedName{
+			Name:      clusterName,
+			Namespace: clusterName,
+		}, cluster)
+
+		// err := a.HiveClient.Get(context.TODO(), types.NamespacedName{Name: managedCluster.Name, Namespace: managedCluster.Name}, clusterDeployment)
+
+		// cluster, err := hiveset.HiveV1().ClusterDeployments(clusterName).Get(
+		// 	context.TODO(), clusterName, v1.GetOptions{})
+
+		// hostedCluster, err := dc.Resource(utils.HDGVR).Namespace(namespace).Get(
+		// 	context.TODO(), clusterName, v1.GetOptions{})
 
 		if err = utils.LogError(err); err != nil {
 
@@ -216,7 +243,12 @@ func monitorClusterStatus(client clientv1.Client, hiveset hiveclient.Interface, 
 
 			// If succeeded = 0 then we did not finish
 			if newJob.Status.Succeeded == 0 {
-				cluster, err = hiveset.HiveV1().ClusterDeployments(clusterName).Get(context.TODO(), clusterName, v1.GetOptions{})
+				cluster = &hivev1.ClusterDeployment{}
+				err = hiveset.Get(context.TODO(), types.NamespacedName{
+					Name:      clusterName,
+					Namespace: clusterName,
+				}, cluster)
+				//cluster, err = hiveset.HiveV1().ClusterDeployments(clusterName).Get(context.TODO(), clusterName, v1.GetOptions{})
 				klog.Warning(cluster.Status.Conditions)
 				return errors.New(jobType + "ing job \"" + jobPath + "\" failed")
 			}
