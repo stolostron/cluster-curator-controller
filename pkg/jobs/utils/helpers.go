@@ -23,7 +23,7 @@ import (
 
 	ajv1 "github.com/open-cluster-management/ansiblejob-go-lib/api/v1alpha1"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
-	hiveclient "github.com/openshift/hive/pkg/client/clientset/versioned"
+	hiveclient "github.com/openshift/hive/pkg/client/clientset/versioned" // TODO: remove
 	clustercuratorv1 "github.com/stolostron/cluster-curator-controller/pkg/api/v1beta1"
 	managedclusteractionv1beta1 "github.com/stolostron/cluster-lifecycle-api/action/v1beta1"
 	managedclusterinfov1beta1 "github.com/stolostron/cluster-lifecycle-api/clusterinfo/v1beta1"
@@ -72,6 +72,12 @@ var CCGVR = schema.GroupVersionResource{
 	Group:    "cluster.open-cluster-management.io",
 	Version:  "v1beta1",
 	Resource: "clustercurators",
+}
+
+var CDGVR = schema.GroupVersionResource{
+	Group:    "hive.openshift.io",
+	Version:  "v1",
+	Resource: "hive.openshift.io",
 }
 
 type PatchStringValue struct {
