@@ -400,7 +400,7 @@ func NeedToUpgrade(curator clustercuratorv1.ClusterCurator) (bool, error) {
 
 	if jobCondtion.Status == metav1.ConditionFalse {
 		// job is not done, do nothing
-		klog.V(2).Info("The ClusterCuratorJob of the curator %q is not done, do nothing", curator.Name)
+		klog.V(2).Info(fmt.Sprintf("The ClusterCuratorJob of the curator %q is not done, do nothing", curator.Name))
 		return false, nil
 	}
 
