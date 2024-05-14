@@ -58,23 +58,12 @@ func ActivateDeploy(hiveset clientv1.Client, clusterName string) error {
 		delete(annotations, "hive.openshift.io/reconcile-pause")
 		cluster.SetAnnotations(annotations)
 		return hiveset.Update(context.TODO(), cluster)
-		// _, err = hiveset.HiveV1().ClusterDeployments(clusterName).Update(
-		// 	context.TODO(), cluster, v1.UpdateOptions{})
-		// if err != nil {
-		// 	return err
-		// }
-		// log.Println("Updated ClusterDeployment ✓")
-		// return nil
 	})
 	return err
 }
 
 func MonitorClusterStatus(
 	config *rest.Config, clusterName string, jobType string, curator *clustercuratorv1.ClusterCurator) error {
-	// hiveset, err := hiveclient.NewForConfig(config)
-	// if err = utils.LogError(err); err != nil {
-	// 	return err
-	// }
 	client, err := utils.GetClient()
 	if err = utils.LogError(err); err != nil {
 		return err
@@ -85,9 +74,6 @@ func MonitorClusterStatus(
 
 func DestroyClusterDeployment(hiveset clientv1.Client, clusterName string) error {
 	klog.V(0).Infof("Deleting Cluster Deployment for %v\n", clusterName)
-
-	// cluster, err := hiveset.HiveV1().ClusterDeployments(clusterName).Get(
-	// 	context.TODO(), clusterName, v1.GetOptions{})
 
 	cluster := &hivev1.ClusterDeployment{}
 	err := hiveset.Get(context.TODO(), types.NamespacedName{
@@ -102,7 +88,6 @@ func DestroyClusterDeployment(hiveset clientv1.Client, clusterName string) error
 		return err
 	}
 
-	//err = hiveset.HiveV1().ClusterDeployments(clusterName).Delete(context.Background(), cluster.Name, v1.DeleteOptions{})
 	err = hiveset.Delete(context.TODO(), &hivev1.ClusterDeployment{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      cluster.Name,
@@ -130,14 +115,6 @@ func monitorClusterStatus(client clientv1.Client, hiveset clientv1.Client, clust
 			Name:      clusterName,
 			Namespace: clusterName,
 		}, cluster)
-
-		// err := a.HiveClient.Get(context.TODO(), types.NamespacedName{Name: managedCluster.Name, Namespace: managedCluster.Name}, clusterDeployment)
-
-		// cluster, err := hiveset.HiveV1().ClusterDeployments(clusterName).Get(
-		// 	context.TODO(), clusterName, v1.GetOptions{})
-
-		// hostedCluster, err := dc.Resource(utils.HDGVR).Namespace(namespace).Get(
-		// 	context.TODO(), clusterName, v1.GetOptions{})
 
 		if err = utils.LogError(err); err != nil {
 
