@@ -37,6 +37,8 @@ const ForceUpgradeAnnotation = "cluster.open-cluster-management.io/upgrade-allow
 const UpgradeClusterversionBackoffLimit = "cluster.open-cluster-management.io/upgrade-clusterversion-backoff-limit"
 const currentNVersion = "4.16.0" // Need to update every ACM release to new N version
 
+var getErr = errors.New("Failed to get remote clusterversion")
+
 func ActivateDeploy(hiveset hiveclient.Interface, clusterName string) error {
 	klog.V(0).Info("* Initiate Provisioning")
 	klog.V(2).Info("Looking up cluster " + clusterName)
@@ -423,7 +425,6 @@ func EUSUpgradeCluster(client clientv1.Client, clusterName string, curator *clus
 		}
 	}
 
-	getErr := errors.New("Failed to get remote clusterversion")
 	resultmcview := managedclusterviewv1beta1.ManagedClusterView{}
 	if err := waitForMCV(client, clusterName, clusterName, &resultmcview, getErr); err != nil {
 		return err
@@ -527,118 +528,56 @@ func EUSUpgradeCluster(client clientv1.Client, clusterName string, curator *clus
 	klog.V(0).Info("Pause 60 seconds for clusterversion to update")
 	time.Sleep(utils.PauseSixtySeconds)
 
-	// Get latest clusterversion or else the object might be stale
-	if err := client.Get(context.TODO(), types.NamespacedName{
-		Namespace: clusterName,
-		Name:      clusterName,
-	}, &mcview); err != nil {
+	var retries = 1
+	curatorAnnotations := curator.GetAnnotations()
 
-		klog.V(2).Info("Create managedclusterview " + clusterName)
-		if err := client.Create(context.TODO(), managedclusterview); err != nil {
-			return err
+	if curatorAnnotations != nil && curatorAnnotations[UpgradeClusterversionBackoffLimit] != "" {
+		backoffLimit, err := strconv.Atoi(curatorAnnotations[UpgradeClusterversionBackoffLimit])
+		if err == nil {
+			if backoffLimit > 0 && backoffLimit <= 100 {
+				retries = backoffLimit
+			} else if backoffLimit > 100 {
+				retries = 100
+			}
 		}
 	}
 
-	if err = waitForMCV(client, clusterName, clusterName, &resultmcview, getErr); err != nil {
-		return err
-	}
-	resultClusterVersion = resultmcview.Status.Result
+	klog.V(0).Info("Retries set to: " + strconv.Itoa(retries))
 
-	if resultClusterVersion.Raw != nil {
-		err := json.Unmarshal(resultClusterVersion.Raw, &clusterVersion)
-		utils.CheckError(err)
-	} else {
-		return getErr
-	}
+	successful := false
+	for i := 1; i <= retries && !successful; i++ {
+		klog.V(2).Info("Update clusterversion attempt " + strconv.Itoa(i))
 
-	cvDesiredUpdate := clusterVersion["spec"].(map[string]interface{})["desiredUpdate"]
-
-	// Always use 'force' option since we cannot get the image hash for EUS to EUS upgrade
-	// Using the version image tag to upgrade will be blocked
-	if cvDesiredUpdate != nil {
-		cvDesiredUpdate.(map[string]interface{})["version"] = updateVersion
-		cvDesiredUpdate.(map[string]interface{})["force"] = true
-		cvDesiredUpdate.(map[string]interface{})["image"] =
-			"quay.io/openshift-release-dev/ocp-release:" + updateVersion + "-multi"
-	} else {
-		// For when desiredUpdate does not exist
-		clusterVersion["spec"].(map[string]interface{})["desiredUpdate"] = map[string]interface{}{
-			"version": updateVersion,
-			"force":   true,
-			"image":   "quay.io/openshift-release-dev/ocp-release:" + updateVersion + "-multi",
-		}
-	}
-
-	// set channel when upgrading to final EUS version
-	if !isInterVersion {
-		finalSemVer, err := semver.Make(updateVersion)
+		mcaStatus, err := eusRetreiveAndUpdateClusterVersion(client,
+			clusterName, updateVersion, managedclusterview, isInterVersion)
 		if err != nil {
 			return err
 		}
-		clusterVersion["spec"].(map[string]interface{})["channel"] = "stable-" + strconv.Itoa(int(finalSemVer.Major)) +
-			"." + strconv.Itoa(int(finalSemVer.Minor))
-	}
 
-	var updateClusterVersion runtime.RawExtension
-	if clusterVersion != nil {
-		b, err := json.Marshal(clusterVersion)
-		utils.CheckError(err)
-		updateClusterVersion.Raw = b
-	}
-	klog.V(2).Info("Create managedclusteraction to update clusterversion " + clusterName)
-	managedclusteraction := &managedclusteractionv1beta1.ManagedClusterAction{
-		ObjectMeta: v1.ObjectMeta{
-			Name:      clusterName,
-			Namespace: clusterName,
-		},
-		Spec: managedclusteractionv1beta1.ActionSpec{
-			ActionType: managedclusteractionv1beta1.UpdateActionType,
-			KubeWork: &managedclusteractionv1beta1.KubeWorkSpec{
-				Resource:       "clusterversions",
-				Name:           "version",
-				Namespace:      "",
-				ObjectTemplate: updateClusterVersion,
-			},
-		},
-	}
-	if err := client.Create(context.TODO(), managedclusteraction); err != nil {
-		return err
-	}
-
-	mcaStatus := managedclusteractionv1beta1.ManagedClusterAction{}
-	for i := 1; i <= 5; i++ {
-		time.Sleep(utils.PauseFiveSeconds)
-		if err := client.Get(context.TODO(), types.NamespacedName{
-			Namespace: clusterName,
-			Name:      clusterName,
-		}, &mcaStatus); err != nil {
-			if i == 5 {
-				return err
-			}
-			klog.Warning(err)
-			continue
-		}
 		if mcaStatus.Status.Conditions != nil {
-			break
-		}
-	}
-
-	if mcaStatus.Status.Conditions != nil {
-		for _, condition := range mcaStatus.Status.Conditions {
-			if condition.Status == v1.ConditionFalse && condition.Reason == managedclusteractionv1beta1.ReasonUpdateResourceFailed {
-				klog.Warning("ManagedClusterAction failed to update remote clusterversion", mcaStatus.Status.Conditions)
-				return errors.New("Remote clusterversion update failed")
+			for _, condition := range mcaStatus.Status.Conditions {
+				if condition.Status == v1.ConditionFalse && condition.Reason == managedclusteractionv1beta1.ReasonUpdateResourceFailed {
+					klog.Warning("ManagedClusterAction failed to update remote clusterversion", mcaStatus.Status.Conditions)
+					if i == retries {
+						klog.Warning("Max attempts reached updating clusterversion")
+						return errors.New("Remote clusterversion update failed")
+					} else {
+						klog.V(2).Info("Retrying clusterversion update")
+					}
+				}
+				if condition.Status == v1.ConditionTrue && condition.Type == managedclusteractionv1beta1.ConditionActionCompleted {
+					klog.V(2).Info("Remote clusterversion updated successfully " + clusterName)
+					successful = true
+					break
+				}
 			}
-			if condition.Status == v1.ConditionTrue && condition.Type == managedclusteractionv1beta1.ConditionActionCompleted {
-				klog.V(2).Info("Remote clusterversion updated successfully " + clusterName)
-			}
+		} else if i == retries {
+			return errors.New("Remote clusterversion update failed")
 		}
-	} else {
-		return errors.New("Remote clusterversion update failed")
-	}
 
-	if err := client.Delete(context.TODO(), &mcaStatus); err != nil {
-		return err
+		if err := client.Delete(context.TODO(), &mcaStatus); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -1010,6 +949,116 @@ func retreiveAndUpdateClusterVersion(
 
 	if curator.Spec.Upgrade.Upstream != "" {
 		clusterVersion["spec"].(map[string]interface{})["upstream"] = curator.Spec.Upgrade.Upstream
+	}
+
+	var updateClusterVersion runtime.RawExtension
+	if clusterVersion != nil {
+		b, err := json.Marshal(clusterVersion)
+		utils.CheckError(err)
+		updateClusterVersion.Raw = b
+	}
+	klog.V(2).Info("Create managedclusteraction to update clusterversion " + clusterName)
+	managedclusteraction := &managedclusteractionv1beta1.ManagedClusterAction{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      clusterName,
+			Namespace: clusterName,
+		},
+		Spec: managedclusteractionv1beta1.ActionSpec{
+			ActionType: managedclusteractionv1beta1.UpdateActionType,
+			KubeWork: &managedclusteractionv1beta1.KubeWorkSpec{
+				Resource:       "clusterversions",
+				Name:           "version",
+				Namespace:      "",
+				ObjectTemplate: updateClusterVersion,
+			},
+		},
+	}
+	if err := client.Create(context.TODO(), managedclusteraction); err != nil {
+		return mcaStatus, err
+	}
+
+	for i := 1; i <= 5; i++ {
+		time.Sleep(utils.PauseFiveSeconds)
+		if err := client.Get(context.TODO(), types.NamespacedName{
+			Namespace: clusterName,
+			Name:      clusterName,
+		}, &mcaStatus); err != nil {
+			if i == 5 {
+				return mcaStatus, err
+			}
+			klog.Warning(err)
+			continue
+		}
+		if mcaStatus.Status.Conditions != nil {
+			break
+		}
+	}
+
+	return mcaStatus, nil
+}
+
+func eusRetreiveAndUpdateClusterVersion(
+	client clientv1.Client,
+	clusterName string,
+	updateVersion string,
+	managedclusterview *managedclusterviewv1beta1.ManagedClusterView,
+	isInterVersion bool) (managedclusteractionv1beta1.ManagedClusterAction, error) {
+
+	// Get latest clusterversion or else the object might be stale
+	mcview := managedclusterviewv1beta1.ManagedClusterView{}
+	mcaStatus := managedclusteractionv1beta1.ManagedClusterAction{}
+	resultmcview := managedclusterviewv1beta1.ManagedClusterView{}
+	clusterVersion := map[string]interface{}{}
+
+	if err := client.Get(context.TODO(), types.NamespacedName{
+		Namespace: clusterName,
+		Name:      clusterName,
+	}, &mcview); err != nil {
+
+		klog.V(2).Info("Create managedclusterview " + clusterName)
+		if err := client.Create(context.TODO(), managedclusterview); err != nil {
+			return mcaStatus, err
+		}
+	}
+
+	if err := waitForMCV(client, clusterName, clusterName, &resultmcview, getErr); err != nil {
+		return mcaStatus, err
+	}
+	resultClusterVersion := resultmcview.Status.Result
+
+	if resultClusterVersion.Raw != nil {
+		err := json.Unmarshal(resultClusterVersion.Raw, &clusterVersion)
+		utils.CheckError(err)
+	} else {
+		return mcaStatus, getErr
+	}
+
+	cvDesiredUpdate := clusterVersion["spec"].(map[string]interface{})["desiredUpdate"]
+
+	// Always use 'force' option since we cannot get the image hash for EUS to EUS upgrade
+	// Using the version image tag to upgrade will be blocked
+	if cvDesiredUpdate != nil {
+		cvDesiredUpdate.(map[string]interface{})["version"] = updateVersion
+		cvDesiredUpdate.(map[string]interface{})["force"] = true
+		cvDesiredUpdate.(map[string]interface{})["image"] =
+			"quay.io/openshift-release-dev/ocp-release:" + updateVersion + "-multi"
+	} else {
+		// For when desiredUpdate does not exist
+		clusterVersion["spec"].(map[string]interface{})["desiredUpdate"] = map[string]interface{}{
+			"version": updateVersion,
+			"force":   true,
+			"image":   "quay.io/openshift-release-dev/ocp-release:" + updateVersion + "-multi",
+		}
+	}
+
+	// set channel when upgrading to final EUS version
+	if !isInterVersion {
+		finalSemVer, err := semver.Make(updateVersion)
+		if err != nil {
+			return mcaStatus, err
+		}
+		clusterVersion["spec"].(map[string]interface{})["channel"] = "stable-" + strconv.Itoa(int(finalSemVer.Major)) +
+			"." + strconv.Itoa(int(finalSemVer.Minor))
 	}
 
 	var updateClusterVersion runtime.RawExtension
