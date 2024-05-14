@@ -10,7 +10,6 @@ import (
 
 	clusterversionv1 "github.com/openshift/api/config/v1"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
-	hiveconstants "github.com/openshift/hive/pkg/constants"
 	clustercuratorv1 "github.com/stolostron/cluster-curator-controller/pkg/api/v1beta1"
 	"github.com/stolostron/cluster-curator-controller/pkg/jobs/utils"
 	managedclusteractionv1beta1 "github.com/stolostron/cluster-lifecycle-api/action/v1beta1"
@@ -165,7 +164,7 @@ func TestActivateDeployNoneTruePauseAnnotation(t *testing.T) {
 		ObjectMeta: v1.ObjectMeta{
 			Name:        ClusterName,
 			Namespace:   ClusterName,
-			Annotations: map[string]string{hiveconstants.ReconcilePauseAnnotation: "false"},
+			Annotations: map[string]string{"hive.openshift.io/reconcile-pause": "false"},
 		},
 	}).WithScheme(s).Build()
 
@@ -183,7 +182,7 @@ func TestActivateDeploy(t *testing.T) {
 		ObjectMeta: v1.ObjectMeta{
 			Name:        ClusterName,
 			Namespace:   ClusterName,
-			Annotations: map[string]string{hiveconstants.ReconcilePauseAnnotation: "true"},
+			Annotations: map[string]string{"hive.openshift.io/reconcile-pause": "true"},
 		},
 	}).WithScheme(s).Build()
 

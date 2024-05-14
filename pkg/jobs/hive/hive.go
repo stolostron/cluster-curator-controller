@@ -11,7 +11,6 @@ import (
 	"time"
 
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
-	hiveconstants "github.com/openshift/hive/pkg/constants"
 	clustercuratorv1 "github.com/stolostron/cluster-curator-controller/pkg/api/v1beta1"
 	"github.com/stolostron/cluster-curator-controller/pkg/jobs/utils"
 	managedclusteractionv1beta1 "github.com/stolostron/cluster-lifecycle-api/action/v1beta1"
@@ -50,13 +49,13 @@ func ActivateDeploy(hiveset clientv1.Client, clusterName string) error {
 
 		klog.V(2).Info("Found cluster " + cluster.Name + " ✓")
 		annotations := cluster.GetAnnotations()
-		if annotations[hiveconstants.ReconcilePauseAnnotation] != "true" {
+		if annotations["hive.openshift.io/reconcile-pause"] != "true" {
 			log.Println("Handle ClusterDeployment directly")
 			return nil
 		}
 
 		// Update the pause annotation
-		delete(annotations, hiveconstants.ReconcilePauseAnnotation)
+		delete(annotations, "hive.openshift.io/reconcile-pause")
 		cluster.SetAnnotations(annotations)
 		return hiveset.Update(context.TODO(), cluster)
 		// _, err = hiveset.HiveV1().ClusterDeployments(clusterName).Update(
