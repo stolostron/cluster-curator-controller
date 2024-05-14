@@ -514,12 +514,12 @@ func GetClusterType(
 	}
 
 	// if clusterName and clusterNamespace are equal we need more info
+	//cluster, err := hiveset.HiveV1().ClusterDeployments(clusterName).Get(context.TODO(), clusterName, v1.GetOptions{})
 	cluster := &hivev1.ClusterDeployment{}
 	err := hiveset.Get(context.TODO(), types.NamespacedName{
 		Name:      clusterName,
 		Namespace: clusterName,
 	}, cluster)
-
 	if err == nil && cluster != nil {
 		return StandaloneClusterType, nil
 	} else if !k8serrors.IsNotFound(err) {
