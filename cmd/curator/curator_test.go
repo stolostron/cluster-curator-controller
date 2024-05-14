@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	hivev1 "github.com/openshift/hive/apis/hive/v1"
 	clustercuratorv1 "github.com/stolostron/cluster-curator-controller/pkg/api/v1beta1"
 	"github.com/stolostron/cluster-curator-controller/pkg/jobs/utils"
 	"github.com/stolostron/library-go/pkg/config"
@@ -222,9 +223,12 @@ func TestCuratorRunNoProviderCredentialPath(t *testing.T) {
 	}()
 
 	s := scheme.Scheme
+	hivev1.AddToScheme(s)
 	s.AddKnownTypes(utils.CCGVR.GroupVersion(), &clustercuratorv1.ClusterCurator{})
 
-	client := clientfake.NewFakeClientWithScheme(s, getClusterCurator())
+	//client := clientfake.NewFakeClientWithScheme(s, getClusterCurator())
+
+	client := clientfake.NewClientBuilder().WithRuntimeObjects(getClusterCurator()).WithScheme(s).Build()
 
 	os.Args[1] = "applycloudprovider-ansible"
 
@@ -244,7 +248,7 @@ func TestCuratorRunProviderCredentialPathEnv(t *testing.T) {
 	}()
 
 	os.Setenv("PROVIDER_CREDENTIAL_PATH", "namespace/secretname")
-	client := clientfake.NewFakeClient()
+	client := clientfake.NewClientBuilder().Build()
 
 	os.Args[1] = "applycloudprovider-ansible"
 
@@ -261,7 +265,7 @@ func TestInvokeMonitor(t *testing.T) {
 	os.Setenv("PROVIDER_CREDENTIAL_PATH", "namespace/secretname")
 	os.Args[1] = "monitor"
 
-	curatorRun(nil, clientfake.NewFakeClient(), ClusterName, ClusterName)
+	curatorRun(nil, clientfake.NewClientBuilder().Build(), ClusterName, ClusterName)
 }
 
 func TestInvokeMonitorImport(t *testing.T) {
@@ -274,7 +278,7 @@ func TestInvokeMonitorImport(t *testing.T) {
 	os.Setenv("PROVIDER_CREDENTIAL_PATH", "namespace/secretname")
 	os.Args[1] = "monitor-import"
 
-	curatorRun(nil, clientfake.NewFakeClient(), ClusterName, ClusterName)
+	curatorRun(nil, clientfake.NewClientBuilder().Build(), ClusterName, ClusterName)
 }
 
 func TestInvokeMonitorDestroy(t *testing.T) {
@@ -287,7 +291,7 @@ func TestInvokeMonitorDestroy(t *testing.T) {
 	os.Setenv("PROVIDER_CREDENTIAL_PATH", "namespace/secretname")
 	os.Args[1] = "monitor-destroy"
 
-	curatorRun(nil, clientfake.NewFakeClient(), ClusterName, ClusterName)
+	curatorRun(nil, clientfake.NewClientBuilder().Build(), ClusterName, ClusterName)
 }
 
 func TestUpgradFailed(t *testing.T) {
