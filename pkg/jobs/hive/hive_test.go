@@ -10,8 +10,6 @@ import (
 
 	clusterversionv1 "github.com/openshift/api/config/v1"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
-	hivefake "github.com/openshift/hive/pkg/client/clientset/versioned/fake"
-	hiveconstants "github.com/openshift/hive/pkg/constants"
 	clustercuratorv1 "github.com/stolostron/cluster-curator-controller/pkg/api/v1beta1"
 	"github.com/stolostron/cluster-curator-controller/pkg/jobs/utils"
 	managedclusteractionv1beta1 "github.com/stolostron/cluster-lifecycle-api/action/v1beta1"
@@ -42,7 +40,7 @@ func getClusterCurator() *clustercuratorv1.ClusterCurator {
 			DesiredCuration: "install",
 			Install: clustercuratorv1.Hooks{
 				Prehook: []clustercuratorv1.Hook{
-					clustercuratorv1.Hook{
+					{
 						Name: "Service now App Update",
 						ExtraVars: &runtime.RawExtension{
 							Raw: []byte(`{"variable1": "1","variable2": "2"}`),
@@ -50,7 +48,7 @@ func getClusterCurator() *clustercuratorv1.ClusterCurator {
 					},
 				},
 				Posthook: []clustercuratorv1.Hook{
-					clustercuratorv1.Hook{
+					{
 						Name: "Service now App Update",
 						ExtraVars: &runtime.RawExtension{
 							Raw: []byte(`{"variable1": "3","variable2": "4"}`),
@@ -73,7 +71,7 @@ func getUpgradeClusterCurator() *clustercuratorv1.ClusterCurator {
 			Upgrade: clustercuratorv1.UpgradeHooks{
 				DesiredUpdate: "4.5.13",
 				Prehook: []clustercuratorv1.Hook{
-					clustercuratorv1.Hook{
+					{
 						Name: "Service now App Update",
 						ExtraVars: &runtime.RawExtension{
 							Raw: []byte(`{"variable1": "1","variable2": "2"}`),
@@ -81,7 +79,7 @@ func getUpgradeClusterCurator() *clustercuratorv1.ClusterCurator {
 					},
 				},
 				Posthook: []clustercuratorv1.Hook{
-					clustercuratorv1.Hook{
+					{
 						Name: "Service now App Update",
 						ExtraVars: &runtime.RawExtension{
 							Raw: []byte(`{"variable1": "3","variable2": "4"}`),
@@ -127,7 +125,9 @@ func getManagedClusterInfo() *managedclusterinfov1beta1.ManagedClusterInfo {
 }
 func TestActivateDeployNoCD(t *testing.T) {
 
-	hiveset := hivefake.NewSimpleClientset()
+	s := scheme.Scheme
+	hivev1.AddToScheme(s)
+	hiveset := clientfake.NewClientBuilder().WithScheme(s).Build()
 
 	t.Log("No ClusterDeployment")
 	assert.NotNil(t, ActivateDeploy(hiveset, ClusterName),
@@ -136,7 +136,9 @@ func TestActivateDeployNoCD(t *testing.T) {
 
 func TestActivateDeployNoPauseAnnotation(t *testing.T) {
 
-	hiveset := hivefake.NewSimpleClientset(&hivev1.ClusterDeployment{
+	s := scheme.Scheme
+	hivev1.AddToScheme(s)
+	hiveset := clientfake.NewClientBuilder().WithRuntimeObjects(&hivev1.ClusterDeployment{
 		TypeMeta: v1.TypeMeta{
 			APIVersion: "v1",
 		},
@@ -144,7 +146,7 @@ func TestActivateDeployNoPauseAnnotation(t *testing.T) {
 			Name:      ClusterName,
 			Namespace: ClusterName,
 		},
-	})
+	}).WithScheme(s).Build()
 
 	t.Log("ClusterDeployment with no Pause annotation")
 	assert.Nil(t, ActivateDeploy(hiveset, ClusterName),
@@ -152,32 +154,36 @@ func TestActivateDeployNoPauseAnnotation(t *testing.T) {
 }
 
 func TestActivateDeployNoneTruePauseAnnotation(t *testing.T) {
-	hiveset := hivefake.NewSimpleClientset(&hivev1.ClusterDeployment{
+	s := scheme.Scheme
+	hivev1.AddToScheme(s)
+	hiveset := clientfake.NewClientBuilder().WithRuntimeObjects(&hivev1.ClusterDeployment{
 		TypeMeta: v1.TypeMeta{
 			APIVersion: "v1",
 		},
 		ObjectMeta: v1.ObjectMeta{
 			Name:        ClusterName,
 			Namespace:   ClusterName,
-			Annotations: map[string]string{hiveconstants.ReconcilePauseAnnotation: "false"},
+			Annotations: map[string]string{"hive.openshift.io/reconcile-pause": "false"},
 		},
-	})
+	}).WithScheme(s).Build()
 
 	assert.Nil(t, ActivateDeploy(hiveset, ClusterName),
 		"err Nil when ClusterDeployment with non true pause annotation")
 }
 
 func TestActivateDeploy(t *testing.T) {
-	hiveset := hivefake.NewSimpleClientset(&hivev1.ClusterDeployment{
+	s := scheme.Scheme
+	hivev1.AddToScheme(s)
+	hiveset := clientfake.NewClientBuilder().WithRuntimeObjects(&hivev1.ClusterDeployment{
 		TypeMeta: v1.TypeMeta{
 			APIVersion: "v1",
 		},
 		ObjectMeta: v1.ObjectMeta{
 			Name:        ClusterName,
 			Namespace:   ClusterName,
-			Annotations: map[string]string{hiveconstants.ReconcilePauseAnnotation: "true"},
+			Annotations: map[string]string{"hive.openshift.io/reconcile-pause": "true"},
 		},
-	})
+	}).WithScheme(s).Build()
 
 	t.Log("ClusterDeployment with true pause annotation")
 	assert.Nil(t, ActivateDeploy(hiveset, ClusterName),
@@ -233,7 +239,7 @@ func getUninstallJob() *batchv1.Job {
 
 func TestMonitorDeployStatusNoClusterDeployment(t *testing.T) {
 
-	hiveset := hivefake.NewSimpleClientset()
+	hiveset := clientfake.NewClientBuilder().Build()
 
 	assert.NotNil(t, monitorClusterStatus(nil, hiveset, ClusterName, utils.Installing, testTimeout),
 		"err is not nil, when cluster provisioning has a condition")
@@ -249,7 +255,7 @@ func TestMonitorDeployStatusProvisionStoppedCondition(t *testing.T) {
 		},
 	}
 
-	hiveset := hivefake.NewSimpleClientset(cd)
+	hiveset := clientfake.NewClientBuilder().WithRuntimeObjects(cd).Build()
 
 	assert.NotNil(t, monitorClusterStatus(nil, hiveset, ClusterName, utils.Installing, testTimeout),
 		"err is not nil, when cluster provisioning has a condition")
@@ -265,7 +271,7 @@ func TestMonitorDeployStatusRequirementsMetCondition(t *testing.T) {
 		},
 	}
 
-	hiveset := hivefake.NewSimpleClientset(cd)
+	hiveset := clientfake.NewClientBuilder().WithRuntimeObjects(cd).Build()
 
 	assert.NotNil(t, monitorClusterStatus(nil, hiveset, ClusterName, utils.Installing, testTimeout),
 		"err is not nil, when cluster provisioning has a condition")
@@ -275,7 +281,7 @@ func TestMonitorDeployNoJobTimeout(t *testing.T) {
 
 	cd := getClusterDeployment()
 
-	hiveset := hivefake.NewSimpleClientset(cd)
+	hiveset := clientfake.NewClientBuilder().WithRuntimeObjects(cd).Build()
 
 	assert.NotNil(t, monitorClusterStatus(nil, hiveset, ClusterName, utils.Installing, testTimeout),
 		"err is not nil, when cluster provisioning has no job created")
@@ -290,16 +296,15 @@ func TestMonitorDeployStatusJobFailed(t *testing.T) {
 	job := getProvisionJob()
 	job.Status.Succeeded = 0
 
-	hiveset := hivefake.NewSimpleClientset(cd)
-
 	cc := getClusterCurator()
 
 	s := scheme.Scheme
+	hivev1.AddToScheme(s)
 	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
 
-	client := clientfake.NewFakeClientWithScheme(s, cc, job)
+	client := clientfake.NewClientBuilder().WithRuntimeObjects(cd, cc, job).WithScheme(s).Build()
 
-	assert.NotNil(t, monitorClusterStatus(client, hiveset, ClusterName, utils.Installing, testTimeout),
+	assert.NotNil(t, monitorClusterStatus(client, client, ClusterName, utils.Installing, testTimeout),
 		"err is not nil, when cluster provisioning has a condition")
 }
 
@@ -307,7 +312,7 @@ func TestMonitorDeployStatusJobCompletedWithSuccess(t *testing.T) {
 
 	cd := getClusterDeployment()
 	cd.Status.Conditions = []hivev1.ClusterDeploymentCondition{
-		hivev1.ClusterDeploymentCondition{
+		{
 			Message: "Provisioned",
 			Reason:  "SuccessfulProvision",
 		},
@@ -317,23 +322,23 @@ func TestMonitorDeployStatusJobCompletedWithSuccess(t *testing.T) {
 	}
 	cc := getClusterCurator()
 
-	hiveset := hivefake.NewSimpleClientset(cd)
 	s := scheme.Scheme
+	hivev1.AddToScheme(s)
 	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
 
-	client := clientfake.NewFakeClientWithScheme(s, cc)
+	client := clientfake.NewClientBuilder().WithRuntimeObjects(cd, cc).WithScheme(s).Build()
 
 	// Put a delay to complete the ClusterDeployment to test the wait loop
 	go func() {
 		time.Sleep(utils.PauseFiveSeconds)
 		cd.Status.WebConsoleURL = "https://my-cluster"
 
-		hiveset.HiveV1().ClusterDeployments(ClusterName).Update(context.TODO(), cd, v1.UpdateOptions{})
+		client.Update(context.TODO(), cd)
 		t.Log("ClusterDeployment webConsoleURL applied")
 	}()
 
 	assert.Equal(t, len(cc.Status.Conditions), 0, "Should be emtpy")
-	assert.Nil(t, monitorClusterStatus(client, hiveset, ClusterName, utils.Installing, testTimeout),
+	assert.Nil(t, monitorClusterStatus(client, client, ClusterName, utils.Installing, testTimeout),
 		"err is nil, when cluster provisioning is successful")
 
 	err := client.Get(context.Background(), types.NamespacedName{Namespace: ClusterName, Name: ClusterName}, cc)
@@ -354,10 +359,11 @@ func TestMonitorDeployStatusJobComplete(t *testing.T) {
 
 	cc := getClusterCurator()
 
-	hiveset := hivefake.NewSimpleClientset(cd)
 	s := scheme.Scheme
+	hivev1.AddToScheme(s)
 	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
-	client := clientfake.NewFakeClientWithScheme(s, cc)
+
+	client := clientfake.NewClientBuilder().WithRuntimeObjects(cd, cc).WithScheme(s).Build()
 
 	// Put a delay to complete the job to test the wait loop
 	go func() {
@@ -372,10 +378,10 @@ func TestMonitorDeployStatusJobComplete(t *testing.T) {
 				Reason:  "SuccessfulProvision",
 			},
 		}
-		hiveset.HiveV1().ClusterDeployments(ClusterName).Update(context.TODO(), cd, v1.UpdateOptions{})
+		client.Update(context.TODO(), cd)
 	}()
 
-	assert.Nil(t, monitorClusterStatus(client, hiveset, ClusterName, utils.Installing, testTimeout),
+	assert.Nil(t, monitorClusterStatus(client, client, ClusterName, utils.Installing, testTimeout),
 		"err is not nil, when cluster provisioning is successful")
 }
 
@@ -386,27 +392,28 @@ func TestMonitorDeployStatusJobDelayedComplete(t *testing.T) {
 		Name: ClusterName + "-12345", // The monitor adds the -provision suffix
 	}
 
-	hiveset := hivefake.NewSimpleClientset(cd)
 	s := scheme.Scheme
+	hivev1.AddToScheme(s)
 	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
-	client := clientfake.NewFakeClientWithScheme(s, getClusterCurator())
+
+	client := clientfake.NewClientBuilder().WithRuntimeObjects(cd, getClusterCurator()).WithScheme(s).Build()
 
 	// Put a delay to complete the job to test the wait loop
 	go func() {
 		time.Sleep(utils.PauseFiveSeconds)
 		cd.Status.WebConsoleURL = "https://my-cluster"
 		cd.Status.Conditions = []hivev1.ClusterDeploymentCondition{
-			hivev1.ClusterDeploymentCondition{
+			{
 				Message: "Provisioned",
 				Reason:  "SuccessfulProvision",
 			},
 		}
 		t.Log("Created the Job resource and update Cluster Deployment as complete")
 		client.Create(context.Background(), getProvisionJob())
-		hiveset.HiveV1().ClusterDeployments(ClusterName).Update(context.TODO(), cd, v1.UpdateOptions{})
+		client.Update(context.TODO(), cd)
 	}()
 
-	assert.Nil(t, monitorClusterStatus(client, hiveset, ClusterName, utils.Installing, testTimeout),
+	assert.Nil(t, monitorClusterStatus(client, client, ClusterName, utils.Installing, testTimeout),
 		"err is nil, when cluster provisioning is successful")
 }
 
@@ -417,17 +424,18 @@ func TestMonitorDestroyStatusJobDelayedComplete(t *testing.T) {
 		Name: ClusterName + "-12345", // The monitor adds the -provision suffix
 	}
 
-	hiveset := hivefake.NewSimpleClientset(cd)
 	s := scheme.Scheme
+	hivev1.AddToScheme(s)
 	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
-	client := clientfake.NewFakeClientWithScheme(s, getClusterCurator())
+
+	client := clientfake.NewClientBuilder().WithRuntimeObjects(cd, getClusterCurator()).WithScheme(s).Build()
 
 	// Put a delay to complete the job to test the wait loop
 	go func() {
 		time.Sleep(utils.PauseFiveSeconds)
 		cd.Status.WebConsoleURL = "https://my-cluster"
 		cd.Status.Conditions = []hivev1.ClusterDeploymentCondition{
-			hivev1.ClusterDeploymentCondition{
+			{
 				Message: "Provisioned",
 				Reason:  "SuccessfulProvision",
 			},
@@ -439,28 +447,35 @@ func TestMonitorDestroyStatusJobDelayedComplete(t *testing.T) {
 		// client.Delete(context.Background(), uninstallJob)
 	}()
 
-	assert.Nil(t, monitorClusterStatus(client, hiveset, ClusterName, utils.Destroying, testTimeout),
+	assert.Nil(t, monitorClusterStatus(client, client, ClusterName, utils.Destroying, testTimeout),
 		"err is nil, when cluster uninstall is successful")
 }
 
 func TestMonitorDestroyClusterDeployementMissing(t *testing.T) {
+	cd := getClusterDeployment()
 
-	hiveset := hivefake.NewSimpleClientset()
+	s := scheme.Scheme
+	hivev1.AddToScheme(s)
+
+	client := clientfake.NewClientBuilder().WithRuntimeObjects(cd).WithScheme(s).Build()
 
 	// Should not return an error, just logs a warning
-	assert.Nil(t, DestroyClusterDeployment(hiveset, ClusterName))
+	assert.Nil(t, DestroyClusterDeployment(client, cd.GetName()))
 }
 
 func TestMonitorDestroyClusterDeployement(t *testing.T) {
-
 	cd := getClusterDeployment()
+	s := scheme.Scheme
+	hivev1.AddToScheme(s)
 
-	hiveset := hivefake.NewSimpleClientset(cd)
-
+	client := clientfake.NewClientBuilder().WithRuntimeObjects(cd).WithScheme(s).Build()
 	// Should not return an error, just logs a warning
-	assert.Nil(t, DestroyClusterDeployment(hiveset, ClusterName))
+	assert.Nil(t, DestroyClusterDeployment(client, cd.GetName()))
 
-	_, err := hiveset.HiveV1().ClusterDeployments(ClusterName).Get(context.Background(), ClusterName, v1.GetOptions{})
+	err := client.Get(context.TODO(), types.NamespacedName{
+		Name:      cd.GetName(),
+		Namespace: cd.GetName(),
+	}, cd)
 	assert.Contains(t, err.Error(), " not found")
 }
 
@@ -471,17 +486,18 @@ func TestMonitorDestroyStatusJobDelayedDeleteOnFinish(t *testing.T) {
 		Name: ClusterName + "-12345", // The monitor adds the -provision suffix
 	}
 
-	hiveset := hivefake.NewSimpleClientset(cd)
 	s := scheme.Scheme
+	hivev1.AddToScheme(s)
 	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
-	client := clientfake.NewFakeClientWithScheme(s, getClusterCurator())
+
+	client := clientfake.NewClientBuilder().WithRuntimeObjects(cd, getClusterCurator()).WithScheme(s).Build()
 
 	// Put a delay to complete the job to test the wait loop
 	go func() {
 		time.Sleep(utils.PauseFiveSeconds)
 		cd.Status.WebConsoleURL = "https://my-cluster"
 		cd.Status.Conditions = []hivev1.ClusterDeploymentCondition{
-			hivev1.ClusterDeploymentCondition{
+			{
 				Message: "Provisioned",
 				Reason:  "SuccessfulProvision",
 			},
@@ -495,7 +511,7 @@ func TestMonitorDestroyStatusJobDelayedDeleteOnFinish(t *testing.T) {
 		client.Delete(context.Background(), uninstallJob)
 	}()
 
-	assert.Nil(t, monitorClusterStatus(client, hiveset, ClusterName, utils.Destroying, testTimeout),
+	assert.Nil(t, monitorClusterStatus(client, client, ClusterName, utils.Destroying, testTimeout),
 		"err is nil, when cluster uninstall is successful")
 }
 
@@ -827,9 +843,7 @@ func TestUpgradeClusterWithChannelUpstream(t *testing.T) {
 	}
 	b, _ := json.Marshal(clusterversion)
 
-	client := clientfake.NewFakeClientWithScheme(s, []runtime.Object{
-		clustercurator, getManagedClusterInfo(),
-	}...)
+	client := clientfake.NewClientBuilder().WithRuntimeObjects(clustercurator, getManagedClusterInfo()).WithScheme(s).Build()
 
 	go func() {
 		for i := 0; i < 10; i++ {
@@ -983,9 +997,8 @@ func TestMonitorUpgradeStatusJobComplete(t *testing.T) {
 
 	s := scheme.Scheme
 	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
-	client := clientfake.NewFakeClientWithScheme(s, []runtime.Object{
-		cc, managedclusterview,
-	}...)
+	s.AddKnownTypes(managedclusterviewv1beta1.SchemeGroupVersion, &managedclusterviewv1beta1.ManagedClusterView{})
+	client := clientfake.NewClientBuilder().WithRuntimeObjects([]runtime.Object{cc, managedclusterview}...).WithScheme(s).Build()
 
 	// Put a delay to complete the job to test the wait loop
 	go func() {
@@ -1054,9 +1067,9 @@ func TestUpgradeClusterForceUpgradeCSVHasDesiredUpdate(t *testing.T) {
 
 	b, _ := json.Marshal(currentClusterVersion)
 
-	client := clientfake.NewFakeClientWithScheme(s, []runtime.Object{
+	client := clientfake.NewClientBuilder().WithRuntimeObjects([]runtime.Object{
 		clustercurator, getManagedClusterInfo(),
-	}...)
+	}...).WithScheme(s).Build()
 
 	go func() {
 		for i := 0; i < 10; i++ {
@@ -1167,12 +1180,12 @@ func TestUpgradeClusterForceUpgradeCSVNoDesiredUpdate(t *testing.T) {
 
 	b, _ := json.Marshal(currentClusterVersion)
 
-	client := clientfake.NewFakeClientWithScheme(s, []runtime.Object{
+	client := clientfake.NewClientBuilder().WithRuntimeObjects([]runtime.Object{
 		clustercurator, getManagedClusterInfo(),
-	}...)
+	}...).WithScheme(s).Build()
 
 	go func() {
-		for i := 0; i < 10; i++ {
+		for i := 0; i < 100; i++ {
 			time.Sleep(1 * time.Second)
 			resultmcview := managedclusterviewv1beta1.ManagedClusterView{}
 			err := client.Get(context.TODO(), types.NamespacedName{
@@ -1205,7 +1218,7 @@ func TestUpgradeClusterForceUpgradeCSVNoDesiredUpdate(t *testing.T) {
 	}()
 
 	go func() {
-		for i := 0; i < 10; i++ {
+		for i := 0; i < 100; i++ {
 			time.Sleep(1 * time.Second)
 			resultmca := managedclusteractionv1beta1.ManagedClusterAction{}
 			err := client.Get(context.TODO(), types.NamespacedName{

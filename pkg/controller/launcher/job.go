@@ -158,14 +158,14 @@ func getBatchJob(
 		}
 
 		jobInitContainers := []corev1.Container{
-			corev1.Container{
+			{
 				Name:            UpgradeCluster,
 				Image:           imageURI,
 				Command:         append([]string{CurCmd, UpgradeCluster, clusterName}),
 				ImagePullPolicy: corev1.PullAlways,
 				Resources:       resourceSettings,
 			},
-			corev1.Container{
+			{
 				Name:            MonUpgrade,
 				Image:           imageURI,
 				Command:         append([]string{CurCmd, MonUpgrade, clusterName}),
@@ -185,28 +185,28 @@ func getBatchJob(
 			}
 
 			jobInitContainers = []corev1.Container{
-				corev1.Container{
+				{
 					Name:            InterUpgradeCluster,
 					Image:           imageURI,
 					Command:         append([]string{CurCmd, InterUpgradeCluster, clusterName}),
 					ImagePullPolicy: corev1.PullAlways,
 					Resources:       resourceSettings,
 				},
-				corev1.Container{
+				{
 					Name:            InterMonUpgrade,
 					Image:           imageURI,
 					Command:         append([]string{CurCmd, InterMonUpgrade, clusterName}),
 					ImagePullPolicy: corev1.PullAlways,
 					Resources:       resourceSettings,
 				},
-				corev1.Container{
+				{
 					Name:            FinalUpgradeCluster,
 					Image:           imageURI,
 					Command:         append([]string{CurCmd, FinalUpgradeCluster, clusterName}),
 					ImagePullPolicy: corev1.PullAlways,
 					Resources:       resourceSettings,
 				},
-				corev1.Container{
+				{
 					Name:            FinalMonUpgrade,
 					Image:           imageURI,
 					Command:         append([]string{CurCmd, MonUpgrade, clusterName}),

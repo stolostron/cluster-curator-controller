@@ -12,7 +12,6 @@ import (
 
 	"k8s.io/klog/v2"
 
-	hiveclient "github.com/openshift/hive/pkg/client/clientset/versioned"
 	clustercuratorv1 "github.com/stolostron/cluster-curator-controller/pkg/api/v1beta1"
 	"github.com/stolostron/cluster-curator-controller/pkg/controller/launcher"
 	"github.com/stolostron/cluster-curator-controller/pkg/jobs/ansible"
@@ -188,16 +187,14 @@ func curatorRun(config *rest.Config, client clientv1.Client, clusterName string,
 	}
 
 	if jobChoice == "activate-and-monitor" {
-		hiveset, err := hiveclient.NewForConfig(config)
-		utils.CheckError(err)
 		dynclient, dErr := utils.GetDynset(nil)
 		utils.CheckError(dErr)
 
-		clusterType, ctErr := utils.GetClusterType(hiveset, dynclient, clusterName, clusterNamespace, false)
+		clusterType, ctErr := utils.GetClusterType(client, dynclient, clusterName, clusterNamespace, false)
 		utils.CheckError(ctErr)
 
 		if clusterType == utils.StandaloneClusterType {
-			if err = hive.ActivateDeploy(hiveset, clusterName); err != nil {
+			if err = hive.ActivateDeploy(client, clusterName); err != nil {
 				utils.CheckError(utils.RecordFailedCuratorStatusCondition(
 					client,
 					clusterName,
@@ -224,12 +221,10 @@ func curatorRun(config *rest.Config, client clientv1.Client, clusterName string,
 	}
 
 	if jobChoice == "monitor" || jobChoice == "activate-and-monitor" {
-		hiveset, err := hiveclient.NewForConfig(config)
-		utils.CheckError(err)
 		dynclient, dErr := utils.GetDynset(nil)
 		utils.CheckError(dErr)
 
-		clusterType, ctErr := utils.GetClusterType(hiveset, dynclient, clusterName, clusterNamespace, false)
+		clusterType, ctErr := utils.GetClusterType(client, dynclient, clusterName, clusterNamespace, false)
 		utils.CheckError(ctErr)
 
 		if clusterType == utils.StandaloneClusterType {
@@ -281,16 +276,14 @@ func curatorRun(config *rest.Config, client clientv1.Client, clusterName string,
 	}
 
 	if jobChoice == "destroy-cluster" {
-		hiveset, err := hiveclient.NewForConfig(config)
-		utils.CheckError(err)
 		dynclient, dErr := utils.GetDynset(nil)
 		utils.CheckError(dErr)
 
-		clusterType, ctErr := utils.GetClusterType(hiveset, dynclient, clusterName, clusterNamespace, false)
+		clusterType, ctErr := utils.GetClusterType(client, dynclient, clusterName, clusterNamespace, false)
 		utils.CheckError(ctErr)
 
 		if clusterType == utils.StandaloneClusterType {
-			if err = hive.DestroyClusterDeployment(hiveset, clusterName); err != nil {
+			if err = hive.DestroyClusterDeployment(client, clusterName); err != nil {
 				utils.CheckError(utils.RecordFailedCuratorStatusCondition(
 					client,
 					clusterName,
@@ -329,12 +322,10 @@ func curatorRun(config *rest.Config, client clientv1.Client, clusterName string,
 	}
 
 	if jobChoice == "monitor-destroy" {
-		hiveset, err := hiveclient.NewForConfig(config)
-		utils.CheckError(err)
 		dynclient, dErr := utils.GetDynset(nil)
 		utils.CheckError(dErr)
 
-		clusterType, ctErr := utils.GetClusterType(hiveset, dynclient, clusterName, clusterNamespace, false)
+		clusterType, ctErr := utils.GetClusterType(client, dynclient, clusterName, clusterNamespace, false)
 		utils.CheckError(ctErr)
 
 		if clusterType == utils.StandaloneClusterType {
@@ -388,12 +379,10 @@ func curatorRun(config *rest.Config, client clientv1.Client, clusterName string,
 	}
 
 	if jobChoice == "upgrade-cluster" {
-		hiveset, err := hiveclient.NewForConfig(config)
-		utils.CheckError(err)
 		dynclient, dErr := utils.GetDynset(nil)
 		utils.CheckError(dErr)
 
-		clusterType, ctErr := utils.GetClusterType(hiveset, dynclient, clusterName, clusterNamespace, true)
+		clusterType, ctErr := utils.GetClusterType(client, dynclient, clusterName, clusterNamespace, true)
 		utils.CheckError(ctErr)
 
 		if clusterType == utils.StandaloneClusterType {
@@ -458,12 +447,10 @@ func curatorRun(config *rest.Config, client clientv1.Client, clusterName string,
 	}
 
 	if jobChoice == "monitor-upgrade" {
-		hiveset, err := hiveclient.NewForConfig(config)
-		utils.CheckError(err)
 		dynclient, dErr := utils.GetDynset(nil)
 		utils.CheckError(dErr)
 
-		clusterType, ctErr := utils.GetClusterType(hiveset, dynclient, clusterName, clusterNamespace, true)
+		clusterType, ctErr := utils.GetClusterType(client, dynclient, clusterName, clusterNamespace, true)
 		utils.CheckError(ctErr)
 
 		if clusterType == utils.StandaloneClusterType {

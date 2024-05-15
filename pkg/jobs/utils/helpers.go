@@ -23,7 +23,6 @@ import (
 
 	ajv1 "github.com/open-cluster-management/ansiblejob-go-lib/api/v1alpha1"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
-	hiveclient "github.com/openshift/hive/pkg/client/clientset/versioned"
 	clustercuratorv1 "github.com/stolostron/cluster-curator-controller/pkg/api/v1beta1"
 	managedclusteractionv1beta1 "github.com/stolostron/cluster-lifecycle-api/action/v1beta1"
 	managedclusterinfov1beta1 "github.com/stolostron/cluster-lifecycle-api/clusterinfo/v1beta1"
@@ -72,6 +71,12 @@ var CCGVR = schema.GroupVersionResource{
 	Group:    "cluster.open-cluster-management.io",
 	Version:  "v1beta1",
 	Resource: "clustercurators",
+}
+
+var CDGVR = schema.GroupVersionResource{
+	Group:    "hive.openshift.io",
+	Version:  "v1",
+	Resource: "hive.openshift.io",
 }
 
 type PatchStringValue struct {
@@ -395,7 +400,7 @@ func NeedToUpgrade(curator clustercuratorv1.ClusterCurator) (bool, error) {
 
 	if jobCondtion.Status == metav1.ConditionFalse {
 		// job is not done, do nothing
-		klog.V(2).Info("The ClusterCuratorJob of the curator %q is not done, do nothing", curator.Name)
+		klog.V(2).Info(fmt.Sprintf("The ClusterCuratorJob of the curator %q is not done, do nothing", curator.Name))
 		return false, nil
 	}
 
@@ -498,7 +503,7 @@ func parseVersionInfo(msg string) (channel, upstream string, semversion semver.V
 }
 
 func GetClusterType(
-	hiveset hiveclient.Interface,
+	hiveset clientv1.Client,
 	dc dynamic.Interface,
 	clusterName string,
 	clusterNamespace string,
@@ -509,7 +514,11 @@ func GetClusterType(
 	}
 
 	// if clusterName and clusterNamespace are equal we need more info
-	cluster, err := hiveset.HiveV1().ClusterDeployments(clusterName).Get(context.TODO(), clusterName, v1.GetOptions{})
+	cluster := &hivev1.ClusterDeployment{}
+	err := hiveset.Get(context.TODO(), types.NamespacedName{
+		Name:      clusterName,
+		Namespace: clusterName,
+	}, cluster)
 	if err == nil && cluster != nil {
 		return StandaloneClusterType, nil
 	} else if !k8serrors.IsNotFound(err) {
