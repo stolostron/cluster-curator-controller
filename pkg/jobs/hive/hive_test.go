@@ -241,7 +241,7 @@ func TestMonitorDeployStatusNoClusterDeployment(t *testing.T) {
 
 	hiveset := clientfake.NewClientBuilder().Build()
 
-	assert.NotNil(t, monitorClusterStatus(nil, hiveset, ClusterName, utils.Installing, testTimeout),
+	assert.NotNil(t, monitorClusterStatus(hiveset, ClusterName, utils.Installing, testTimeout),
 		"err is not nil, when cluster provisioning has a condition")
 }
 
@@ -257,7 +257,7 @@ func TestMonitorDeployStatusProvisionStoppedCondition(t *testing.T) {
 
 	hiveset := clientfake.NewClientBuilder().WithRuntimeObjects(cd).Build()
 
-	assert.NotNil(t, monitorClusterStatus(nil, hiveset, ClusterName, utils.Installing, testTimeout),
+	assert.NotNil(t, monitorClusterStatus(hiveset, ClusterName, utils.Installing, testTimeout),
 		"err is not nil, when cluster provisioning has a condition")
 }
 
@@ -273,7 +273,7 @@ func TestMonitorDeployStatusRequirementsMetCondition(t *testing.T) {
 
 	hiveset := clientfake.NewClientBuilder().WithRuntimeObjects(cd).Build()
 
-	assert.NotNil(t, monitorClusterStatus(nil, hiveset, ClusterName, utils.Installing, testTimeout),
+	assert.NotNil(t, monitorClusterStatus(hiveset, ClusterName, utils.Installing, testTimeout),
 		"err is not nil, when cluster provisioning has a condition")
 }
 
@@ -283,7 +283,7 @@ func TestMonitorDeployNoJobTimeout(t *testing.T) {
 
 	hiveset := clientfake.NewClientBuilder().WithRuntimeObjects(cd).Build()
 
-	assert.NotNil(t, monitorClusterStatus(nil, hiveset, ClusterName, utils.Installing, testTimeout),
+	assert.NotNil(t, monitorClusterStatus(hiveset, ClusterName, utils.Installing, testTimeout),
 		"err is not nil, when cluster provisioning has no job created")
 }
 func TestMonitorDeployStatusJobFailed(t *testing.T) {
@@ -304,7 +304,7 @@ func TestMonitorDeployStatusJobFailed(t *testing.T) {
 
 	client := clientfake.NewClientBuilder().WithRuntimeObjects(cd, cc, job).WithScheme(s).Build()
 
-	assert.NotNil(t, monitorClusterStatus(client, client, ClusterName, utils.Installing, testTimeout),
+	assert.NotNil(t, monitorClusterStatus(client, ClusterName, utils.Installing, testTimeout),
 		"err is not nil, when cluster provisioning has a condition")
 }
 
@@ -338,7 +338,7 @@ func TestMonitorDeployStatusJobCompletedWithSuccess(t *testing.T) {
 	}()
 
 	assert.Equal(t, len(cc.Status.Conditions), 0, "Should be emtpy")
-	assert.Nil(t, monitorClusterStatus(client, client, ClusterName, utils.Installing, testTimeout),
+	assert.Nil(t, monitorClusterStatus(client, ClusterName, utils.Installing, testTimeout),
 		"err is nil, when cluster provisioning is successful")
 
 	err := client.Get(context.Background(), types.NamespacedName{Namespace: ClusterName, Name: ClusterName}, cc)
@@ -381,7 +381,7 @@ func TestMonitorDeployStatusJobComplete(t *testing.T) {
 		client.Update(context.TODO(), cd)
 	}()
 
-	assert.Nil(t, monitorClusterStatus(client, client, ClusterName, utils.Installing, testTimeout),
+	assert.Nil(t, monitorClusterStatus(client, ClusterName, utils.Installing, testTimeout),
 		"err is not nil, when cluster provisioning is successful")
 }
 
@@ -413,7 +413,7 @@ func TestMonitorDeployStatusJobDelayedComplete(t *testing.T) {
 		client.Update(context.TODO(), cd)
 	}()
 
-	assert.Nil(t, monitorClusterStatus(client, client, ClusterName, utils.Installing, testTimeout),
+	assert.Nil(t, monitorClusterStatus(client, ClusterName, utils.Installing, testTimeout),
 		"err is nil, when cluster provisioning is successful")
 }
 
@@ -447,7 +447,7 @@ func TestMonitorDestroyStatusJobDelayedComplete(t *testing.T) {
 		// client.Delete(context.Background(), uninstallJob)
 	}()
 
-	assert.Nil(t, monitorClusterStatus(client, client, ClusterName, utils.Destroying, testTimeout),
+	assert.Nil(t, monitorClusterStatus(client, ClusterName, utils.Destroying, testTimeout),
 		"err is nil, when cluster uninstall is successful")
 }
 
@@ -511,7 +511,7 @@ func TestMonitorDestroyStatusJobDelayedDeleteOnFinish(t *testing.T) {
 		client.Delete(context.Background(), uninstallJob)
 	}()
 
-	assert.Nil(t, monitorClusterStatus(client, client, ClusterName, utils.Destroying, testTimeout),
+	assert.Nil(t, monitorClusterStatus(client, ClusterName, utils.Destroying, testTimeout),
 		"err is nil, when cluster uninstall is successful")
 }
 
@@ -1242,4 +1242,442 @@ func TestUpgradeClusterForceUpgradeCSVNoDesiredUpdate(t *testing.T) {
 	}()
 
 	assert.Nil(t, UpgradeCluster(client, ClusterName, clustercurator), "Upgrade started successfully to non-recommended version")
+}
+
+func TestEUSIntermediateUpgrade(t *testing.T) {
+	s := scheme.Scheme
+	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
+	s.AddKnownTypes(managedclusterinfov1beta1.SchemeGroupVersion, &managedclusterinfov1beta1.ManagedClusterInfo{})
+	s.AddKnownTypes(managedclusteractionv1beta1.SchemeGroupVersion, &managedclusteractionv1beta1.ManagedClusterAction{})
+	s.AddKnownTypes(managedclusterviewv1beta1.SchemeGroupVersion, &managedclusterviewv1beta1.ManagedClusterView{})
+	s.AddKnownTypes(corev1.SchemeGroupVersion, &corev1.ConfigMap{})
+	s.AddKnownTypes(managedclusteractionv1beta1.SchemeGroupVersion, &managedclusteractionv1beta1.ManagedClusterAction{})
+
+	clustercurator := &clustercuratorv1.ClusterCurator{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      ClusterName,
+			Namespace: ClusterName,
+			Annotations: map[string]string{
+				"cluster.open-cluster-management.io/upgrade-clusterversion-backoff-limit": "10",
+			},
+		},
+		Spec: clustercuratorv1.ClusterCuratorSpec{
+			DesiredCuration: "upgrade",
+			Upgrade: clustercuratorv1.UpgradeHooks{
+				IntermediateUpdate: "4.13.37",
+				DesiredUpdate:      "4.14.16",
+			},
+		},
+	}
+
+	ocpConfigMap := &corev1.ConfigMap{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "admin-acks",
+			Namespace: "openshift-config",
+		},
+		Data: map[string]string{},
+	}
+
+	configMapBytes, _ := json.Marshal(ocpConfigMap)
+
+	ocpConfigMCV := &managedclusterviewv1beta1.ManagedClusterView{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      ClusterName + "admack",
+			Namespace: ClusterName,
+			Labels: map[string]string{
+				"cluster-curator-upgrade": "feng-managed",
+			},
+		},
+		Spec: managedclusterviewv1beta1.ViewSpec{
+			Scope: managedclusterviewv1beta1.ViewScope{
+				Kind:      "ConfigMap",
+				Name:      "admin-acks",
+				Namespace: "openshift-config",
+				Version:   "v1",
+			},
+		},
+		Status: managedclusterviewv1beta1.ViewStatus{
+			Conditions: []v1.Condition{
+				{
+					Message: "Watching resources successfully",
+					Reason:  "GetResourceProcessing",
+					Status:  "True",
+					Type:    "Processing",
+				},
+			},
+			Result: runtime.RawExtension{
+				Raw: configMapBytes,
+			},
+		},
+	}
+
+	currentClusterVersion := &clusterversionv1.ClusterVersion{
+		TypeMeta: v1.TypeMeta{
+			APIVersion: "config.openshift.io/v1",
+			Kind:       "ClusterVersion",
+		},
+		ObjectMeta: v1.ObjectMeta{
+			Name: "version",
+		},
+		Spec: clusterversionv1.ClusterVersionSpec{
+			Channel:   "stable-4.12",
+			ClusterID: "201ad26c-67d6-416a",
+			Upstream:  "https://api.openshift.com/api",
+		},
+		Status: clusterversionv1.ClusterVersionStatus{
+			AvailableUpdates: []clusterversionv1.Update{
+				{
+					Version: "4.12.15",
+					Image:   "quay.io/openshift-release-dev/ocp-release@sha256:71e158c6173ad6aa6e356c119a87459196bbe70e89c0db1e35c1f63a87d90676",
+				},
+			},
+			Desired: clusterversionv1.Update{
+				Version: "4.12.14",
+			},
+		},
+	}
+
+	b, _ := json.Marshal(currentClusterVersion)
+
+	clusterVersionMCV := &managedclusterviewv1beta1.ManagedClusterView{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      ClusterName,
+			Namespace: ClusterName,
+			Labels: map[string]string{
+				"cluster-curator-upgrade": "feng-managed",
+			},
+		},
+		Spec: managedclusterviewv1beta1.ViewSpec{
+			Scope: managedclusterviewv1beta1.ViewScope{
+				Kind:    "ClusterVersion",
+				Name:    "version",
+				Version: "v1",
+				Group:   "config.openshift.io",
+			},
+		},
+		Status: managedclusterviewv1beta1.ViewStatus{
+			Conditions: []v1.Condition{
+				{
+					Message: "Watching resources successfully",
+					Reason:  "GetResourceProcessing",
+					Status:  "True",
+					Type:    "Processing",
+				},
+			},
+			Result: runtime.RawExtension{
+				Raw: b,
+			},
+		},
+	}
+
+	mci := &managedclusterinfov1beta1.ManagedClusterInfo{
+		TypeMeta: v1.TypeMeta{
+			APIVersion: managedclusterinfov1beta1.SchemeGroupVersion.String(),
+			Kind:       "ManagedClusterInfo",
+		},
+		ObjectMeta: v1.ObjectMeta{
+			Name:      ClusterName,
+			Namespace: ClusterName,
+		},
+		Status: managedclusterinfov1beta1.ClusterInfoStatus{
+			KubeVendor: managedclusterinfov1beta1.KubeVendorOpenShift,
+			DistributionInfo: managedclusterinfov1beta1.DistributionInfo{
+				OCP: managedclusterinfov1beta1.OCPDistributionInfo{
+					AvailableUpdates: []string{"4.12.15", "4.12.16", "4.12.17"},
+					Desired: managedclusterinfov1beta1.OCPVersionRelease{
+						Version:  "4.12.14",
+						Channels: []string{"stable-4.12", "stable-4.13"},
+						URL:      "https://access.redhat.com/errata",
+					},
+					VersionAvailableUpdates: []managedclusterinfov1beta1.OCPVersionRelease{
+						{
+							Version:  "4.12.15",
+							Channels: []string{"stable-4.6", "stable-4.7"},
+							URL:      "https://access.redhat.com/errata",
+						},
+					},
+					Version: "4.12.14",
+				},
+			},
+		},
+	}
+
+	client := clientfake.NewClientBuilder().WithRuntimeObjects(
+		clustercurator,
+		mci,
+		ocpConfigMCV,
+		clusterVersionMCV,
+	).WithScheme(s).Build()
+
+	go func() {
+		for i := 0; i < 1000; i++ {
+			resultmca := managedclusteractionv1beta1.ManagedClusterAction{}
+			err := client.Get(context.TODO(), types.NamespacedName{
+				Namespace: ClusterName,
+				Name:      ClusterName + "admack",
+			}, &resultmca)
+
+			if err == nil {
+				patch := []byte(`{"status":{"conditions":[
+							{
+								"lastTransitionTime": "2021-04-28T16:19:38Z",
+								"message": " Resource action is done.",
+								"reason": "ActionDone",
+								"status": "True",
+								"type": "Completed"
+							}]}}`)
+				client.Patch(context.Background(), &resultmca, clientv1.RawPatch(types.MergePatchType, patch))
+				break
+			}
+			time.Sleep(1 * time.Second)
+		}
+	}()
+
+	go func() {
+		for i := 0; i < 1000; i++ {
+			resultmca := managedclusteractionv1beta1.ManagedClusterAction{}
+			err := client.Get(context.TODO(), types.NamespacedName{
+				Namespace: ClusterName,
+				Name:      ClusterName,
+			}, &resultmca)
+
+			if err == nil {
+				patch := []byte(`{"status":{"conditions":[
+							{
+								"lastTransitionTime": "2021-04-28T16:19:38Z",
+								"message": " Resource action is done.",
+								"reason": "ActionDone",
+								"status": "True",
+								"type": "Completed"
+							}]}}`)
+				client.Patch(context.Background(), &resultmca, clientv1.RawPatch(types.MergePatchType, patch))
+				break
+			}
+			time.Sleep(1 * time.Second)
+		}
+	}()
+
+	assert.Nil(
+		t,
+		EUSUpgradeCluster(client, ClusterName, clustercurator, true),
+		"EUS Intermediate Upgrade started successfully")
+}
+
+func TestEUSFinalUpgrade(t *testing.T) {
+	s := scheme.Scheme
+	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
+	s.AddKnownTypes(managedclusterinfov1beta1.SchemeGroupVersion, &managedclusterinfov1beta1.ManagedClusterInfo{})
+	s.AddKnownTypes(managedclusteractionv1beta1.SchemeGroupVersion, &managedclusteractionv1beta1.ManagedClusterAction{})
+	s.AddKnownTypes(managedclusterviewv1beta1.SchemeGroupVersion, &managedclusterviewv1beta1.ManagedClusterView{})
+	s.AddKnownTypes(corev1.SchemeGroupVersion, &corev1.ConfigMap{})
+	s.AddKnownTypes(managedclusteractionv1beta1.SchemeGroupVersion, &managedclusteractionv1beta1.ManagedClusterAction{})
+
+	clustercurator := &clustercuratorv1.ClusterCurator{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      ClusterName,
+			Namespace: ClusterName,
+			Annotations: map[string]string{
+				"cluster.open-cluster-management.io/upgrade-clusterversion-backoff-limit": "10",
+			},
+		},
+		Spec: clustercuratorv1.ClusterCuratorSpec{
+			DesiredCuration: "upgrade",
+			Upgrade: clustercuratorv1.UpgradeHooks{
+				IntermediateUpdate: "4.13.37",
+				DesiredUpdate:      "4.14.16",
+			},
+		},
+	}
+
+	ocpConfigMap := &corev1.ConfigMap{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "admin-acks",
+			Namespace: "openshift-config",
+		},
+		Data: map[string]string{},
+	}
+
+	configMapBytes, _ := json.Marshal(ocpConfigMap)
+
+	ocpConfigMCV := &managedclusterviewv1beta1.ManagedClusterView{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      ClusterName + "admack",
+			Namespace: ClusterName,
+			Labels: map[string]string{
+				"cluster-curator-upgrade": "feng-managed",
+			},
+		},
+		Spec: managedclusterviewv1beta1.ViewSpec{
+			Scope: managedclusterviewv1beta1.ViewScope{
+				Kind:      "ConfigMap",
+				Name:      "admin-acks",
+				Namespace: "openshift-config",
+				Version:   "v1",
+			},
+		},
+		Status: managedclusterviewv1beta1.ViewStatus{
+			Conditions: []v1.Condition{
+				{
+					Message: "Watching resources successfully",
+					Reason:  "GetResourceProcessing",
+					Status:  "True",
+					Type:    "Processing",
+				},
+			},
+			Result: runtime.RawExtension{
+				Raw: configMapBytes,
+			},
+		},
+	}
+
+	currentClusterVersion := &clusterversionv1.ClusterVersion{
+		TypeMeta: v1.TypeMeta{
+			APIVersion: "config.openshift.io/v1",
+			Kind:       "ClusterVersion",
+		},
+		ObjectMeta: v1.ObjectMeta{
+			Name: "version",
+		},
+		Spec: clusterversionv1.ClusterVersionSpec{
+			Channel:   "stable-4.12",
+			ClusterID: "201ad26c-67d6-416a",
+			Upstream:  "https://api.openshift.com/api",
+		},
+		Status: clusterversionv1.ClusterVersionStatus{
+			AvailableUpdates: []clusterversionv1.Update{
+				{
+					Version: "4.13.38",
+					Image:   "quay.io/openshift-release-dev/ocp-release@sha256:71e158c6173ad6aa6e356c119a87459196bbe70e89c0db1e35c1f63a87d90676",
+				},
+			},
+			Desired: clusterversionv1.Update{
+				Version: "4.13.37",
+			},
+		},
+	}
+
+	b, _ := json.Marshal(currentClusterVersion)
+
+	clusterVersionMCV := &managedclusterviewv1beta1.ManagedClusterView{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      ClusterName,
+			Namespace: ClusterName,
+			Labels: map[string]string{
+				"cluster-curator-upgrade": "feng-managed",
+			},
+		},
+		Spec: managedclusterviewv1beta1.ViewSpec{
+			Scope: managedclusterviewv1beta1.ViewScope{
+				Kind:    "ClusterVersion",
+				Name:    "version",
+				Version: "v1",
+				Group:   "config.openshift.io",
+			},
+		},
+		Status: managedclusterviewv1beta1.ViewStatus{
+			Conditions: []v1.Condition{
+				{
+					Message: "Watching resources successfully",
+					Reason:  "GetResourceProcessing",
+					Status:  "True",
+					Type:    "Processing",
+				},
+			},
+			Result: runtime.RawExtension{
+				Raw: b,
+			},
+		},
+	}
+
+	mci := &managedclusterinfov1beta1.ManagedClusterInfo{
+		TypeMeta: v1.TypeMeta{
+			APIVersion: managedclusterinfov1beta1.SchemeGroupVersion.String(),
+			Kind:       "ManagedClusterInfo",
+		},
+		ObjectMeta: v1.ObjectMeta{
+			Name:      ClusterName,
+			Namespace: ClusterName,
+		},
+		Status: managedclusterinfov1beta1.ClusterInfoStatus{
+			KubeVendor: managedclusterinfov1beta1.KubeVendorOpenShift,
+			DistributionInfo: managedclusterinfov1beta1.DistributionInfo{
+				OCP: managedclusterinfov1beta1.OCPDistributionInfo{
+					AvailableUpdates: []string{"4.13.38", "4.13.39", "4.13.40"},
+					Desired: managedclusterinfov1beta1.OCPVersionRelease{
+						Version:  "4.13.37",
+						Channels: []string{"stable-4.12", "stable-4.13"},
+						URL:      "https://access.redhat.com/errata",
+					},
+					VersionAvailableUpdates: []managedclusterinfov1beta1.OCPVersionRelease{
+						{
+							Version:  "4.13.38",
+							Channels: []string{"stable-4.12", "stable-4.13"},
+							URL:      "https://access.redhat.com/errata",
+						},
+					},
+					Version: "4.13.37",
+				},
+			},
+		},
+	}
+
+	client := clientfake.NewClientBuilder().WithRuntimeObjects(
+		clustercurator,
+		mci,
+		ocpConfigMCV,
+		clusterVersionMCV,
+	).WithScheme(s).Build()
+
+	go func() {
+		for i := 0; i < 1000; i++ {
+			resultmca := managedclusteractionv1beta1.ManagedClusterAction{}
+			err := client.Get(context.TODO(), types.NamespacedName{
+				Namespace: ClusterName,
+				Name:      ClusterName + "admack",
+			}, &resultmca)
+
+			if err == nil {
+				patch := []byte(`{"status":{"conditions":[
+							{
+								"lastTransitionTime": "2021-04-28T16:19:38Z",
+								"message": " Resource action is done.",
+								"reason": "ActionDone",
+								"status": "True",
+								"type": "Completed"
+							}]}}`)
+				client.Patch(context.Background(), &resultmca, clientv1.RawPatch(types.MergePatchType, patch))
+				break
+			}
+			time.Sleep(1 * time.Second)
+		}
+	}()
+
+	go func() {
+		for i := 0; i < 1000; i++ {
+			resultmca := managedclusteractionv1beta1.ManagedClusterAction{}
+			err := client.Get(context.TODO(), types.NamespacedName{
+				Namespace: ClusterName,
+				Name:      ClusterName,
+			}, &resultmca)
+
+			if err == nil {
+				patch := []byte(`{"status":{"conditions":[
+							{
+								"lastTransitionTime": "2021-04-28T16:19:38Z",
+								"message": " Resource action is done.",
+								"reason": "ActionDone",
+								"status": "True",
+								"type": "Completed"
+							}]}}`)
+				client.Patch(context.Background(), &resultmca, clientv1.RawPatch(types.MergePatchType, patch))
+				break
+			}
+			time.Sleep(1 * time.Second)
+		}
+	}()
+
+	assert.Nil(
+		t,
+		EUSUpgradeCluster(client, ClusterName, clustercurator, false),
+		"EUS Final Upgrade started successfully")
 }

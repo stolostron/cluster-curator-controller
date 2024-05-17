@@ -74,7 +74,7 @@ func MonitorClusterStatus(
 		return err
 	}
 
-	return monitorClusterStatus(client, client, clusterName, jobType, utils.GetMonitorAttempts(jobType, curator))
+	return monitorClusterStatus(client, clusterName, jobType, utils.GetMonitorAttempts(jobType, curator))
 }
 
 func DestroyClusterDeployment(hiveset clientv1.Client, clusterName string) error {
@@ -107,7 +107,7 @@ func DestroyClusterDeployment(hiveset clientv1.Client, clusterName string) error
 	return nil
 }
 
-func monitorClusterStatus(client clientv1.Client, hiveset clientv1.Client, clusterName string, jobType string, monitorAttempts int) error {
+func monitorClusterStatus(client clientv1.Client, clusterName string, jobType string, monitorAttempts int) error {
 	klog.V(0).Info("Waiting up to " + strconv.Itoa(monitorAttempts*5) + "s for Hive Provisioning job")
 	jobName := ""
 	var cluster *hivev1.ClusterDeployment
@@ -116,7 +116,7 @@ func monitorClusterStatus(client clientv1.Client, hiveset clientv1.Client, clust
 
 		// Refresh the clusterDeployment resource
 		cluster := &hivev1.ClusterDeployment{}
-		err := hiveset.Get(context.TODO(), types.NamespacedName{
+		err := client.Get(context.TODO(), types.NamespacedName{
 			Name:      clusterName,
 			Namespace: clusterName,
 		}, cluster)
@@ -225,7 +225,7 @@ func monitorClusterStatus(client clientv1.Client, hiveset clientv1.Client, clust
 			// If succeeded = 0 then we did not finish
 			if newJob.Status.Succeeded == 0 {
 				cluster = &hivev1.ClusterDeployment{}
-				_ = hiveset.Get(context.TODO(), types.NamespacedName{
+				_ = client.Get(context.TODO(), types.NamespacedName{
 					Name:      clusterName,
 					Namespace: clusterName,
 				}, cluster)

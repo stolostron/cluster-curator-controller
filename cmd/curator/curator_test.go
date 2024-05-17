@@ -3,17 +3,22 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"strings"
 	"testing"
+	"time"
 
+	clusterversionv1 "github.com/openshift/api/config/v1"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 	clustercuratorv1 "github.com/stolostron/cluster-curator-controller/pkg/api/v1beta1"
 	"github.com/stolostron/cluster-curator-controller/pkg/jobs/utils"
+	managedclusterviewv1beta1 "github.com/stolostron/cluster-lifecycle-api/view/v1beta1"
 	"github.com/stolostron/library-go/pkg/config"
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	clientfake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
@@ -126,6 +131,84 @@ func getNodepool(npName string, npNamespace string, npClusterName string) *unstr
 	}
 }
 
+func getEUSUpgradeClusterCurator() *clustercuratorv1.ClusterCurator {
+	return &clustercuratorv1.ClusterCurator{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      ClusterName,
+			Namespace: ClusterName,
+		},
+		Spec: clustercuratorv1.ClusterCuratorSpec{
+			DesiredCuration: "upgrade",
+			Upgrade: clustercuratorv1.UpgradeHooks{
+				IntermediateUpdate: "4.13.37",
+				DesiredUpdate:      "4.14.16",
+				MonitorTimeout:     120,
+			},
+		},
+	}
+}
+
+func getEUSClusterVersionManagedClusterView() *managedclusterviewv1beta1.ManagedClusterView {
+	clusterversion := &clusterversionv1.ClusterVersion{
+		TypeMeta: v1.TypeMeta{
+			APIVersion: "config.openshift.io/v1",
+			Kind:       "ClusterVersion",
+		},
+		ObjectMeta: v1.ObjectMeta{
+			Name: "version",
+		},
+		Spec: clusterversionv1.ClusterVersionSpec{
+			Channel:   "stable-4.5",
+			ClusterID: "201ad26c-67d6-416a",
+			Upstream:  "https://api.openshift.com/api",
+		},
+		Status: clusterversionv1.ClusterVersionStatus{
+			Conditions: []clusterversionv1.ClusterOperatorStatusCondition{
+				{
+					LastTransitionTime: v1.NewTime(time.Now()),
+					Message:            "Done applying 4.13.37",
+					Status:             "True",
+					Type:               "Available",
+				},
+				{
+					LastTransitionTime: v1.NewTime(time.Now()),
+					Message:            "Working towards 4.13.37: 100% complete",
+					Status:             "True",
+					Type:               "Progressing",
+				},
+			},
+		},
+	}
+
+	b, _ := json.Marshal(clusterversion)
+	return &managedclusterviewv1beta1.ManagedClusterView{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      ClusterName,
+			Namespace: ClusterName,
+		},
+		Spec: managedclusterviewv1beta1.ViewSpec{
+			Scope: managedclusterviewv1beta1.ViewScope{
+				Kind:    "ClusterVersion",
+				Name:    "version",
+				Version: "v1",
+				Group:   "config.openshift.io",
+			},
+		},
+		Status: managedclusterviewv1beta1.ViewStatus{
+			Conditions: []v1.Condition{
+				{
+					Message: "Watching resources successfully",
+					Reason:  "GetResourceProcessing",
+					Status:  "True",
+					Type:    "Processing",
+				},
+			},
+			Result: runtime.RawExtension{
+				Raw: b,
+			},
+		},
+	}
+}
 func TestCuratorRunNoParam(t *testing.T) {
 
 	defer func() {
@@ -177,7 +260,7 @@ func TestCuratorRunNoClusterCurator(t *testing.T) {
 	s := scheme.Scheme
 	s.AddKnownTypes(utils.CCGVR.GroupVersion(), &clustercuratorv1.ClusterCurator{})
 
-	client := clientfake.NewFakeClientWithScheme(s)
+	client := clientfake.NewClientBuilder().WithScheme(s).Build()
 
 	os.Args[1] = "SKIP_ALL_TESTING"
 
@@ -189,7 +272,7 @@ func TestCuratorRunClusterCurator(t *testing.T) {
 	s := scheme.Scheme
 	s.AddKnownTypes(utils.CCGVR.GroupVersion(), &clustercuratorv1.ClusterCurator{})
 
-	client := clientfake.NewFakeClientWithScheme(s, getClusterCurator())
+	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(getClusterCurator()).Build()
 
 	os.Args[1] = "SKIP_ALL_TESTING"
 
@@ -199,13 +282,13 @@ func TestCuratorRunClusterCurator(t *testing.T) {
 func TestCuratorRunClusterCuratorInstallUpgradeOperation(t *testing.T) {
 	s := scheme.Scheme
 	s.AddKnownTypes(utils.CCGVR.GroupVersion(), &clustercuratorv1.ClusterCurator{})
-	client := clientfake.NewFakeClientWithScheme(s, getClusterCuratorWithInstallOperation())
+	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(getClusterCuratorWithInstallOperation()).Build()
 
 	os.Args[1] = "SKIP_ALL_TESTING"
 
 	assert.NotPanics(t, func() { curatorRun(nil, client, ClusterName, ClusterName) }, "no panic when ClusterCurator found and skip test")
 
-	client = clientfake.NewFakeClientWithScheme(s, getClusterCuratorWithUpgradeOperation())
+	client = clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(getClusterCuratorWithUpgradeOperation()).Build()
 
 	assert.NotPanics(t, func() { curatorRun(nil, client, ClusterName, ClusterName) }, "no panic when ClusterCurator found and skip test")
 }
@@ -490,4 +573,71 @@ func TestHypershiftMonitorUpgrade(t *testing.T) {
 	config, _ := config.LoadConfig("", "", "")
 
 	curatorRun(config, client, ClusterNamespace, ClusterName)
+}
+
+func TestEUSIntermediateUpgrade(t *testing.T) {
+	// Test will fail because we don't have all the objects
+	// But that's ok, we just need to test the curator code
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("expected recover, but failed")
+		}
+	}()
+
+	os.Args[1] = "intermediate-upgrade-cluster"
+	os.Args[2] = ClusterName
+
+	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
+	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(
+		getEUSUpgradeClusterCurator(),
+	).Build()
+
+	config, _ := config.LoadConfig("", "", "")
+
+	curatorRun(config, client, ClusterName, ClusterName)
+}
+
+func TestEUSFinalUpgrade(t *testing.T) {
+	// Test will fail because we don't have all the objects
+	// But that's ok, we just need to test the curator code
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("expected recover, but failed")
+		}
+	}()
+
+	os.Args[1] = "final-upgrade-cluster"
+	os.Args[2] = ClusterName
+
+	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
+	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(
+		getEUSUpgradeClusterCurator(),
+	).Build()
+
+	config, _ := config.LoadConfig("", "", "")
+
+	curatorRun(config, client, ClusterName, ClusterName)
+}
+
+func TestEUSMonitorUpgrade(t *testing.T) {
+	// Test will fail because we don't have all the objects
+	// But that's ok, we just need to test the curator code
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("expected recover, but failed")
+		}
+	}()
+
+	os.Args[1] = "intermediate-monitor-upgrade"
+	os.Args[2] = ClusterName
+
+	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
+	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(
+		getEUSUpgradeClusterCurator(),
+		getEUSClusterVersionManagedClusterView(),
+	).Build()
+
+	config, _ := config.LoadConfig("", "", "")
+
+	curatorRun(config, client, ClusterName, ClusterName)
 }

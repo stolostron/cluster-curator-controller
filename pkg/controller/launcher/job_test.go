@@ -425,3 +425,56 @@ func TestCreateLauncherInvalidOverrideJob(t *testing.T) {
 	assert.NotNil(t, err, "CreateJob err is not nil")
 	t.Log(err)
 }
+
+// Test get batch job for EUS upgrades
+func TestGetBatchJobEUSUpgrade(t *testing.T) {
+	clusterCurator := clustercuratorv1.ClusterCurator{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      clusterName,
+			Namespace: clusterName,
+		},
+		Spec: clustercuratorv1.ClusterCuratorSpec{
+			DesiredCuration: "upgrade",
+			Upgrade: clustercuratorv1.UpgradeHooks{
+				IntermediateUpdate: "4.13.37",
+				DesiredUpdate:      "4.14.16",
+				MonitorTimeout:     120,
+			},
+		},
+	}
+
+	batchJobObj := getBatchJob(clusterName, clusterName, imageURI, clusterCurator)
+
+	t.Log("Test count initContainers in job")
+	foundInitContainers := len(batchJobObj.Spec.Template.Spec.InitContainers)
+
+	if foundInitContainers != numInitContainers {
+		t.Fatalf("Invalid InitContainers count, expected %v found %v\n",
+			numInitContainers, foundInitContainers)
+	}
+
+	t.Log("Validate initContainers")
+	interUpgradeCluster := batchJobObj.Spec.Template.Spec.InitContainers[0]
+
+	if interUpgradeCluster.Name != "intermediate-upgrade-cluster" {
+		t.Fatalf("The ClusterCurator job was not corrctly populated, missing intermediate-upgrade-cluster initContainer")
+	}
+
+	interMonUpgrade := batchJobObj.Spec.Template.Spec.InitContainers[1]
+
+	if interMonUpgrade.Name != "intermediate-monitor-upgrade" {
+		t.Fatalf("The ClusterCurator job was not corrctly populated, missing intermediate-monitor-upgrade initContainer")
+	}
+
+	finalUpgradeCluster := batchJobObj.Spec.Template.Spec.InitContainers[2]
+
+	if finalUpgradeCluster.Name != "final-upgrade-cluster" {
+		t.Fatalf("The ClusterCurator job was not corrctly populated, missing final-upgrade-cluster initContainer")
+	}
+
+	finalMonUpgrade := batchJobObj.Spec.Template.Spec.InitContainers[3]
+
+	if finalMonUpgrade.Name != "final-monitor-upgrade" {
+		t.Fatalf("The ClusterCurator job was not corrctly populated, missing final-monitor-upgrade initContainer")
+	}
+}
