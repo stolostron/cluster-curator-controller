@@ -150,7 +150,7 @@ func newClusterCuratorPredicate() predicate.Predicate {
 				if newClusterCurator.Spec.CuratingJob != oldClusterCurator.Spec.CuratingJob && newClusterCurator.Spec.CuratingJob == "" {
 					return false
 				}
-				if oldClusterCurator.Spec.Upgrade.IntermediateUpdate != "" && oldClusterCurator.Spec.Upgrade.DesiredUpdate != "" {
+				if oldClusterCurator.Spec.Upgrade.IntermediateUpdate != "" {
 					return false
 				}
 			}

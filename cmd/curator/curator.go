@@ -433,6 +433,7 @@ func curatorRun(config *rest.Config, client clientv1.Client, clusterName string,
 	}
 
 	if jobChoice == "intermediate-monitor-upgrade" {
+		// no need to check cluster type, only hive EUS upgrade supported for now
 		if err = hive.MonitorUpgradeStatus(client, clusterName, curator, true); err != nil {
 			utils.CheckError(utils.RecordFailedCuratorStatusCondition(
 				client,
