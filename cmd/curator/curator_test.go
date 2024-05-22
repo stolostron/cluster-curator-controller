@@ -641,3 +641,116 @@ func TestEUSMonitorUpgrade(t *testing.T) {
 
 	curatorRun(config, client, ClusterName, ClusterName)
 }
+
+// func TestIntermediateUpdateImmutability(t *testing.T) {
+// 	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
+// 	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(
+// 		getEUSUpgradeClusterCurator(),
+// 	).Build()
+
+// 	curator := clustercuratorv1.ClusterCurator{}
+// 	client.Get(context.TODO(), types.NamespacedName{
+// 		Namespace: ClusterName,
+// 		Name:      ClusterName,
+// 	}, &curator)
+
+// 	patch := []byte(
+// 		`{
+// 			"spec": {
+// 				"upgrade": {
+// 					"intermediateUpdate": "4.13.38"
+// 				}
+// 			}
+// 		}`)
+
+// 	err := client.Patch(context.Background(), &curator, clientv1.RawPatch(types.MergePatchType, patch))
+
+// 	assert.NotNil(t, err, "intermediateUpdate immutable validation successful")
+// }
+
+// func TestDesiredUpdateImmutabilityWhenIntermediateUpdateExists(t *testing.T) {
+// 	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
+// 	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(
+// 		getEUSUpgradeClusterCurator(),
+// 	).Build()
+
+// 	curator := clustercuratorv1.ClusterCurator{}
+// 	client.Get(context.TODO(), types.NamespacedName{
+// 		Namespace: ClusterName,
+// 		Name:      ClusterName,
+// 	}, &curator)
+
+// 	patch := []byte(
+// 		`{
+// 			"spec": {
+// 				"upgrade": {
+// 					"desireUpdate": "4.14.17"
+// 				}
+// 			}
+// 		}`)
+
+// 	err := client.Patch(context.Background(), &curator, clientv1.RawPatch(types.MergePatchType, patch))
+
+// 	assert.NotNil(t, err, "desireUpdate immutable when intermediateUpdate exists validation successful")
+// }
+
+// func TestIntermediateUpdateCreation(t *testing.T) {
+// 	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
+// 	client := clientfake.NewClientBuilder().WithScheme(s).Build()
+
+// 	curator := clustercuratorv1.ClusterCurator{
+// 		ObjectMeta: v1.ObjectMeta{
+// 			Name:      ClusterName,
+// 			Namespace: ClusterName,
+// 		},
+// 		Spec: clustercuratorv1.ClusterCuratorSpec{
+// 			DesiredCuration: "upgrade",
+// 			Upgrade: clustercuratorv1.UpgradeHooks{
+// 				IntermediateUpdate: "4.13.37",
+// 				MonitorTimeout:     120,
+// 			},
+// 		},
+// 	}
+
+// 	err := client.Create(context.TODO(), &curator)
+// 	assert.NotNil(t, err, "Cannot create curator with only intermediateUpdate validation successful")
+// }
+
+// func TestAddIntermediateUpdateToExistingCurator(t *testing.T) {
+// 	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
+// 	curator := clustercuratorv1.ClusterCurator{
+// 		ObjectMeta: v1.ObjectMeta{
+// 			Name:      ClusterName,
+// 			Namespace: ClusterName,
+// 		},
+// 		Spec: clustercuratorv1.ClusterCuratorSpec{
+// 			DesiredCuration: "upgrade",
+// 			Upgrade: clustercuratorv1.UpgradeHooks{
+// 				DesiredUpdate:  "4.14.16",
+// 				MonitorTimeout: 120,
+// 			},
+// 		},
+// 	}
+// 	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(
+// 		&curator,
+// 	).Build()
+
+// 	curator = clustercuratorv1.ClusterCurator{}
+// 	client.Get(context.TODO(), types.NamespacedName{
+// 		Namespace: ClusterName,
+// 		Name:      ClusterName,
+// 	}, &curator)
+
+// 	patch := []byte(
+// 		`{
+// 			"spec": {
+// 				"upgrade": {
+// 					"intermediateUpdate": "4.13.38"
+// 				}
+// 			}
+// 		}`)
+
+// 	err := client.Patch(context.Background(), &curator, clientv1.RawPatch(types.MergePatchType, patch))
+
+// 	assert.NotNil(t, err, "Cannot add intermediateUpdate to existing curator validation successful")
+// }

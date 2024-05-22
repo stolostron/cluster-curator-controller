@@ -33,7 +33,6 @@ import (
 const MCVUpgradeLabel = "cluster-curator-upgrade"
 const ForceUpgradeAnnotation = "cluster.open-cluster-management.io/upgrade-allow-not-recommended-versions"
 const UpgradeClusterversionBackoffLimit = "cluster.open-cluster-management.io/upgrade-clusterversion-backoff-limit"
-const currentNVersion = "4.16.0" // Need to update every ACM release to new N version
 const HiveReconcilePauseAnnotation = "hive.openshift.io/reconcile-pause"
 
 var getErr = errors.New("Failed to get remote clusterversion")
@@ -793,11 +792,6 @@ func validateEUSUpgradeVersion(client clientv1.Client, clusterName string, curat
 		return err
 	}
 
-	nVersion, err := semver.Make(currentNVersion)
-	if err != nil {
-		return err
-	}
-
 	managedClusterInfo := managedclusterinfov1beta1.ManagedClusterInfo{}
 	if err := client.Get(context.TODO(), types.NamespacedName{
 		Namespace: clusterName,
@@ -834,10 +828,6 @@ func validateEUSUpgradeVersion(client clientv1.Client, clusterName string, curat
 
 	if isInterVersion && (intermediateVersion.Minor != (currentVersion.Minor+1) || desiredVersion.Minor != (currentVersion.Minor+2)) {
 		return errors.New(fmt.Sprintf("Minor version EUS to EUS upgrade must be continuous for Curator %q", curator.Name))
-	}
-
-	if desiredVersion.Minor > (nVersion.Minor + 1) {
-		return errors.New(fmt.Sprintf("Minor version EUS to EUS upgrade cannot go above N+1 for Curator %q", curator.Name))
 	}
 
 	return nil
