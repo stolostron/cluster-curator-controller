@@ -31,6 +31,10 @@ type ClusterCuratorSpec struct {
 	Destroy Hooks `json:"destroy,omitempty"`
 
 	// During an upgrade curation run these
+	// +kubebuilder:validation:XValidation:rule="!(has(oldSelf.intermediateUpdate) && self.intermediateUpdate != oldSelf.intermediateUpdate)",message="The intermediateUpdate cannot be modified"
+	// +kubebuilder:validation:XValidation:rule="!(has(oldSelf.intermediateUpdate) && oldSelf.intermediateUpdate != '' && has(oldSelf.desiredUpdate) && self.desiredUpdate != oldSelf.desiredUpdate)",message="The desiredUpdate cannot be modified when intermediateUpdate exists"
+	// +kubebuilder:validation:XValidation:rule="!has(self.intermediateUpdate) || (has(self.desiredUpdate) && self.desiredUpdate != '')",message="The intermediateUpdate cannot be created if desiredUpdate is missing or empty"
+	// +kubebuilder:validation:XValidation:rule="!(has(self.intermediateUpdate) && !has(oldSelf.intermediateUpdate) && has(oldSelf.desiredUpdate) && oldSelf.desiredUpdate != '')",message="The intermediateUpdate cannot be added via update if desiredUpdate already exists"
 	Upgrade UpgradeHooks `json:"upgrade,omitempty"`
 
 	// Kubernetes job resource created for curation of a cluster
@@ -103,8 +107,6 @@ type UpgradeHooks struct {
 	// the intermediate cluster version when performing EUS to EUS upgrades.
 	// Setting both this value and DesiredUpdate will trigger an EUS to EUS upgrade.
 	// +kubebuilder:validation:Optional
-	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="Value is immutable"
-	// +kubebuilder:validation:MaxLength=512
 	IntermediateUpdate string `json:"intermediateUpdate,omitempty"`
 
 	// DesiredUpdate indicates the desired value of
