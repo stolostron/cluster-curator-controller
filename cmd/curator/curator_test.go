@@ -708,8 +708,6 @@ func TestIntermediateUpdateImmutability(t *testing.T) {
 	err = c.Patch(context.Background(), &curator, client.RawPatch(types.MergePatchType, patch))
 
 	assert.NotNil(t, err, "intermediateUpdate immutable validation successful")
-
-	m.Stop()
 }
 
 func TestDesiredUpdateImmutabilityWhenIntermediateUpdateExists(t *testing.T) {
@@ -766,8 +764,6 @@ func TestDesiredUpdateImmutabilityWhenIntermediateUpdateExists(t *testing.T) {
 	err = c.Patch(context.Background(), &curator, client.RawPatch(types.MergePatchType, patch))
 
 	assert.NotNil(t, err, "desireUpdate immutable when intermediateUpdate exists validation successful")
-
-	m.Stop()
 }
 
 func TestIntermediateUpdateCreation(t *testing.T) {
@@ -817,8 +813,6 @@ func TestIntermediateUpdateCreation(t *testing.T) {
 
 	err = c.Create(context.TODO(), &curator)
 	assert.NotNil(t, err, "Cannot create curator with only intermediateUpdate validation successful")
-
-	m.Stop()
 }
 
 func TestAddIntermediateUpdateToExistingCurator(t *testing.T) {
@@ -889,6 +883,4 @@ func TestAddIntermediateUpdateToExistingCurator(t *testing.T) {
 	err = c.Patch(context.Background(), &curator, client.RawPatch(types.MergePatchType, patch))
 
 	assert.NotNil(t, err, "Cannot add intermediateUpdate to existing curator validation successful")
-
-	m.Stop()
 }
