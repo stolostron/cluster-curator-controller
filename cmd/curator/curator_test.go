@@ -3,8 +3,11 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"log"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -16,11 +19,16 @@ import (
 	managedclusterviewv1beta1 "github.com/stolostron/cluster-lifecycle-api/view/v1beta1"
 	"github.com/stolostron/library-go/pkg/config"
 	"github.com/stretchr/testify/assert"
+	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	clientfake "sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/envtest"
 )
 
 const ClusterName = "my-cluster"
@@ -329,7 +337,7 @@ func TestCuratorRunProviderCredentialPathEnv(t *testing.T) {
 	}()
 
 	os.Setenv("PROVIDER_CREDENTIAL_PATH", "namespace/secretname")
-	client := clientfake.NewClientBuilder().Build()
+	client := clientfake.NewClientBuilder().WithScheme(s).Build()
 
 	os.Args[1] = "applycloudprovider-ansible"
 
@@ -387,18 +395,20 @@ func TestUpgradFailed(t *testing.T) {
 	s := scheme.Scheme
 	s.AddKnownTypes(utils.CCGVR.GroupVersion(), &clustercuratorv1.ClusterCurator{})
 
-	client := clientfake.NewFakeClientWithScheme(s, &clustercuratorv1.ClusterCurator{
-		ObjectMeta: v1.ObjectMeta{
-			Name:      ClusterName,
-			Namespace: ClusterName,
-		},
-		Spec: clustercuratorv1.ClusterCuratorSpec{
-			DesiredCuration: "upgrade",
-			Upgrade: clustercuratorv1.UpgradeHooks{
-				DesiredUpdate: "4.11.4",
+	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(
+		&clustercuratorv1.ClusterCurator{
+			ObjectMeta: v1.ObjectMeta{
+				Name:      ClusterName,
+				Namespace: ClusterName,
+			},
+			Spec: clustercuratorv1.ClusterCuratorSpec{
+				DesiredCuration: "upgrade",
+				Upgrade: clustercuratorv1.UpgradeHooks{
+					DesiredUpdate: "4.11.4",
+				},
 			},
 		},
-	})
+	).Build()
 
 	curatorRun(nil, client, ClusterName, ClusterName)
 }
@@ -415,18 +425,20 @@ func TestUpgradDone(t *testing.T) {
 	s := scheme.Scheme
 	s.AddKnownTypes(utils.CCGVR.GroupVersion(), &clustercuratorv1.ClusterCurator{})
 
-	client := clientfake.NewFakeClientWithScheme(s, &clustercuratorv1.ClusterCurator{
-		ObjectMeta: v1.ObjectMeta{
-			Name:      ClusterName,
-			Namespace: ClusterName,
-		},
-		Spec: clustercuratorv1.ClusterCuratorSpec{
-			DesiredCuration: "upgrade",
-			Upgrade: clustercuratorv1.UpgradeHooks{
-				DesiredUpdate: "4.11.4",
+	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(
+		&clustercuratorv1.ClusterCurator{
+			ObjectMeta: v1.ObjectMeta{
+				Name:      ClusterName,
+				Namespace: ClusterName,
+			},
+			Spec: clustercuratorv1.ClusterCuratorSpec{
+				DesiredCuration: "upgrade",
+				Upgrade: clustercuratorv1.UpgradeHooks{
+					DesiredUpdate: "4.11.4",
+				},
 			},
 		},
-	})
+	).Build()
 
 	curatorRun(nil, client, ClusterName, ClusterName)
 }
@@ -642,115 +654,241 @@ func TestEUSMonitorUpgrade(t *testing.T) {
 	curatorRun(config, client, ClusterName, ClusterName)
 }
 
-// func TestIntermediateUpdateImmutability(t *testing.T) {
-// 	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
-// 	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(
-// 		getEUSUpgradeClusterCurator(),
-// 	).Build()
+func TestIntermediateUpdateImmutability(t *testing.T) {
+	clustercuratorv1.AddToScheme(scheme.Scheme)
+	m := &envtest.Environment{
+		CRDDirectoryPaths: []string{
+			filepath.Join("..", "..", "deploy", "crd"),
+		},
+	}
 
-// 	curator := clustercuratorv1.ClusterCurator{}
-// 	client.Get(context.TODO(), types.NamespacedName{
-// 		Namespace: ClusterName,
-// 		Name:      ClusterName,
-// 	}, &curator)
+	var err error
+	var cfg *rest.Config
+	if cfg, err = m.Start(); err != nil {
+		log.Fatal(err)
+	}
 
-// 	patch := []byte(
-// 		`{
-// 			"spec": {
-// 				"upgrade": {
-// 					"intermediateUpdate": "4.13.38"
-// 				}
-// 			}
-// 		}`)
+	defer m.Stop()
 
-// 	err := client.Patch(context.Background(), &curator, clientv1.RawPatch(types.MergePatchType, patch))
+	var c client.Client
 
-// 	assert.NotNil(t, err, "intermediateUpdate immutable validation successful")
-// }
+	if c, err = client.New(cfg, client.Options{Scheme: scheme.Scheme}); err != nil {
+		log.Fatal(err)
+	}
 
-// func TestDesiredUpdateImmutabilityWhenIntermediateUpdateExists(t *testing.T) {
-// 	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
-// 	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(
-// 		getEUSUpgradeClusterCurator(),
-// 	).Build()
+	err = c.Create(context.Background(), &corev1.Namespace{
+		ObjectMeta: v1.ObjectMeta{
+			Name: ClusterName,
+		},
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
 
-// 	curator := clustercuratorv1.ClusterCurator{}
-// 	client.Get(context.TODO(), types.NamespacedName{
-// 		Namespace: ClusterName,
-// 		Name:      ClusterName,
-// 	}, &curator)
+	err = c.Create(context.Background(), getEUSUpgradeClusterCurator())
+	if err != nil {
+		log.Fatal(err)
+	}
 
-// 	patch := []byte(
-// 		`{
-// 			"spec": {
-// 				"upgrade": {
-// 					"desireUpdate": "4.14.17"
-// 				}
-// 			}
-// 		}`)
+	curator := clustercuratorv1.ClusterCurator{}
+	c.Get(context.TODO(), types.NamespacedName{
+		Namespace: ClusterName,
+		Name:      ClusterName,
+	}, &curator)
 
-// 	err := client.Patch(context.Background(), &curator, clientv1.RawPatch(types.MergePatchType, patch))
+	patch := []byte(
+		`{
+			"spec": {
+				"upgrade": {
+					"intermediateUpdate": "4.13.38"
+				}
+			}
+		}`)
 
-// 	assert.NotNil(t, err, "desireUpdate immutable when intermediateUpdate exists validation successful")
-// }
+	err = c.Patch(context.Background(), &curator, client.RawPatch(types.MergePatchType, patch))
 
-// func TestIntermediateUpdateCreation(t *testing.T) {
-// 	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
-// 	client := clientfake.NewClientBuilder().WithScheme(s).Build()
+	assert.NotNil(t, err, "intermediateUpdate immutable validation successful")
 
-// 	curator := clustercuratorv1.ClusterCurator{
-// 		ObjectMeta: v1.ObjectMeta{
-// 			Name:      ClusterName,
-// 			Namespace: ClusterName,
-// 		},
-// 		Spec: clustercuratorv1.ClusterCuratorSpec{
-// 			DesiredCuration: "upgrade",
-// 			Upgrade: clustercuratorv1.UpgradeHooks{
-// 				IntermediateUpdate: "4.13.37",
-// 				MonitorTimeout:     120,
-// 			},
-// 		},
-// 	}
+	m.Stop()
+}
 
-// 	err := client.Create(context.TODO(), &curator)
-// 	assert.NotNil(t, err, "Cannot create curator with only intermediateUpdate validation successful")
-// }
+func TestDesiredUpdateImmutabilityWhenIntermediateUpdateExists(t *testing.T) {
+	clustercuratorv1.AddToScheme(scheme.Scheme)
+	m := &envtest.Environment{
+		CRDDirectoryPaths: []string{
+			filepath.Join("..", "..", "deploy", "crd"),
+		},
+	}
 
-// func TestAddIntermediateUpdateToExistingCurator(t *testing.T) {
-// 	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
-// 	curator := clustercuratorv1.ClusterCurator{
-// 		ObjectMeta: v1.ObjectMeta{
-// 			Name:      ClusterName,
-// 			Namespace: ClusterName,
-// 		},
-// 		Spec: clustercuratorv1.ClusterCuratorSpec{
-// 			DesiredCuration: "upgrade",
-// 			Upgrade: clustercuratorv1.UpgradeHooks{
-// 				DesiredUpdate:  "4.14.16",
-// 				MonitorTimeout: 120,
-// 			},
-// 		},
-// 	}
-// 	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(
-// 		&curator,
-// 	).Build()
+	var err error
+	var cfg *rest.Config
+	if cfg, err = m.Start(); err != nil {
+		log.Fatal(err)
+	}
 
-// 	curator = clustercuratorv1.ClusterCurator{}
-// 	client.Get(context.TODO(), types.NamespacedName{
-// 		Namespace: ClusterName,
-// 		Name:      ClusterName,
-// 	}, &curator)
+	defer m.Stop()
 
-// 	patch := []byte(
-// 		`{
-// 			"spec": {
-// 				"upgrade": {
-// 					"intermediateUpdate": "4.13.38"
-// 				}
-// 			}
-// 		}`)
+	var c client.Client
 
-// 	err := client.Patch(context.Background(), &curator, clientv1.RawPatch(types.MergePatchType, patch))
+	if c, err = client.New(cfg, client.Options{Scheme: scheme.Scheme}); err != nil {
+		log.Fatal(err)
+	}
 
-// 	assert.NotNil(t, err, "Cannot add intermediateUpdate to existing curator validation successful")
-// }
+	err = c.Create(context.Background(), &corev1.Namespace{
+		ObjectMeta: v1.ObjectMeta{
+			Name: ClusterName,
+		},
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = c.Create(context.Background(), getEUSUpgradeClusterCurator())
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	curator := clustercuratorv1.ClusterCurator{}
+	c.Get(context.TODO(), types.NamespacedName{
+		Namespace: ClusterName,
+		Name:      ClusterName,
+	}, &curator)
+
+	patch := []byte(
+		`{
+			"spec": {
+				"upgrade": {
+					"desiredUpdate": "4.14.17"
+				}
+			}
+		}`)
+
+	err = c.Patch(context.Background(), &curator, client.RawPatch(types.MergePatchType, patch))
+
+	assert.NotNil(t, err, "desireUpdate immutable when intermediateUpdate exists validation successful")
+
+	m.Stop()
+}
+
+func TestIntermediateUpdateCreation(t *testing.T) {
+	clustercuratorv1.AddToScheme(scheme.Scheme)
+	m := &envtest.Environment{
+		CRDDirectoryPaths: []string{
+			filepath.Join("..", "..", "deploy", "crd"),
+		},
+	}
+
+	var err error
+	var cfg *rest.Config
+	if cfg, err = m.Start(); err != nil {
+		log.Fatal(err)
+	}
+
+	defer m.Stop()
+
+	var c client.Client
+
+	if c, err = client.New(cfg, client.Options{Scheme: scheme.Scheme}); err != nil {
+		log.Fatal(err)
+	}
+
+	err = c.Create(context.Background(), &corev1.Namespace{
+		ObjectMeta: v1.ObjectMeta{
+			Name: ClusterName,
+		},
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	curator := clustercuratorv1.ClusterCurator{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      ClusterName,
+			Namespace: ClusterName,
+		},
+		Spec: clustercuratorv1.ClusterCuratorSpec{
+			DesiredCuration: "upgrade",
+			Upgrade: clustercuratorv1.UpgradeHooks{
+				IntermediateUpdate: "4.13.37",
+				MonitorTimeout:     120,
+			},
+		},
+	}
+
+	err = c.Create(context.TODO(), &curator)
+	assert.NotNil(t, err, "Cannot create curator with only intermediateUpdate validation successful")
+
+	m.Stop()
+}
+
+func TestAddIntermediateUpdateToExistingCurator(t *testing.T) {
+	clustercuratorv1.AddToScheme(scheme.Scheme)
+	m := &envtest.Environment{
+		CRDDirectoryPaths: []string{
+			filepath.Join("..", "..", "deploy", "crd"),
+		},
+	}
+
+	var err error
+	var cfg *rest.Config
+	if cfg, err = m.Start(); err != nil {
+		log.Fatal(err)
+	}
+
+	defer m.Stop()
+
+	var c client.Client
+
+	if c, err = client.New(cfg, client.Options{Scheme: scheme.Scheme}); err != nil {
+		log.Fatal(err)
+	}
+
+	err = c.Create(context.Background(), &corev1.Namespace{
+		ObjectMeta: v1.ObjectMeta{
+			Name: ClusterName,
+		},
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	curator := clustercuratorv1.ClusterCurator{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      ClusterName,
+			Namespace: ClusterName,
+		},
+		Spec: clustercuratorv1.ClusterCuratorSpec{
+			DesiredCuration: "upgrade",
+			Upgrade: clustercuratorv1.UpgradeHooks{
+				DesiredUpdate:  "4.14.16",
+				MonitorTimeout: 120,
+			},
+		},
+	}
+
+	err = c.Create(context.Background(), &curator)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	curator = clustercuratorv1.ClusterCurator{}
+	c.Get(context.TODO(), types.NamespacedName{
+		Namespace: ClusterName,
+		Name:      ClusterName,
+	}, &curator)
+
+	patch := []byte(
+		`{
+			"spec": {
+				"upgrade": {
+					"intermediateUpdate": "4.13.38"
+				}
+			}
+		}`)
+
+	err = c.Patch(context.Background(), &curator, client.RawPatch(types.MergePatchType, patch))
+
+	assert.NotNil(t, err, "Cannot add intermediateUpdate to existing curator validation successful")
+
+	m.Stop()
+}

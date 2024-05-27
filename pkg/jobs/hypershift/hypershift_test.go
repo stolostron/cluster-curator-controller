@@ -183,7 +183,7 @@ func TestMonitorClusterStatusInstallNoHC(t *testing.T) {
 	clusterCurator := &clustercuratorv1.ClusterCurator{}
 	dynfake := dynfake.NewSimpleDynamicClient(runtime.NewScheme())
 	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
-	client := clientfake.NewFakeClientWithScheme(s, clusterCurator)
+	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(clusterCurator).Build()
 
 	assert.NotNil(
 		t,

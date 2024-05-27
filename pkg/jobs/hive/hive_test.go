@@ -535,9 +535,7 @@ func TestUpgradeClusterNonOpenshift(t *testing.T) {
 		},
 	}
 
-	client := clientfake.NewFakeClientWithScheme(s, []runtime.Object{
-		getUpgradeClusterCurator(), managedclusterinfo,
-	}...)
+	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(getUpgradeClusterCurator(), managedclusterinfo).Build()
 
 	assert.Equal(t, UpgradeCluster(client, ClusterName, getUpgradeClusterCurator()),
 		errors.New("Can not upgrade non openshift cluster"))
@@ -560,9 +558,7 @@ func TestUpgradeClusterNoDesiredUpdate(t *testing.T) {
 		},
 	}
 
-	client := clientfake.NewFakeClientWithScheme(s, []runtime.Object{
-		clustercurator, getManagedClusterInfo(),
-	}...)
+	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(clustercurator, getManagedClusterInfo()).Build()
 
 	assert.Equal(t, UpgradeCluster(client, ClusterName, clustercurator),
 		errors.New("Provide valid upgrade version or channel or upstream"))
@@ -587,9 +583,7 @@ func TestUpgradeClusterInValidVersion(t *testing.T) {
 		},
 	}
 
-	client := clientfake.NewFakeClientWithScheme(s, []runtime.Object{
-		clustercurator, getManagedClusterInfo(),
-	}...)
+	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(clustercurator, getManagedClusterInfo()).Build()
 
 	assert.Equal(t, UpgradeCluster(client, ClusterName, clustercurator),
 		errors.New("Provided version is not valid"), "Invalid Version")
@@ -615,9 +609,7 @@ func TestUpgradeClusterInValidChannel(t *testing.T) {
 		},
 	}
 
-	client := clientfake.NewFakeClientWithScheme(s, []runtime.Object{
-		clustercurator, getManagedClusterInfo(),
-	}...)
+	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(clustercurator, getManagedClusterInfo()).Build()
 
 	assert.Equal(t, UpgradeCluster(client, ClusterName, clustercurator),
 		errors.New("Provided channel is not valid"), "Invalid Channel")
@@ -673,9 +665,7 @@ func TestUpgradeClusterMCVExists(t *testing.T) {
 		},
 	}
 
-	client := clientfake.NewFakeClientWithScheme(s, []runtime.Object{
-		clustercurator, getManagedClusterInfo(), managedclusterview,
-	}...)
+	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(clustercurator, getManagedClusterInfo(), managedclusterview).Build()
 
 	assert.NotNil(t, UpgradeCluster(client, ClusterName, clustercurator), "err not nil when managedclusterview already exists")
 }
@@ -729,9 +719,7 @@ func TestUpgradeCluster(t *testing.T) {
 	}
 	b, _ := json.Marshal(clusterversion)
 
-	client := clientfake.NewFakeClientWithScheme(s, []runtime.Object{
-		clustercurator, getManagedClusterInfo(),
-	}...)
+	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(clustercurator, getManagedClusterInfo()).Build()
 
 	go func() {
 		for i := 0; i < 10; i++ {

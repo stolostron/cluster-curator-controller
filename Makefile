@@ -37,6 +37,14 @@ export DOCKER_TAG        ?= $(shell whoami)
 #CRD_OPTIONS ?= "crd"
 CRD_OPTIONS ?= "crd:trivialVersions=true"
 
+TEST_TMP := /tmp
+export KUBEBUILDER_ASSETS ?= $(TEST_TMP)/kubebuilder/bin
+K8S_VERSION ?= 1.27.1
+GOHOSTOS ?= $(shell go env GOHOSTOS)
+GOHOSTARCH ?= $(shell go env GOHOSTARCH)
+KB_TOOLS_ARCHIVE_NAME := kubebuilder-tools-$(K8S_VERSION)-$(GOHOSTOS)-$(GOHOSTARCH).tar.gz
+KB_TOOLS_ARCHIVE_PATH := $(TEST_TMP)/$(KB_TOOLS_ARCHIVE_NAME)
+
 BEFORE_SCRIPT := $(shell build/before-make.sh)
 
 export DOCKER_BUILD_OPTS  = --build-arg VCS_REF=$(VCS_REF) \
@@ -111,7 +119,7 @@ lint:
 
 .PHONY: unit-tests
 ## Runs go unit tests
-unit-tests:
+unit-tests: ensure-kubebuilder-tools
 	@build/run-unit-tests.sh
 	#GOFLAGS="" go test -timeout 2000s -v ./pkg/...
 	#GOFLAGS="" go test -timeout 60s -v -short ./cmd/...
@@ -142,3 +150,15 @@ scale-up-test:
 .PHONY: scale-down-test
 scale-down-test:
 	go test -v -timeout 500s ./cmd/controller/controller_test.go -run TestDeleteManagedClusters
+
+.PHONY: ensure-kubebuilder-tools
+# download the kubebuilder-tools to get kube-apiserver binaries from it
+ensure-kubebuilder-tools:
+ifeq "" "$(wildcard $(KUBEBUILDER_ASSETS))"
+	$(info Downloading kube-apiserver into '$(KUBEBUILDER_ASSETS)')
+	mkdir -p '$(KUBEBUILDER_ASSETS)'
+	curl -s -f -L https://storage.googleapis.com/kubebuilder-tools/$(KB_TOOLS_ARCHIVE_NAME) -o '$(KB_TOOLS_ARCHIVE_PATH)'
+	tar -C '$(KUBEBUILDER_ASSETS)' --strip-components=2 -zvxf '$(KB_TOOLS_ARCHIVE_PATH)'
+else
+	$(info Using existing kube-apiserver from "$(KUBEBUILDER_ASSETS)")
+endif

@@ -147,7 +147,7 @@ func TestRecordCuratedStatusCondition(t *testing.T) {
 	s := scheme.Scheme
 	s.AddKnownTypes(CCGVR.GroupVersion(), &clustercuratorv1.ClusterCurator{})
 
-	client := clientfake.NewFakeClientWithScheme(s, cc)
+	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(cc).Build()
 
 	assert.Nil(t,
 		recordCuratedStatusCondition(
@@ -176,7 +176,7 @@ func TestRecordCurrentStatusConditionNoResource(t *testing.T) {
 	s := scheme.Scheme
 	s.AddKnownTypes(CCGVR.GroupVersion(), &clustercuratorv1.ClusterCurator{})
 
-	client := clientfake.NewFakeClientWithScheme(s)
+	client := clientfake.NewClientBuilder().WithScheme(s).Build()
 
 	err := RecordCurrentStatusCondition(
 		client,
@@ -196,7 +196,7 @@ func TestGetClusterCurator(t *testing.T) {
 	s := scheme.Scheme
 	s.AddKnownTypes(CCGVR.GroupVersion(), &clustercuratorv1.ClusterCurator{})
 
-	client := clientfake.NewFakeClientWithScheme(s, cc)
+	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(cc).Build()
 
 	_, err := GetClusterCurator(client, ClusterName, ClusterName)
 	assert.Nil(t, err, "err is nil, when ClusterCurator resource is retrieved")
@@ -207,7 +207,7 @@ func TestGetClusterCuratorNoResource(t *testing.T) {
 	s := scheme.Scheme
 	s.AddKnownTypes(CCGVR.GroupVersion(), &clustercuratorv1.ClusterCurator{})
 
-	client := clientfake.NewFakeClientWithScheme(s)
+	client := clientfake.NewClientBuilder().WithScheme(s).Build()
 
 	cc, err := GetClusterCurator(client, ClusterName, ClusterName)
 	assert.Nil(t, cc, "cc is nil, when ClusterCurator resource is not found")
@@ -221,7 +221,7 @@ func TestRecordCuratorJobName(t *testing.T) {
 
 	s := scheme.Scheme
 	s.AddKnownTypes(CCGVR.GroupVersion(), &clustercuratorv1.ClusterCurator{})
-	client := clientfake.NewFakeClientWithScheme(s, cc)
+	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(cc).Build()
 
 	err := RecordCuratorJobName(client, ClusterName, ClusterName, "my-job-ABCDE")
 
@@ -233,7 +233,7 @@ func TestRecordCuratorJobNameInvalidCurator(t *testing.T) {
 
 	s := scheme.Scheme
 	s.AddKnownTypes(CCGVR.GroupVersion(), &clustercuratorv1.ClusterCurator{})
-	client := clientfake.NewFakeClientWithScheme(s)
+	client := clientfake.NewClientBuilder().WithScheme(s).Build()
 
 	err := RecordCuratorJobName(client, ClusterName, ClusterName, "my-job-ABCDE")
 

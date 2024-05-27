@@ -296,7 +296,7 @@ func TestCreateLauncher(t *testing.T) {
 	}
 
 	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
-	client := clientfake.NewFakeClientWithScheme(s, clusterCurator)
+	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(clusterCurator).Build()
 	kubeset := fake.NewSimpleClientset()
 
 	testLauncher := NewLauncher(client, kubeset, imageURI, *clusterCurator)
@@ -344,7 +344,7 @@ func TestCreateLauncherBadClusterCurator(t *testing.T) {
 	}
 
 	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
-	client := clientfake.NewFakeClientWithScheme(s, clusterCurator)
+	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(clusterCurator).Build()
 	kubeset := fake.NewSimpleClientset()
 
 	testLauncher := NewLauncher(client, kubeset, imageURI, *clusterCurator)
@@ -385,7 +385,7 @@ func TestCreateLauncherOverrideJob(t *testing.T) {
 	}
 
 	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
-	client := clientfake.NewFakeClientWithScheme(s, clusterCurator)
+	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(clusterCurator).Build()
 	kubeset := fake.NewSimpleClientset()
 
 	testLauncher := NewLauncher(client, kubeset, imageURI, *clusterCurator)
@@ -413,7 +413,7 @@ func TestCreateLauncherInvalidOverrideJob(t *testing.T) {
 	}
 
 	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
-	client := clientfake.NewFakeClientWithScheme(s, clusterCurator)
+	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(clusterCurator).Build()
 	kubeset := fake.NewSimpleClientset()
 
 	testLauncher := NewLauncher(client, kubeset, imageURI, *clusterCurator)
