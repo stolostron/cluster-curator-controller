@@ -707,7 +707,12 @@ func TestIntermediateUpdateImmutability(t *testing.T) {
 
 	err = c.Patch(context.Background(), &curator, client.RawPatch(types.MergePatchType, patch))
 
+	c.Get(context.TODO(), types.NamespacedName{
+		Namespace: ClusterName,
+		Name:      ClusterName,
+	}, &curator)
 	assert.NotNil(t, err, "intermediateUpdate immutable validation successful")
+	assert.True(t, curator.Spec.Upgrade.IntermediateUpdate == "4.13.37", "intermediateUpdate is not changed")
 }
 
 func TestDesiredUpdateImmutabilityWhenIntermediateUpdateExists(t *testing.T) {
