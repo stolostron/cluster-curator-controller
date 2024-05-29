@@ -711,7 +711,7 @@ func TestIntermediateUpdateImmutability(t *testing.T) {
 		Namespace: ClusterName,
 		Name:      ClusterName,
 	}, &curator)
-	assert.NotNil(t, err, "intermediateUpdate immutable validation successful")
+	assert.True(t, strings.Contains(err.Error(), "The intermediateUpdate cannot be modified"), "The intermediateUpdate cannot be modified error found")
 	assert.True(t, curator.Spec.Upgrade.IntermediateUpdate == "4.13.37", "intermediateUpdate is not changed")
 }
 
@@ -768,7 +768,8 @@ func TestDesiredUpdateImmutabilityWhenIntermediateUpdateExists(t *testing.T) {
 
 	err = c.Patch(context.Background(), &curator, client.RawPatch(types.MergePatchType, patch))
 
-	assert.NotNil(t, err, "desireUpdate immutable when intermediateUpdate exists validation successful")
+	assert.True(t, strings.Contains(err.Error(), "The desiredUpdate cannot be modified when intermediateUpdate exists"),
+		"desireUpdate immutable when intermediateUpdate exists validation successful")
 }
 
 func TestIntermediateUpdateCreation(t *testing.T) {
@@ -817,7 +818,8 @@ func TestIntermediateUpdateCreation(t *testing.T) {
 	}
 
 	err = c.Create(context.TODO(), &curator)
-	assert.NotNil(t, err, "Cannot create curator with only intermediateUpdate validation successful")
+	assert.True(t, strings.Contains(err.Error(), "The intermediateUpdate cannot be created if desiredUpdate is missing or empty"),
+		"Cannot create curator with only intermediateUpdate validation successful")
 }
 
 func TestAddIntermediateUpdateToExistingCurator(t *testing.T) {
@@ -887,5 +889,6 @@ func TestAddIntermediateUpdateToExistingCurator(t *testing.T) {
 
 	err = c.Patch(context.Background(), &curator, client.RawPatch(types.MergePatchType, patch))
 
-	assert.NotNil(t, err, "Cannot add intermediateUpdate to existing curator validation successful")
+	assert.True(t, strings.Contains(err.Error(), "The intermediateUpdate cannot be added via update if desiredUpdate already exists"),
+		"Cannot add intermediateUpdate to existing curator validation successful")
 }
