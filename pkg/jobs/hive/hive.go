@@ -18,11 +18,13 @@ import (
 	managedclusterinfov1beta1 "github.com/stolostron/cluster-lifecycle-api/clusterinfo/v1beta1"
 	managedclusterviewv1beta1 "github.com/stolostron/cluster-lifecycle-api/view/v1beta1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/blang/semver/v4"
 	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/util/retry"
@@ -375,7 +377,7 @@ func EUSUpgradeCluster(client clientv1.Client, clusterName string, curator *clus
 	if err := client.Get(context.TODO(), types.NamespacedName{
 		Name:      clusterName + "admack",
 		Namespace: clusterName,
-	}, &ocpConfigView); err != nil {
+	}, &ocpConfigView); err != nil && k8serrors.IsNotFound(err) {
 		// check if mcv exists before creating
 
 		klog.V(2).Info("Create managedclusterview " + clusterName + "admack")
@@ -391,7 +393,7 @@ func EUSUpgradeCluster(client clientv1.Client, clusterName string, curator *clus
 	}
 
 	resultConfigMap := resultOCPConfigMCV.Status.Result
-	configMap := map[string]interface{}{}
+	configMap := &corev1.ConfigMap{}
 
 	if resultConfigMap.Raw != nil {
 		err := json.Unmarshal(resultConfigMap.Raw, &configMap)
@@ -424,7 +426,7 @@ func EUSUpgradeCluster(client clientv1.Client, clusterName string, curator *clus
 	if err := client.Get(context.TODO(), types.NamespacedName{
 		Namespace: clusterName,
 		Name:      clusterName,
-	}, &mcview); err != nil {
+	}, &mcview); err != nil && k8serrors.IsNotFound(err) {
 
 		klog.V(2).Info("Create managedclusterview " + clusterName)
 		if err := client.Create(context.TODO(), managedclusterview); err != nil {
@@ -453,16 +455,16 @@ func EUSUpgradeCluster(client clientv1.Client, clusterName string, curator *clus
 		return err
 	}
 
+	// "kube-1.{{ '%02d' | format((ocp_minor_version.split('.')[1] | int) + 14"
 	ackString := "ack-" + strconv.Itoa(int(desiredSemVer.Major)) + "." + strconv.Itoa(int(desiredSemVer.Minor)) +
 		"-kube-1." + strconv.Itoa(int(desiredSemVer.Minor+14)) + "-api-removals-in-" +
 		strconv.Itoa(int(desiredSemVer.Major)) + "." + strconv.Itoa(int(desiredSemVer.Minor+1))
 
-	cmData := configMap["data"]
+	cmData := configMap.Data
 	if cmData != nil {
-		// "kube-1.{{ '%02d' | format((ocp_minor_version.split('.')[1] | int) + 14"
-		cmData.(map[string]interface{})[ackString] = "true"
+		cmData[ackString] = "true"
 	} else {
-		configMap["data"] = map[string]interface{}{
+		configMap.Data = map[string]string{
 			ackString: "true",
 		}
 	}
@@ -514,13 +516,13 @@ func EUSUpgradeCluster(client clientv1.Client, clusterName string, curator *clus
 	}
 
 	if ocpConfigMCAStatus.Status.Conditions != nil {
-		for _, condition := range ocpConfigMCAStatus.Status.Conditions {
-			if condition.Status == v1.ConditionFalse && condition.Reason == managedclusteractionv1beta1.ReasonUpdateResourceFailed {
+		condition := meta.FindStatusCondition(ocpConfigMCAStatus.Status.Conditions, managedclusteractionv1beta1.ConditionActionCompleted)
+		if condition != nil {
+			if condition.Status == v1.ConditionTrue {
+				klog.V(2).Info("Remote configmap updated successfully " + clusterName + "admack")
+			} else if condition.Status == v1.ConditionFalse {
 				klog.Warning("ManagedClusterAction failed to update remote clusterversion", ocpConfigMCAStatus.Status.Conditions)
 				return errors.New("Remote confimap update failed")
-			}
-			if condition.Status == v1.ConditionTrue && condition.Type == managedclusteractionv1beta1.ConditionActionCompleted {
-				klog.V(2).Info("Remote configmap updated successfully " + clusterName + "admack")
 			}
 		}
 	} else {
@@ -562,8 +564,13 @@ func EUSUpgradeCluster(client clientv1.Client, clusterName string, curator *clus
 		}
 
 		if mcaStatus.Status.Conditions != nil {
-			for _, condition := range mcaStatus.Status.Conditions {
-				if condition.Status == v1.ConditionFalse && condition.Reason == managedclusteractionv1beta1.ReasonUpdateResourceFailed {
+			condition := meta.FindStatusCondition(mcaStatus.Status.Conditions, managedclusteractionv1beta1.ConditionActionCompleted)
+			if condition != nil {
+				if condition.Status == v1.ConditionTrue {
+					klog.V(2).Info("Remote clusterversion updated successfully " + clusterName)
+					successful = true
+					break
+				} else if condition.Status == v1.ConditionFalse {
 					klog.Warning("ManagedClusterAction failed to update remote clusterversion", mcaStatus.Status.Conditions)
 					if i == retries {
 						klog.Warning("Max attempts reached updating clusterversion")
@@ -571,11 +578,6 @@ func EUSUpgradeCluster(client clientv1.Client, clusterName string, curator *clus
 					} else {
 						klog.V(2).Info("Retrying clusterversion update")
 					}
-				}
-				if condition.Status == v1.ConditionTrue && condition.Type == managedclusteractionv1beta1.ConditionActionCompleted {
-					klog.V(2).Info("Remote clusterversion updated successfully " + clusterName)
-					successful = true
-					break
 				}
 			}
 		} else if i == retries {
@@ -748,7 +750,7 @@ func validateUpgradeVersion(client clientv1.Client, clusterName string, curator 
 	return nil
 }
 
-func waitForMCV(client clientv1.Client, clusterName string, clusterNamespace string, mcv *managedclusterviewv1beta1.ManagedClusterView, errMsg error) error {
+func waitForMCV(client clientv1.Client, clusterName string, clusterNamespace string, mcv *managedclusterviewv1beta1.ManagedClusterView, err error) error {
 	for i := 1; i <= 5; i++ {
 		time.Sleep(utils.PauseFiveSeconds)
 		if err := client.Get(context.TODO(), types.NamespacedName{
@@ -757,21 +759,21 @@ func waitForMCV(client clientv1.Client, clusterName string, clusterNamespace str
 		}, mcv); err != nil {
 			if i == 5 {
 				klog.Warning(err)
-				return errMsg
+				return err
 			}
 			klog.Warning(err)
 			continue
 		}
 		labels := mcv.ObjectMeta.GetLabels()
 		if len(labels) == 0 {
-			return errMsg
+			return err
 		}
 		if _, ok := labels[MCVUpgradeLabel]; ok {
 			if mcv.Status.Result.Raw != nil {
 				break
 			}
 		} else {
-			return errMsg
+			return err
 		}
 	}
 
@@ -812,13 +814,13 @@ func validateEUSUpgradeVersion(client clientv1.Client, clusterName string, curat
 	}
 
 	if isInterVersion && (intermediateVersion.Compare(currentVersion) == 0 || intermediateVersion.Compare(currentVersion) == -1) {
-		return errors.New(fmt.Sprintf("IntermediateUpdate %v must be greater than current version %v to run EUS to EUS upgrade for Curator %q",
+		return errors.New(fmt.Sprintf("IntermediateUpdate %s must be greater than current version %s to run EUS to EUS upgrade for Curator %q",
 			intermediateVersion, currentVersion, curator.Name))
 	}
 
 	// desiredVersion == targeted final EUS version
 	if desiredVersion.Compare(intermediateVersion) == 0 || desiredVersion.Compare(intermediateVersion) == -1 {
-		return errors.New(fmt.Sprintf("DesiredUpdate %v must be greater than IntermediateUpdate %v to run EUS to EUS upgrade for Curator %q",
+		return errors.New(fmt.Sprintf("DesiredUpdate %s must be greater than IntermediateUpdate %s to run EUS to EUS upgrade for Curator %q",
 			desiredVersion, intermediateVersion, curator.Name))
 	}
 
@@ -1011,7 +1013,7 @@ func eusRetreiveAndUpdateClusterVersion(
 	if err := client.Get(context.TODO(), types.NamespacedName{
 		Namespace: clusterName,
 		Name:      clusterName,
-	}, &mcview); err != nil {
+	}, &mcview); err != nil && k8serrors.IsNotFound(err) {
 
 		klog.V(2).Info("Create managedclusterview " + clusterName)
 		if err := client.Create(context.TODO(), managedclusterview); err != nil {
