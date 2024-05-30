@@ -379,11 +379,12 @@ func EUSUpgradeCluster(client clientv1.Client, clusterName string, curator *clus
 		Namespace: clusterName,
 	}, &ocpConfigView); err != nil && k8serrors.IsNotFound(err) {
 		// check if mcv exists before creating
-
 		klog.V(2).Info("Create managedclusterview " + clusterName + "admack")
 		if err := client.Create(context.TODO(), ocpConfigMCV); err != nil {
 			return err
 		}
+	} else if err != nil {
+		return err
 	}
 
 	ocpConfigGetErr := errors.New("Failed to get remote admin-ack configmap")
@@ -427,11 +428,12 @@ func EUSUpgradeCluster(client clientv1.Client, clusterName string, curator *clus
 		Namespace: clusterName,
 		Name:      clusterName,
 	}, &mcview); err != nil && k8serrors.IsNotFound(err) {
-
 		klog.V(2).Info("Create managedclusterview " + clusterName)
 		if err := client.Create(context.TODO(), managedclusterview); err != nil {
 			return err
 		}
+	} else if err != nil {
+		return err
 	}
 
 	resultmcview := managedclusterviewv1beta1.ManagedClusterView{}
@@ -753,15 +755,15 @@ func validateUpgradeVersion(client clientv1.Client, clusterName string, curator 
 func waitForMCV(client clientv1.Client, clusterName string, clusterNamespace string, mcv *managedclusterviewv1beta1.ManagedClusterView, err error) error {
 	for i := 1; i <= 5; i++ {
 		time.Sleep(utils.PauseFiveSeconds)
-		if err := client.Get(context.TODO(), types.NamespacedName{
+		if clientGetErr := client.Get(context.TODO(), types.NamespacedName{
 			Name:      clusterName,
 			Namespace: clusterNamespace,
-		}, mcv); err != nil {
+		}, mcv); clientGetErr != nil {
 			if i == 5 {
 				klog.Warning(err)
 				return err
 			}
-			klog.Warning(err)
+			klog.Warning(clientGetErr)
 			continue
 		}
 		labels := mcv.ObjectMeta.GetLabels()
@@ -1014,11 +1016,12 @@ func eusRetreiveAndUpdateClusterVersion(
 		Namespace: clusterName,
 		Name:      clusterName,
 	}, &mcview); err != nil && k8serrors.IsNotFound(err) {
-
 		klog.V(2).Info("Create managedclusterview " + clusterName)
 		if err := client.Create(context.TODO(), managedclusterview); err != nil {
 			return mcaStatus, err
 		}
+	} else if err != nil {
+		return mcaStatus, err
 	}
 
 	if err := waitForMCV(client, clusterName, clusterName, &resultmcview, getErr); err != nil {
