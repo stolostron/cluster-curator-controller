@@ -27,6 +27,10 @@ const DoneDoneDone = "done"
 const ActivateAndMonitor = "activate-and-monitor"
 const UpgradeCluster = "upgrade-cluster"
 const MonUpgrade = "monitor-upgrade"
+const InterUpgradeCluster = "intermediate-upgrade-cluster"
+const InterMonUpgrade = "intermediate-monitor-upgrade"
+const FinalUpgradeCluster = "final-upgrade-cluster"
+const FinalMonUpgrade = "final-monitor-upgrade"
 
 const DeleteClusterDeployment = "destroy-cluster"
 const MonitorDestroy = "monitor-destroy"
@@ -146,6 +150,71 @@ func getBatchJob(
 			isPrehook = false
 			isPosthook = false
 		}
+
+		annotations := map[string]string{
+			UpgradeCluster: "Start Upgrading the Cluster and monitor to completion",
+			MonUpgrade:     "Monitor upgrade status to completion",
+			DoneDoneDone:   "Cluster Curator job has completed",
+		}
+
+		jobInitContainers := []corev1.Container{
+			{
+				Name:            UpgradeCluster,
+				Image:           imageURI,
+				Command:         append([]string{CurCmd, UpgradeCluster, clusterName}),
+				ImagePullPolicy: corev1.PullAlways,
+				Resources:       resourceSettings,
+			},
+			{
+				Name:            MonUpgrade,
+				Image:           imageURI,
+				Command:         append([]string{CurCmd, MonUpgrade, clusterName}),
+				ImagePullPolicy: corev1.PullAlways,
+				Resources:       resourceSettings,
+			},
+		}
+
+		if curator.Spec.Upgrade.IntermediateUpdate != "" && curator.Spec.Upgrade.DesiredUpdate != "" {
+			// Trigger EUS to EUS upgrade
+			annotations = map[string]string{
+				InterUpgradeCluster: "Upgrade cluster to intermediate version and monitor to completion",
+				InterMonUpgrade:     "Monitor intermediate upgrade status to completion",
+				FinalUpgradeCluster: "Upgrade cluster to final version and monitor to completion",
+				FinalMonUpgrade:     "Monitor final upgrade status to completion",
+				DoneDoneDone:        "Cluster Curator job has completed",
+			}
+
+			jobInitContainers = []corev1.Container{
+				{
+					Name:            InterUpgradeCluster,
+					Image:           imageURI,
+					Command:         append([]string{CurCmd, InterUpgradeCluster, clusterName}),
+					ImagePullPolicy: corev1.PullAlways,
+					Resources:       resourceSettings,
+				},
+				{
+					Name:            InterMonUpgrade,
+					Image:           imageURI,
+					Command:         append([]string{CurCmd, InterMonUpgrade, clusterName}),
+					ImagePullPolicy: corev1.PullAlways,
+					Resources:       resourceSettings,
+				},
+				{
+					Name:            FinalUpgradeCluster,
+					Image:           imageURI,
+					Command:         append([]string{CurCmd, FinalUpgradeCluster, clusterName}),
+					ImagePullPolicy: corev1.PullAlways,
+					Resources:       resourceSettings,
+				},
+				{
+					Name:            FinalMonUpgrade,
+					Image:           imageURI,
+					Command:         append([]string{CurCmd, MonUpgrade, clusterName}),
+					ImagePullPolicy: corev1.PullAlways,
+					Resources:       resourceSettings,
+				},
+			}
+		}
 		newJob = &batchv1.Job{
 			ObjectMeta: v1.ObjectMeta{
 				GenerateName: "curator-job-",
@@ -153,11 +222,7 @@ func getBatchJob(
 				Labels: map[string]string{
 					"open-cluster-management": "curator-job",
 				},
-				Annotations: map[string]string{
-					UpgradeCluster: "Start Upgrading the Cluster and monitor to completion",
-					MonUpgrade:     "Monitor upgrade status to completion",
-					DoneDoneDone:   "Cluster Curator job has completed",
-				},
+				Annotations: annotations,
 			},
 			Spec: batchv1.JobSpec{
 				BackoffLimit:            new(int32),
@@ -166,22 +231,7 @@ func getBatchJob(
 					Spec: corev1.PodSpec{
 						ServiceAccountName: "cluster-installer",
 						RestartPolicy:      corev1.RestartPolicyNever,
-						InitContainers: []corev1.Container{
-							corev1.Container{
-								Name:            UpgradeCluster,
-								Image:           imageURI,
-								Command:         append([]string{CurCmd, UpgradeCluster, clusterName}),
-								ImagePullPolicy: corev1.PullAlways,
-								Resources:       resourceSettings,
-							},
-							corev1.Container{
-								Name:            MonUpgrade,
-								Image:           imageURI,
-								Command:         append([]string{CurCmd, MonUpgrade, clusterName}),
-								ImagePullPolicy: corev1.PullAlways,
-								Resources:       resourceSettings,
-							},
-						},
+						InitContainers:     jobInitContainers,
 						Containers: []corev1.Container{
 							corev1.Container{
 								Name:    DoneDoneDone,

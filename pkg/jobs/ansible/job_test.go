@@ -327,7 +327,9 @@ func TestJob(t *testing.T) {
 	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
 	s.AddKnownTypes(hivev1.SchemeBuilder.GroupVersion, &hivev1.ClusterDeployment{}, &hivev1.MachinePool{})
 	s.AddKnownTypes(corev1.SchemeGroupVersion, &corev1.Secret{})
-	client := clientfake.NewFakeClientWithScheme(s, getClusterCurator(), genClusterDeployment(), genInstallConfigSecret(), genMachinePool())
+	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(
+		getClusterCurator(), genClusterDeployment(), genInstallConfigSecret(), genMachinePool()).Build()
+
 	t.Logf("client has been initialized")
 
 	go func() {
@@ -373,7 +375,8 @@ func TestJobPosthook(t *testing.T) {
 	s.AddKnownTypes(ajv1.SchemeBuilder.GroupVersion, &ajv1.AnsibleJob{})
 	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
 	s.AddKnownTypes(hivev1.SchemeBuilder.GroupVersion, &hivev1.ClusterDeployment{}, &hivev1.MachinePool{})
-	client := clientfake.NewFakeClientWithScheme(s, getClusterCurator(), genClusterDeployment(), genMachinePool())
+	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(
+		getClusterCurator(), genClusterDeployment(), genMachinePool()).Build()
 
 	// buildAnsibleJob("successful", AnsibleJobTemplateName),
 	go func() {
@@ -418,7 +421,8 @@ func TestMonitorAnsibleJobAnsibleJobStatusSuccessfulPreHook(t *testing.T) {
 
 	s.AddKnownTypes(ajv1.SchemeBuilder.GroupVersion, &ajv1.AnsibleJob{})
 	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
-	client := clientfake.NewFakeClientWithScheme(s, aj, cc)
+	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(
+		aj, cc).Build()
 
 	mapAJ, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(&aj)
 	unstructAJ := &unstructured.Unstructured{Object: mapAJ}
@@ -439,7 +443,8 @@ func TestMonitorAnsibleJobAnsibleJobStatusError(t *testing.T) {
 
 	s.AddKnownTypes(ajv1.SchemeBuilder.GroupVersion, &ajv1.AnsibleJob{})
 	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
-	client := clientfake.NewFakeClientWithScheme(s, aj, cc)
+	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(
+		aj, cc).Build()
 
 	mapAJ, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(&aj)
 	unstructAJ := &unstructured.Unstructured{Object: mapAJ}
@@ -457,7 +462,8 @@ func TestMonitorAnsibleJobK8sJob(t *testing.T) {
 
 	s.AddKnownTypes(ajv1.SchemeBuilder.GroupVersion, &ajv1.AnsibleJob{})
 	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
-	client := clientfake.NewFakeClientWithScheme(s, aj, cc)
+	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(
+		aj, cc).Build()
 
 	mapAJ, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(&aj)
 	unstructAJ := &unstructured.Unstructured{Object: mapAJ}
@@ -488,7 +494,8 @@ func TestRunAnsibleJob(t *testing.T) {
 	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
 	s.AddKnownTypes(hivev1.SchemeBuilder.GroupVersion, &hivev1.ClusterDeployment{}, &hivev1.MachinePool{})
 	s.AddKnownTypes(corev1.SchemeGroupVersion, &corev1.Secret{})
-	client := clientfake.NewFakeClientWithScheme(s, cc, genClusterDeployment(), genMachinePool(), genInstallConfigSecret())
+	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(
+		cc, genClusterDeployment(), genMachinePool(), genInstallConfigSecret()).Build()
 
 	aJob, err := RunAnsibleJob(client, cc, POSTHOOK, cc.Spec.Install.Posthook[0], "toweraccess")
 	assert.Nil(t, err, "err is nil when job is started")
@@ -506,7 +513,8 @@ func TestAnsibleJobExtraVars(t *testing.T) {
 	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
 	s.AddKnownTypes(hivev1.SchemeBuilder.GroupVersion, &hivev1.ClusterDeployment{}, &hivev1.MachinePool{})
 	s.AddKnownTypes(corev1.SchemeGroupVersion, &corev1.Secret{})
-	client := clientfake.NewFakeClientWithScheme(s, cc, genClusterDeployment(), genMachinePool(), genInstallConfigSecret())
+	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(
+		cc, genClusterDeployment(), genMachinePool(), genInstallConfigSecret()).Build()
 
 	aJob, err := RunAnsibleJob(client, cc, POSTHOOK, cc.Spec.Install.Posthook[0], "toweraccess")
 	assert.Nil(t, err, "err is nil when job is started")
@@ -718,9 +726,12 @@ func TestUpgradeAnsibleJobExtraVars(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			var fakeClient client.WithWatch
 			if test.managedClusterInfo != nil {
-				fakeClient = clientfake.NewFakeClientWithScheme(s, test.clusterCurator, genClusterDeployment(), genMachinePool(), genInstallConfigSecret(), test.managedClusterInfo)
+				fakeClient = clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(
+					test.clusterCurator, genClusterDeployment(), genMachinePool(),
+					genInstallConfigSecret(), test.managedClusterInfo).Build()
 			} else {
-				fakeClient = clientfake.NewFakeClientWithScheme(s, test.clusterCurator, genClusterDeployment(), genMachinePool(), genInstallConfigSecret())
+				fakeClient = clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(
+					test.clusterCurator, genClusterDeployment(), genMachinePool(), genInstallConfigSecret()).Build()
 			}
 
 			var hook clustercuratorv1.Hook
@@ -790,7 +801,9 @@ func TestInventory(t *testing.T) {
 				cc.Spec.Inventory = test.inventory
 			}
 
-			client := clientfake.NewFakeClientWithScheme(s, cc, genClusterDeployment(), genMachinePool(), genInstallConfigSecret())
+			client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(
+				cc, genClusterDeployment(), genMachinePool(), genInstallConfigSecret()).Build()
+
 			aJob, err := RunAnsibleJob(client, cc, POSTHOOK, cc.Spec.Install.Posthook[0], "toweraccess")
 			assert.Nil(t, err, "err is nil when job is started")
 
