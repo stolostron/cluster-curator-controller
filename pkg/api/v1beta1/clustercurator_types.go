@@ -32,7 +32,7 @@ type ClusterCuratorSpec struct {
 	// Hosted clusters support both prehook and posthook.
 	Destroy Hooks `json:"destroy,omitempty"`
 
-	// During an upgrade curation run these hooks.
+	// An upgrade curation runs these hooks.
 	// +kubebuilder:validation:XValidation:rule="!(has(oldSelf.intermediateUpdate) && self.intermediateUpdate != oldSelf.intermediateUpdate)",message="The intermediateUpdate cannot be modified"
 	// +kubebuilder:validation:XValidation:rule="!(has(oldSelf.intermediateUpdate) && oldSelf.intermediateUpdate != '' && has(oldSelf.desiredUpdate) && self.desiredUpdate != oldSelf.desiredUpdate)",message="The desiredUpdate cannot be modified when intermediateUpdate exists"
 	// +kubebuilder:validation:XValidation:rule="!has(self.intermediateUpdate) || (has(self.desiredUpdate) && self.desiredUpdate != '')",message="The intermediateUpdate cannot be created if desiredUpdate is missing or empty"
