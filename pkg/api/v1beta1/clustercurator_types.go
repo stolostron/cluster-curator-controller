@@ -14,22 +14,22 @@ type ClusterCuratorSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// This is the desired curation that will occur. The supported options are 'install', 'upgrade', or 'destroy'.
+	// This is the desired curation that occurs. The supported options are 'install', 'upgrade', or 'destroy'.
 	// +kubebuilder:validation:Enum={install,scale,upgrade,destroy,delete-cluster-namespace}
 	DesiredCuration string `json:"desiredCuration,omitempty"`
 
 	// Points to the Cloud Provider or Ansible Provider secret, format: namespace/secretName
 	ProviderCredentialPath string `json:"providerCredentialPath,omitempty"`
 
-	// During an install curation run these pre/post hooks.
+	// An install curation runs these prehooks and posthooks.
 	Install Hooks `json:"install,omitempty"`
 
-	// During an scale curation run these pre/post hooks.
+	// A scale curation run these prehooks and posthooks.
 	Scale Hooks `json:"scale,omitempty"`
 
-	// During an destroy curation run these hooks.
+	// A destroy curation runs these hooks.
 	// Standalone clusters only support the prehook.
-	// Hosted clusters support both prehook/posthook.
+	// Hosted clusters support both prehook and posthook.
 	Destroy Hooks `json:"destroy,omitempty"`
 
 	// During an upgrade curation run these hooks.
@@ -51,9 +51,9 @@ type Hook struct {
 	// +kubebuilder:validation:Required
 	Name string `json:"name"`
 
-	// Type of the Hook. For Job type, Ansible job template will be used.
-	// For Workflow type, Ansible workflow template will be used.
-	// If omitted, defaults to Job type.
+	// Type of the Hook. For Job type, Ansible job template is used.
+	// For Workflow type, Ansible workflow template is used.
+	// If omitted, it defaults to the Job type.
 	// +optional
 	// +kubebuilder:default=Job
 	Type HookType `json:"type,omitempty"`
@@ -90,10 +90,10 @@ type Hooks struct {
 	// +kubebuilder:pruning:PreserveUnknownFields
 	OverrideJob *runtime.RawExtension `json:"overrideJob,omitempty"`
 
-	// JobMonitorTimeout defines the timeout for finding a job, the unit of this is minute.
+	// JobMonitorTimeout defines the timeout for finding a job and defines time in minutes.
 	// If the job is found, the curator controller waits until the job becomes active.
 	// By default, it is 5 minutes.
-	// If its value is less than or equal to zero, the default value will be used.
+	// If its value is less than or equal to zero, the default is used.
 	// +optional
 	// +kubebuilder:default=5
 	JobMonitorTimeout int `json:"jobMonitorTimeout,omitempty"`
@@ -107,26 +107,26 @@ type UpgradeHooks struct {
 
 	// IntermediateUpdate indicates the desired value of
 	// the intermediate cluster version when performing EUS to EUS upgrades.
-	// Setting both this value and DesiredUpdate will trigger an EUS to EUS upgrade.
+	// Setting both this value and DesiredUpdate triggers an EUS to EUS upgrade.
 	// +kubebuilder:validation:Optional
 	IntermediateUpdate string `json:"intermediateUpdate,omitempty"`
 
 	// DesiredUpdate indicates the desired value of
-	// the cluster version. Setting this value will trigger an upgrade (if
+	// the cluster version. Setting this value triggers an upgrade (if
 	// the current version does not match the desired version). During
 	// an EUS to EUS upgrade, this value becomes the final cluster version
-	// (the target version that ClusterCurator will upgrade the cluster to).
+	// (the target version that ClusterCurator upgrades the cluster to).
 	// +optional
 	DesiredUpdate string `json:"desiredUpdate,omitempty"`
 
 	// Channel is an identifier for explicitly requesting that a non-default
-	// set of updates be applied to this cluster. The default channel will
-	// contain stable updates that are appropriate for production clusters.
+	// set of updates be applied to this cluster. The default channel
+	// contains stable updates that are appropriate for production clusters.
 	// +optional
 	Channel string `json:"channel,omitempty"`
 
 	// Upstream may be used to specify the preferred update server. By default
-	// it will use the appropriate update server for the cluster and region.
+	// it uses the appropriate update server for the cluster and region.
 	// +optional
 	Upstream string `json:"upstream,omitempty"`
 
@@ -140,9 +140,9 @@ type UpgradeHooks struct {
 	// +kubebuilder:pruning:PreserveUnknownFields
 	OverrideJob *runtime.RawExtension `json:"overrideJob,omitempty"`
 
-	// MonitorTimeout defines the monitor process timeout, the unit of this is minute.
+	// MonitorTimeout defines the monitor process timeout, and defines time in minutes.
 	// By default, it is 120 minutes.
-	// If its value is less than or equal to zero, the default value will be used.
+	// If its value is less than or equal to zero, the default value is used.
 	// +optional
 	// +kubebuilder:default=120
 	MonitorTimeout int `json:"monitorTimeout,omitempty"`

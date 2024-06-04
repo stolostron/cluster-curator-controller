@@ -54,7 +54,7 @@ spec:
                 description: Kubernetes job resource created for curation of a cluster.
                 type: string
               desiredCuration:
-                description: This is the desired curation that will occur. The supported
+                description: This is the desired curation that occurs. The supported
                   options are 'install', 'upgrade', or 'destroy'.
                 enum:
                 - install
@@ -64,17 +64,17 @@ spec:
                 - delete-cluster-namespace
                 type: string
               destroy:
-                description: During an destroy curation run these hooks. Standalone
-                  clusters only support the prehook. Hosted clusters support both
-                  prehook/posthook.
+                description: A destroy curation runs these hooks. Standalone clusters
+                  only support the prehook. Hosted clusters support both prehook and
+                  posthook.
                 properties:
                   jobMonitorTimeout:
                     default: 5
                     description: JobMonitorTimeout defines the timeout for finding
-                      a job, the unit of this is minute. If the job is found, the
+                      a job and defines time in minutes. If the job is found, the
                       curator controller waits until the job becomes active. By default,
                       it is 5 minutes. If its value is less than or equal to zero,
-                      the default value will be used.
+                      the default is used.
                     type: integer
                   overrideJob:
                     description: When provided, this is a Job specification and overrides
@@ -105,8 +105,8 @@ spec:
                         type:
                           default: Job
                           description: Type of the Hook. For Job type, Ansible job
-                            template will be used. For Workflow type, Ansible workflow
-                            template will be used. If omitted, defaults to Job type.
+                            template is used. For Workflow type, Ansible workflow
+                            template is used. If omitted, it defaults to the Job type.
                           enum:
                           - Job
                           - Workflow
@@ -139,8 +139,8 @@ spec:
                         type:
                           default: Job
                           description: Type of the Hook. For Job type, Ansible job
-                            template will be used. For Workflow type, Ansible workflow
-                            template will be used. If omitted, defaults to Job type.
+                            template is used. For Workflow type, Ansible workflow
+                            template is used. If omitted, it defaults to the Job type.
                           enum:
                           - Job
                           - Workflow
@@ -155,15 +155,15 @@ spec:
                     type: string
                 type: object
               install:
-                description: During an install curation run these pre/post hooks.
+                description: An install curation runs these prehooks and posthooks.
                 properties:
                   jobMonitorTimeout:
                     default: 5
                     description: JobMonitorTimeout defines the timeout for finding
-                      a job, the unit of this is minute. If the job is found, the
+                      a job and defines time in minutes. If the job is found, the
                       curator controller waits until the job becomes active. By default,
                       it is 5 minutes. If its value is less than or equal to zero,
-                      the default value will be used.
+                      the default is used.
                     type: integer
                   overrideJob:
                     description: When provided, this is a Job specification and overrides
@@ -194,8 +194,8 @@ spec:
                         type:
                           default: Job
                           description: Type of the Hook. For Job type, Ansible job
-                            template will be used. For Workflow type, Ansible workflow
-                            template will be used. If omitted, defaults to Job type.
+                            template is used. For Workflow type, Ansible workflow
+                            template is used. If omitted, it defaults to the Job type.
                           enum:
                           - Job
                           - Workflow
@@ -228,8 +228,8 @@ spec:
                         type:
                           default: Job
                           description: Type of the Hook. For Job type, Ansible job
-                            template will be used. For Workflow type, Ansible workflow
-                            template will be used. If omitted, defaults to Job type.
+                            template is used. For Workflow type, Ansible workflow
+                            template is used. If omitted, it defaults to the Job type.
                           enum:
                           - Job
                           - Workflow
@@ -252,15 +252,15 @@ spec:
                   format: namespace/secretName'
                 type: string
               scale:
-                description: During an scale curation run these pre/post hooks.
+                description: A scale curation run these prehooks and posthooks.
                 properties:
                   jobMonitorTimeout:
                     default: 5
                     description: JobMonitorTimeout defines the timeout for finding
-                      a job, the unit of this is minute. If the job is found, the
+                      a job and defines time in minutes. If the job is found, the
                       curator controller waits until the job becomes active. By default,
                       it is 5 minutes. If its value is less than or equal to zero,
-                      the default value will be used.
+                      the default is used.
                     type: integer
                   overrideJob:
                     description: When provided, this is a Job specification and overrides
@@ -291,8 +291,8 @@ spec:
                         type:
                           default: Job
                           description: Type of the Hook. For Job type, Ansible job
-                            template will be used. For Workflow type, Ansible workflow
-                            template will be used. If omitted, defaults to Job type.
+                            template is used. For Workflow type, Ansible workflow
+                            template is used. If omitted, it defaults to the Job type.
                           enum:
                           - Job
                           - Workflow
@@ -325,8 +325,8 @@ spec:
                         type:
                           default: Job
                           description: Type of the Hook. For Job type, Ansible job
-                            template will be used. For Workflow type, Ansible workflow
-                            template will be used. If omitted, defaults to Job type.
+                            template is used. For Workflow type, Ansible workflow
+                            template is used. If omitted, it defaults to the Job type.
                           enum:
                           - Job
                           - Workflow
@@ -346,29 +346,29 @@ spec:
                   channel:
                     description: Channel is an identifier for explicitly requesting
                       that a non-default set of updates be applied to this cluster.
-                      The default channel will contain stable updates that are appropriate
+                      The default channel contains stable updates that are appropriate
                       for production clusters.
                     type: string
                   desiredUpdate:
                     description: DesiredUpdate indicates the desired value of the
-                      cluster version. Setting this value will trigger an upgrade
-                      (if the current version does not match the desired version).
-                      During an EUS to EUS upgrade, this value becomes the final cluster
-                      version (the target version that ClusterCurator will upgrade
-                      the cluster to).
+                      cluster version. Setting this value triggers an upgrade (if
+                      the current version does not match the desired version). During
+                      an EUS to EUS upgrade, this value becomes the final cluster
+                      version (the target version that ClusterCurator upgrades the
+                      cluster to).
                     type: string
                   intermediateUpdate:
                     description: IntermediateUpdate indicates the desired value of
                       the intermediate cluster version when performing EUS to EUS
-                      upgrades. Setting both this value and DesiredUpdate will trigger
+                      upgrades. Setting both this value and DesiredUpdate triggers
                       an EUS to EUS upgrade.
                     type: string
                   monitorTimeout:
                     default: 120
                     description: MonitorTimeout defines the monitor process timeout,
-                      the unit of this is minute. By default, it is 120 minutes. If
-                      its value is less than or equal to zero, the default value will
-                      be used.
+                      and defines time in minutes. By default, it is 120 minutes.
+                      If its value is less than or equal to zero, the default value
+                      is used.
                     type: integer
                   overrideJob:
                     description: When provided, this is a Job specification and overrides
@@ -399,8 +399,8 @@ spec:
                         type:
                           default: Job
                           description: Type of the Hook. For Job type, Ansible job
-                            template will be used. For Workflow type, Ansible workflow
-                            template will be used. If omitted, defaults to Job type.
+                            template is used. For Workflow type, Ansible workflow
+                            template is used. If omitted, it defaults to the Job type.
                           enum:
                           - Job
                           - Workflow
@@ -433,8 +433,8 @@ spec:
                         type:
                           default: Job
                           description: Type of the Hook. For Job type, Ansible job
-                            template will be used. For Workflow type, Ansible workflow
-                            template will be used. If omitted, defaults to Job type.
+                            template is used. For Workflow type, Ansible workflow
+                            template is used. If omitted, it defaults to the Job type.
                           enum:
                           - Job
                           - Workflow
@@ -449,8 +449,8 @@ spec:
                     type: string
                   upstream:
                     description: Upstream may be used to specify the preferred update
-                      server. By default it will use the appropriate update server
-                      for the cluster and region.
+                      server. By default it uses the appropriate update server for
+                      the cluster and region.
                     type: string
                 type: object
                 x-kubernetes-validations:
