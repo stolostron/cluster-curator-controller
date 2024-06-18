@@ -707,7 +707,7 @@ func validateUpgradeVersion(client clientv1.Client, clusterName string, curator 
 
 	klog.V(2).Info("kubevendor: ", managedClusterInfo.Status.KubeVendor)
 
-	if managedClusterInfo.Status.KubeVendor != "OpenShift" {
+	if managedClusterInfo.Status.KubeVendor != "OpenShift" && managedClusterInfo.Status.KubeVendor != "OpenShiftDedicated" {
 		return errors.New("Can not upgrade non openshift cluster")
 	}
 
@@ -806,7 +806,7 @@ func validateEUSUpgradeVersion(client clientv1.Client, clusterName string, curat
 
 	klog.V(2).Info("kubevendor: ", managedClusterInfo.Status.KubeVendor)
 
-	if managedClusterInfo.Status.KubeVendor != "OpenShift" {
+	if managedClusterInfo.Status.KubeVendor != "OpenShift" && managedClusterInfo.Status.KubeVendor != "OpenShiftDedicated" {
 		return errors.New("can not upgrade non openshift cluster")
 	}
 
