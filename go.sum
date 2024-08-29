@@ -1067,8 +1067,6 @@ github.com/stolostron/ansiblejob-go-lib v0.1.12 h1:B1JS4cTctTNDkd4NrUEcRBS9JovJN
 github.com/stolostron/ansiblejob-go-lib v0.1.12/go.mod h1:dDL15yXQUna2cVZwjgnQ/HZ95deXgI4Uj8/djY4A5o4=
 github.com/stolostron/cluster-lifecycle-api v0.0.0-20220714081119-eae2fe1f05fd h1:TitMXyGY/ld+hS6kjdHwcdR+Pl2UrtO812ehBTcu34Q=
 github.com/stolostron/cluster-lifecycle-api v0.0.0-20220714081119-eae2fe1f05fd/go.mod h1:pNeVzujoHsTHDloNHVfp1QPYlQy8MkXMuuZme96/x8M=
-github.com/stolostron/library-go v0.0.0-20220727113621-f74e0852408a h1:H//pS8d6Oi4uYjGNFxhyA3mg/VVWO2FEIjpln6m5ckE=
-github.com/stolostron/library-go v0.0.0-20220727113621-f74e0852408a/go.mod h1:BbQ8BihpRXW6OaK6ZD1g28IkS8T6/DlYag9nJvivuq0=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/objx v0.1.1/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/objx v0.2.0/go.mod h1:qt09Ya8vawLte6SNmTgCsAVtYtaKzEcn8ATUoHMkEqE=

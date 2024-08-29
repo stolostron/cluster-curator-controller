@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/blang/semver/v4"
-	"github.com/stolostron/library-go/pkg/config"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -33,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	clientv1 "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -174,7 +174,7 @@ func patchDyn(dynset dynamic.Interface, clusterName string, containerName string
 
 func GetDynset(dynset dynamic.Interface) (dynamic.Interface, error) {
 
-	config, err := config.LoadConfig("", "", "")
+	config, err := rest.InClusterConfig()
 	if err != nil {
 		return nil, err
 	}
@@ -184,7 +184,7 @@ func GetDynset(dynset dynamic.Interface) (dynamic.Interface, error) {
 
 func GetClient() (clientv1.Client, error) {
 
-	config, err := config.LoadConfig("", "", "")
+	config, err := rest.InClusterConfig()
 	if err != nil {
 		return nil, err
 	}
@@ -204,7 +204,7 @@ func GetClient() (clientv1.Client, error) {
 
 func GetKubeset() (kubernetes.Interface, error) {
 
-	config, err := config.LoadConfig("", "", "")
+	config, err := rest.InClusterConfig()
 	if err != nil {
 		return nil, err
 	}

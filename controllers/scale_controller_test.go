@@ -10,11 +10,11 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/stolostron/library-go/pkg/config"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	managedclusterclient "open-cluster-management.io/api/client/cluster/clientset/versioned"
 	managedclusterv1 "open-cluster-management.io/api/cluster/v1"
 )
@@ -86,7 +86,7 @@ func TestCreateControllerScale(t *testing.T) {
 
 	skipShort(t)
 
-	config, err := config.LoadConfig("", "", "")
+	config, err := rest.InClusterConfig()
 	if err != nil {
 		t.Fatal("Could not load Kube Config")
 	}
@@ -122,7 +122,7 @@ func TestDeleteManagedClusters(t *testing.T) {
 
 	skipShort(t)
 
-	config, err := config.LoadConfig("", "", "")
+	config, err := rest.InClusterConfig()
 	assert.Nil(t, err, "err nil, when kube config is found")
 
 	mcset, err := managedclusterclient.NewForConfig(config)
@@ -153,7 +153,7 @@ func TestRemoveFinalizerForManagedClusters(t *testing.T) {
 
 	skipShort(t)
 
-	config, err := config.LoadConfig("", "", "")
+	config, err := rest.InClusterConfig()
 	assert.Nil(t, err, "err nil, when kube config is found")
 
 	mcset, err := managedclusterclient.NewForConfig(config)

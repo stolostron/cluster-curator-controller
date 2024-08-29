@@ -20,7 +20,6 @@ import (
 	"github.com/stolostron/cluster-curator-controller/pkg/jobs/importer"
 	"github.com/stolostron/cluster-curator-controller/pkg/jobs/secrets"
 	"github.com/stolostron/cluster-curator-controller/pkg/jobs/utils"
-	"github.com/stolostron/library-go/pkg/config"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
@@ -56,7 +55,7 @@ func main() {
 	}
 
 	// Build a connection to the Hub OCP
-	config, err := config.LoadConfig("", "", "")
+	config, err := rest.InClusterConfig()
 	utils.CheckError(err)
 
 	client, err := utils.GetClient()
