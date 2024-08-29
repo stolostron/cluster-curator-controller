@@ -17,7 +17,6 @@ import (
 	clustercuratorv1 "github.com/stolostron/cluster-curator-controller/pkg/api/v1beta1"
 	"github.com/stolostron/cluster-curator-controller/pkg/jobs/utils"
 	managedclusterviewv1beta1 "github.com/stolostron/cluster-lifecycle-api/view/v1beta1"
-	"github.com/stolostron/library-go/pkg/config"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -462,7 +461,7 @@ func TestHypershiftActivate(t *testing.T) {
 		getNodepool(NodepoolName, ClusterNamespace, ClusterName),
 	).Build()
 
-	config, _ := config.LoadConfig("", "", "")
+	config, _ := rest.InClusterConfig()
 
 	curatorRun(config, client, ClusterNamespace, ClusterName)
 }
@@ -486,7 +485,7 @@ func TestHypershiftMonitor(t *testing.T) {
 		getNodepool(NodepoolName, ClusterNamespace, ClusterName),
 	).Build()
 
-	config, _ := config.LoadConfig("", "", "")
+	config, _ := rest.InClusterConfig()
 
 	curatorRun(config, client, ClusterNamespace, ClusterName)
 }
@@ -510,7 +509,7 @@ func TestHypershiftDestroyCluster(t *testing.T) {
 		getNodepool(NodepoolName, ClusterNamespace, ClusterName),
 	).Build()
 
-	config, _ := config.LoadConfig("", "", "")
+	config, _ := rest.InClusterConfig()
 
 	curatorRun(config, client, ClusterNamespace, ClusterName)
 }
@@ -534,7 +533,7 @@ func TestHypershiftMonitorDestroy(t *testing.T) {
 		getNodepool(NodepoolName, ClusterNamespace, ClusterName),
 	).Build()
 
-	config, _ := config.LoadConfig("", "", "")
+	config, _ := rest.InClusterConfig()
 
 	curatorRun(config, client, ClusterNamespace, ClusterName)
 }
@@ -558,7 +557,7 @@ func TestHypershiftUpgradeCluster(t *testing.T) {
 		getNodepool(NodepoolName, ClusterNamespace, ClusterName),
 	).Build()
 
-	config, _ := config.LoadConfig("", "", "")
+	config, _ := rest.InClusterConfig()
 
 	curatorRun(config, client, ClusterNamespace, ClusterName)
 }
@@ -582,7 +581,7 @@ func TestHypershiftMonitorUpgrade(t *testing.T) {
 		getNodepool(NodepoolName, ClusterNamespace, ClusterName),
 	).Build()
 
-	config, _ := config.LoadConfig("", "", "")
+	config, _ := rest.InClusterConfig()
 
 	curatorRun(config, client, ClusterNamespace, ClusterName)
 }
@@ -604,7 +603,7 @@ func TestEUSIntermediateUpgrade(t *testing.T) {
 		getEUSUpgradeClusterCurator(),
 	).Build()
 
-	config, _ := config.LoadConfig("", "", "")
+	config, _ := rest.InClusterConfig()
 
 	curatorRun(config, client, ClusterName, ClusterName)
 }
@@ -626,7 +625,7 @@ func TestEUSFinalUpgrade(t *testing.T) {
 		getEUSUpgradeClusterCurator(),
 	).Build()
 
-	config, _ := config.LoadConfig("", "", "")
+	config, _ := rest.InClusterConfig()
 
 	curatorRun(config, client, ClusterName, ClusterName)
 }
@@ -649,7 +648,7 @@ func TestEUSMonitorUpgrade(t *testing.T) {
 		getEUSClusterVersionManagedClusterView(),
 	).Build()
 
-	config, _ := config.LoadConfig("", "", "")
+	config, _ := rest.InClusterConfig()
 
 	curatorRun(config, client, ClusterName, ClusterName)
 }
