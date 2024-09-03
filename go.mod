@@ -5,7 +5,7 @@ go 1.21
 require (
 	github.com/blang/semver/v4 v4.0.0
 	github.com/go-logr/logr v1.4.1
-	github.com/open-cluster-management/ansiblejob-go-lib v0.0.0-00010101000000-000000000000
+	github.com/open-cluster-management/ansiblejob-go-lib v0.1.12
 	github.com/openshift/api v3.9.1-0.20191111211345-a27ff30ebf09+incompatible
 	github.com/openshift/hive/apis v0.0.0-20240719225702-cddd4f9551ea
 	github.com/stolostron/cluster-lifecycle-api v0.0.0-20220714081119-eae2fe1f05fd
@@ -79,7 +79,6 @@ require (
 
 replace (
 	github.com/googleapis/gnostic => github.com/googleapis/gnostic v0.4.1 // ensure compatible between controller-runtime and kube-openapi
-	github.com/open-cluster-management/ansiblejob-go-lib => github.com/stolostron/ansiblejob-go-lib v0.1.12
 	golang.org/x/crypto => golang.org/x/crypto v0.0.0-20211202192323-5770296d904e // CVE-2021-43565
 )
 
