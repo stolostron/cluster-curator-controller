@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	ajv1 "github.com/open-cluster-management/ansiblejob-go-lib/api/v1alpha1"
+	ajv1 "github.com/stolostron/cluster-curator-controller/pkg/api/v1alpha1"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 	clustercuratorv1 "github.com/stolostron/cluster-curator-controller/pkg/api/v1beta1"
 	"github.com/stolostron/cluster-curator-controller/pkg/jobs/utils"
