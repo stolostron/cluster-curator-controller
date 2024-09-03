@@ -1,4 +1,4 @@
-FROM registry.ci.openshift.org/stolostron/builder:go1.21-linux as builder
+FROM registry.ci.openshift.org/stolostron/builder:go1.22-linux as builder
 
 WORKDIR /go/src/github.com/stolostron/cluster-curator-controller
 COPY . .
