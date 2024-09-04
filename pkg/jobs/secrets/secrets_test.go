@@ -10,6 +10,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
 // We want to be able to dynamically build a Cloud Provider
@@ -123,9 +124,12 @@ func TestMissingAnsibleCredentials(t *testing.T) {
 	kubeset := fake.NewSimpleClientset()
 	assert.Nil(t, CreateAnsibleSecret(kubeset, cpMap, cpNamespace), "err nil when Ansible secret nothing to create")
 
-	ansibleSecret, err := kubeset.CoreV1().Secrets(cpNamespace).Get(context.TODO(), AnsibleSecretName, v1.GetOptions{})
-	assert.NotNil(t, err, "err is not nil, for GET Ansible secret when none present")
-	assert.Nil(t, ansibleSecret, "ansibleSecret is nil, when no Ansible parameters")
+	_, err := kubeset.CoreV1().Secrets(cpNamespace).Get(context.TODO(), AnsibleSecretName, v1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		t.Log("Ansible secret not found ✓")
+	} else {
+		t.Fatalf("Ansible secret should not be found. %v", err)
+	}
 }
 
 // These functions are just for development, but we will test that they create secrets
