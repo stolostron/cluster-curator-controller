@@ -81,7 +81,7 @@ require (
 replace (
 	github.com/googleapis/gnostic => github.com/googleapis/gnostic v0.4.1 // ensure compatible between controller-runtime and kube-openapi
 	github.com/open-cluster-management/ansiblejob-go-lib => github.com/stolostron/ansiblejob-go-lib v0.1.12
-	golang.org/x/crypto => golang.org/x/crypto v0.0.0-20211202192323-5770296d904e // CVE-2021-43565
+	golang.org/x/crypto => golang.org/x/crypto v0.32.0
 )
 
 //(hive dependency) from ocp installer
