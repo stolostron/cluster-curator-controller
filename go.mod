@@ -7,7 +7,7 @@ require (
 	github.com/go-logr/logr v1.4.2
 	github.com/openshift/api v3.9.1-0.20191111211345-a27ff30ebf09+incompatible
 	github.com/openshift/hive/apis v0.0.0-20250206153200-5a34ea42e678
-	github.com/stolostron/cluster-lifecycle-api v0.0.0-20220714081119-eae2fe1f05fd
+	github.com/stolostron/cluster-lifecycle-api v0.0.0-20240918064238-a5e71b599118
 	github.com/stretchr/testify v1.9.0
 	gopkg.in/yaml.v2 v2.4.0
 	gopkg.in/yaml.v3 v3.0.1
@@ -16,7 +16,7 @@ require (
 	k8s.io/client-go v0.32.1
 	k8s.io/klog v1.0.0
 	k8s.io/klog/v2 v2.130.1
-	open-cluster-management.io/api v0.11.0
+	open-cluster-management.io/api v0.14.1-0.20240627145512-bd6f2229b53c
 	sigs.k8s.io/controller-runtime v0.19.0
 )
 
