@@ -2,7 +2,7 @@ module github.com/stolostron/cluster-curator-controller
 
 go 1.23.0
 
-toolchain go1.23.7
+toolchain go1.24.2
 
 require (
 	github.com/blang/semver/v4 v4.0.0
