@@ -5,7 +5,7 @@ go 1.23.0
 require (
 	github.com/blang/semver/v4 v4.0.0
 	github.com/go-logr/logr v1.4.2
-	github.com/openshift/api v3.9.1-0.20191111211345-a27ff30ebf09+incompatible
+	github.com/openshift/api v0.0.0-20250405052455-aa882942241d
 	github.com/openshift/hive/apis v0.0.0-20250206153200-5a34ea42e678
 	github.com/stolostron/cluster-lifecycle-api v0.0.0-20220714081119-eae2fe1f05fd
 	github.com/stretchr/testify v1.9.0
