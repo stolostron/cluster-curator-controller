@@ -17,7 +17,7 @@ require (
 	k8s.io/apimachinery v0.29.2
 	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/klog v1.0.0
-	k8s.io/klog/v2 v2.120.1
+	k8s.io/klog/v2 v2.130.1
 	open-cluster-management.io/api v0.11.0
 	sigs.k8s.io/controller-runtime v0.16.6
 )
