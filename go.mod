@@ -110,7 +110,7 @@ replace (
 	github.com/go-openapi/errors => github.com/go-openapi/errors v0.19.2
 	github.com/go-openapi/spec => github.com/go-openapi/spec v0.19.4
 	github.com/go-openapi/validate => github.com/go-openapi/validate v0.19.8
-	github.com/hashicorp/go-plugin => github.com/hashicorp/go-plugin v1.2.2
+	github.com/hashicorp/go-plugin => github.com/hashicorp/go-plugin v1.6.3
 	github.com/ulikunitz/xz => github.com/ulikunitz/xz v0.5.7
 	google.golang.org/api => google.golang.org/api v0.25.0
 	google.golang.org/genproto => google.golang.org/genproto v0.0.0-20200526211855-cb27e3aa2013
