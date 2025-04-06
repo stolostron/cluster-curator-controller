@@ -107,7 +107,7 @@ replace (
 // Prevent the following modules from upgrading version as result of terraform-provider-kubernetes module
 // The following modules need to be locked to compile correctly with terraform-provider-azure and terraform-provider-google
 replace (
-	github.com/apparentlymart/go-cidr => github.com/apparentlymart/go-cidr v1.0.1
+	github.com/apparentlymart/go-cidr => github.com/apparentlymart/go-cidr v1.1.0
 	github.com/go-openapi/errors => github.com/go-openapi/errors v0.19.2
 	github.com/go-openapi/spec => github.com/go-openapi/spec v0.19.4
 	github.com/go-openapi/validate => github.com/go-openapi/validate v0.19.8
