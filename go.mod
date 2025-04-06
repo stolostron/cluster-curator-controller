@@ -9,7 +9,7 @@ require (
 	github.com/openshift/api v3.9.1-0.20191111211345-a27ff30ebf09+incompatible
 	github.com/openshift/hive/apis v0.0.0-20240503201730-e11a23b88b31
 	github.com/stolostron/cluster-lifecycle-api v0.0.0-20220714081119-eae2fe1f05fd
-	github.com/stolostron/library-go v0.0.0-20220727113621-f74e0852408a
+	github.com/stolostron/library-go v0.0.0-20230104093626-beceb342d8ed
 	github.com/stretchr/testify v1.8.4
 	gopkg.in/yaml.v2 v2.4.0
 	gopkg.in/yaml.v3 v3.0.1
