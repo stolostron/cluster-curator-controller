@@ -136,5 +136,5 @@ replace (
 	k8s.io/legacy-cloud-providers => k8s.io/legacy-cloud-providers v0.26.2
 	k8s.io/metrics => k8s.io/metrics v0.26.2
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.26.2
-	kubevirt.io/client-go => kubevirt.io/client-go v0.29.0
+	kubevirt.io/client-go => kubevirt.io/client-go v0.59.2
 )
