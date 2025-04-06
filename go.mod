@@ -1,6 +1,8 @@
 module github.com/stolostron/cluster-curator-controller
 
-go 1.21
+go 1.22
+
+toolchain go1.22.9
 
 require (
 	github.com/blang/semver/v4 v4.0.0
@@ -67,7 +69,7 @@ require (
 	golang.org/x/time v0.5.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
-	google.golang.org/protobuf v1.33.0 // indirect
+	google.golang.org/protobuf v1.36.6 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	k8s.io/apiextensions-apiserver v0.29.2 // indirect
 	k8s.io/component-base v0.29.2 // indirect
