@@ -3,7 +3,7 @@ FROM brew.registry.redhat.io/rh-osbs/openshift-golang-builder:rhel_9_1.23 as bui
 WORKDIR /go/src/github.com/stolostron/cluster-curator-controller
 COPY . .
 
-RUN make compile-curator
+RUN make compile-curator-konflux
 
 #RUN go build -o build/_output/curator ./pkg/jobs/curator.go
 #RUN go build -o build/_output/cluster-curator-controller ./pkg/controller/controller.go
