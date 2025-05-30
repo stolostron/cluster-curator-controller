@@ -71,8 +71,8 @@ github.com/onsi/ginkgo/v2 v2.21.0 h1:7rg/4f3rB88pb5obDgNZrNHrQ4e6WpjonchcpuBRnZM
 github.com/onsi/ginkgo/v2 v2.21.0/go.mod h1:7Du3c42kxCUegi0IImZ1wUQzMBVecgIHjR1C+NkhLQo=
 github.com/onsi/gomega v1.35.1 h1:Cwbd75ZBPxFSuZ6T+rN/WCb/gOc6YgFBXLlZLhC7Ds4=
 github.com/onsi/gomega v1.35.1/go.mod h1:PvZbdDc8J6XJEpDK4HCuRBm8a6Fzp9/DmhC9C7yFlog=
-github.com/openshift/api v0.0.0-20250530162003-e041b5efb8e4 h1:E/NGBIipQbG6+BUuABD+N4bGQawqhLFNx/yX75FwhuY=
-github.com/openshift/api v0.0.0-20250530162003-e041b5efb8e4/go.mod h1:yk60tHAmHhtVpJQo3TwVYq2zpuP70iJIFDCmeKMIzPw=
+github.com/openshift/api v0.0.0-20250313134101-8a7efbfb5316 h1:iJ1OkAUvFbQPB6qWRDxrH1jj8iA9GA/Jx2vYz7o+i1E=
+github.com/openshift/api v0.0.0-20250313134101-8a7efbfb5316/go.mod h1:yk60tHAmHhtVpJQo3TwVYq2zpuP70iJIFDCmeKMIzPw=
 github.com/openshift/hive/apis v0.0.0-20250530014049-295f1b4ae4af h1:fE9Ytk51FunHGAV6FQBvejz59Ld2TUH/ImwnePoJJNc=
 github.com/openshift/hive/apis v0.0.0-20250530014049-295f1b4ae4af/go.mod h1:XUEuhGkTuSXP+eb0LtY3/iJTs/3Fc18CVkqMsmgN+gg=
 github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
