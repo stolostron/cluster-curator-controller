@@ -705,7 +705,7 @@ func TestUpgradeCluster(t *testing.T) {
 			Upstream:  "https://api.openshift.com/api",
 		},
 		Status: clusterversionv1.ClusterVersionStatus{
-			AvailableUpdates: []clusterversionv1.Update{
+			AvailableUpdates: []clusterversionv1.Release{
 				{
 					Version: "4.5.14",
 					Image:   "quay.io/openshift-release",
@@ -817,7 +817,7 @@ func TestUpgradeClusterWithChannelUpstream(t *testing.T) {
 			Upstream:  "https://api.openshift.com/api",
 		},
 		Status: clusterversionv1.ClusterVersionStatus{
-			AvailableUpdates: []clusterversionv1.Update{
+			AvailableUpdates: []clusterversionv1.Release{
 				{
 					Version: "4.5.14",
 					Image:   "quay.io/openshift-release",
@@ -1044,7 +1044,7 @@ func TestUpgradeClusterForceUpgradeCSVHasDesiredUpdate(t *testing.T) {
 			},
 		},
 		Status: clusterversionv1.ClusterVersionStatus{
-			AvailableUpdates: []clusterversionv1.Update{
+			AvailableUpdates: []clusterversionv1.Release{
 				{
 					Version: "4.5.10",
 					Image:   "quay.io/openshift-release-dev/ocp-release@sha256:71e158c6173ad6aa6e356c119a87459196bbe70e89c0db1e35c1f63a87d90676",
@@ -1157,7 +1157,7 @@ func TestUpgradeClusterForceUpgradeCSVNoDesiredUpdate(t *testing.T) {
 			Upstream:  "https://api.openshift.com/api",
 		},
 		Status: clusterversionv1.ClusterVersionStatus{
-			AvailableUpdates: []clusterversionv1.Update{
+			AvailableUpdates: []clusterversionv1.Release{
 				{
 					Version: "4.5.10",
 					Image:   "quay.io/openshift-release-dev/ocp-release@sha256:71e158c6173ad6aa6e356c119a87459196bbe70e89c0db1e35c1f63a87d90676",
@@ -1313,13 +1313,13 @@ func TestEUSIntermediateUpgrade(t *testing.T) {
 			Upstream:  "https://api.openshift.com/api",
 		},
 		Status: clusterversionv1.ClusterVersionStatus{
-			AvailableUpdates: []clusterversionv1.Update{
+			AvailableUpdates: []clusterversionv1.Release{
 				{
 					Version: "4.12.15",
 					Image:   "quay.io/openshift-release-dev/ocp-release@sha256:71e158c6173ad6aa6e356c119a87459196bbe70e89c0db1e35c1f63a87d90676",
 				},
 			},
-			Desired: clusterversionv1.Update{
+			Desired: clusterversionv1.Release{
 				Version: "4.12.14",
 			},
 		},
@@ -1532,13 +1532,13 @@ func TestEUSFinalUpgrade(t *testing.T) {
 			Upstream:  "https://api.openshift.com/api",
 		},
 		Status: clusterversionv1.ClusterVersionStatus{
-			AvailableUpdates: []clusterversionv1.Update{
+			AvailableUpdates: []clusterversionv1.Release{
 				{
 					Version: "4.13.38",
 					Image:   "quay.io/openshift-release-dev/ocp-release@sha256:71e158c6173ad6aa6e356c119a87459196bbe70e89c0db1e35c1f63a87d90676",
 				},
 			},
-			Desired: clusterversionv1.Update{
+			Desired: clusterversionv1.Release{
 				Version: "4.13.37",
 			},
 		},
