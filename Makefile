@@ -139,6 +139,11 @@ compile-curator:
 	GOFLAGS="" go build -o build/_output/curator ./cmd/curator/curator.go
 	GOFLAGS="" go build -o build/_output/manager ./cmd/manager/main.go
 
+.PHONY: compile-curator-konflux
+compile-curator-konflux:
+	GOFLAGS="" go build -o build/_output/curator ./cmd/curator/curator.go
+	GOFLAGS="" go build -o build/_output/manager ./cmd/manager/main.go
+
 .PHONY: build-curator
 build-curator:
 	docker build -f Dockerfile.prow . -t ${REPO_URL}/cluster-curator-controller:${VERSION}
