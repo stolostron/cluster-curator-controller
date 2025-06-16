@@ -24,6 +24,9 @@ LABEL \
     io.k8s.display-name="Cluster curator" \
     io.openshift.tags="mce acm cluster-curator"
 
+# Add license
+COPY --from=builder /go/src/github.com/stolostron/cluster-curator-controller/LICENSE /licenses/
+
 # Add the binaries
 COPY --from=builder /go/src/github.com/stolostron/cluster-curator-controller/build/_output/curator .
 COPY --from=builder /go/src/github.com/stolostron/cluster-curator-controller/build/_output/manager .
