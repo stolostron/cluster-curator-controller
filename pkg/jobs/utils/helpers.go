@@ -7,6 +7,9 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"os"
+	"os/user"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -20,8 +23,8 @@ import (
 
 	"k8s.io/klog/v2"
 
-	ajv1 "github.com/stolostron/cluster-curator-controller/pkg/api/v1alpha1"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
+	ajv1 "github.com/stolostron/cluster-curator-controller/pkg/api/v1alpha1"
 	clustercuratorv1 "github.com/stolostron/cluster-curator-controller/pkg/api/v1beta1"
 	managedclusteractionv1beta1 "github.com/stolostron/cluster-lifecycle-api/action/v1beta1"
 	managedclusterinfov1beta1 "github.com/stolostron/cluster-lifecycle-api/clusterinfo/v1beta1"
@@ -33,6 +36,7 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 	clientv1 "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -174,7 +178,7 @@ func patchDyn(dynset dynamic.Interface, clusterName string, containerName string
 
 func GetDynset(dynset dynamic.Interface) (dynamic.Interface, error) {
 
-	config, err := rest.InClusterConfig()
+	config, err := LoadConfig("", "", "")
 	if err != nil {
 		return nil, err
 	}
@@ -184,7 +188,7 @@ func GetDynset(dynset dynamic.Interface) (dynamic.Interface, error) {
 
 func GetClient() (clientv1.Client, error) {
 
-	config, err := rest.InClusterConfig()
+	config, err := LoadConfig("", "", "")
 	if err != nil {
 		return nil, err
 	}
@@ -558,4 +562,69 @@ func GetMonitorAttempts(jobType string, curator *clustercuratorv1.ClusterCurator
 	}
 
 	return monitorAttempts
+}
+
+// Copied from https://github.com/stolostron/library-go which is no longed supported
+// but this is a useful func for local testing as we don't need to build the image
+// LoadConfig loads the kubeconfig and returns a *rest.Config
+// url: The url of the server
+// kubeconfig: The path of the kubeconfig, if empty the KUBECONFIG environment variable will be used.
+// context: The context to use to search the *rest.Config in the kubeconfig file,
+// if empty the current-context will be used.
+// Search in the following order:
+// provided kubeconfig path, KUBECONFIG environment variable, in the cluster, in the user home directory.
+// If the context is not provided and the url is not provided, it returns a *rest.Config the for the current-context.
+// If the context is not provided but the url provided, it returns a *rest.Config for the server identified by the url.
+// If the context is provided, it returns a *rest.Config for the provided context.
+func LoadConfig(
+	url,
+	kubeconfig,
+	context string,
+) (*rest.Config, error) {
+	if kubeconfig == "" {
+		kubeconfig = os.Getenv("KUBECONFIG")
+	}
+	klog.V(5).Infof("Kubeconfig path %s\n", kubeconfig)
+	// If we have an explicit indication of where the kubernetes config lives, read that.
+	if kubeconfig != "" {
+		return configFromFile(url, kubeconfig, context)
+	}
+	// If not, try the in-cluster config.
+	if c, err := rest.InClusterConfig(); err == nil {
+		return c, nil
+	}
+	// If no in-cluster config, try the default location in the user's home directory.
+	if usr, err := user.Current(); err == nil {
+		klog.V(5).Infof("clientcmd.BuildConfigFromFlags for url %s using %s\n",
+			url,
+			filepath.Join(usr.HomeDir,
+				".kube",
+				"config"))
+		return configFromFile(url, filepath.Join(usr.HomeDir, ".kube", "config"), context)
+	}
+
+	return nil, fmt.Errorf("could not create a valid kubeconfig")
+
+}
+
+func configFromFile(url, kubeconfig, context string) (*rest.Config, error) {
+	if context == "" {
+		// klog.V(5).Infof("clientcmd.BuildConfigFromFlags with %s and %s", url, kubeconfig)
+		// Retreive the config for the current context
+		if url == "" {
+			config, err := clientcmd.LoadFromFile(kubeconfig)
+			if err != nil {
+				return nil, err
+			}
+			return clientcmd.NewDefaultClientConfig(
+				*config,
+				&clientcmd.ConfigOverrides{}).ClientConfig()
+		}
+		return clientcmd.BuildConfigFromFlags(url, kubeconfig)
+	}
+	return clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+		&clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeconfig},
+		&clientcmd.ConfigOverrides{
+			CurrentContext: context,
+		}).ClientConfig()
 }

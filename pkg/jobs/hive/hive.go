@@ -290,8 +290,10 @@ func UpgradeCluster(client clientv1.Client, clusterName string, curator *cluster
 	klog.V(0).Info("Retries set to: " + strconv.Itoa(retries))
 
 	desiredUpdate := curator.Spec.Upgrade.DesiredUpdate
+	imageWithDigest := ""
+	var err error
 
-	if err := validateUpgradeVersion(client, clusterName, curator); err != nil {
+	if err, imageWithDigest = validateUpgradeVersion(client, clusterName, curator); err != nil {
 		return err
 	}
 
@@ -301,7 +303,7 @@ func UpgradeCluster(client clientv1.Client, clusterName string, curator *cluster
 	for i := 1; i <= retries && !successful; i++ {
 		klog.V(2).Info("Update clusterversion attempt " + strconv.Itoa(i))
 
-		mcaStatus, err := retreiveAndUpdateClusterVersion(client, clusterName, curator, desiredUpdate)
+		mcaStatus, err := retreiveAndUpdateClusterVersion(client, clusterName, curator, desiredUpdate, imageWithDigest)
 		if err != nil {
 			return err
 		}
@@ -691,28 +693,29 @@ func MonitorUpgradeStatus(client clientv1.Client, clusterName string, curator *c
 	return timeoutErr
 }
 
-func validateUpgradeVersion(client clientv1.Client, clusterName string, curator *clustercuratorv1.ClusterCurator) error {
+func validateUpgradeVersion(client clientv1.Client, clusterName string, curator *clustercuratorv1.ClusterCurator) (error, string) {
 
 	desiredUpdate := curator.Spec.Upgrade.DesiredUpdate
 	channel := curator.Spec.Upgrade.Channel
 	upstream := curator.Spec.Upgrade.Upstream
+	imageWithDigest := ""
 
 	managedClusterInfo := managedclusterinfov1beta1.ManagedClusterInfo{}
 	if err := client.Get(context.TODO(), types.NamespacedName{
 		Namespace: clusterName,
 		Name:      clusterName,
 	}, &managedClusterInfo); err != nil {
-		return err
+		return err, imageWithDigest
 	}
 
 	klog.V(2).Info("kubevendor: ", managedClusterInfo.Status.KubeVendor)
 
 	if managedClusterInfo.Status.KubeVendor != "OpenShift" && managedClusterInfo.Status.KubeVendor != "OpenShiftDedicated" {
-		return errors.New("Can not upgrade non openshift cluster")
+		return errors.New("Can not upgrade non openshift cluster"), imageWithDigest
 	}
 
 	if desiredUpdate == "" && channel == "" && upstream == "" {
-		return errors.New("Provide valid upgrade version or channel or upstream")
+		return errors.New("Provide valid upgrade version or channel or upstream"), imageWithDigest
 	}
 
 	curatorAnnotations := curator.GetAnnotations()
@@ -720,8 +723,92 @@ func validateUpgradeVersion(client clientv1.Client, clusterName string, curator 
 	isValidVersion := false
 
 	if curatorAnnotations != nil && curatorAnnotations[ForceUpgradeAnnotation] == "true" {
-		klog.V(2).Info("Force upgrade option used, version validation disabled")
-		isValidVersion = true
+		klog.V(2).Info("Force upgrade option used")
+		// Get clusterversion from managed cluster to check conditionalUpdates
+		// this info is not in ManagedClusterInfo
+		mcviewobj := &managedclusterviewv1beta1.ManagedClusterView{
+			ObjectMeta: v1.ObjectMeta{
+				Name:      clusterName,
+				Namespace: clusterName,
+				Labels: map[string]string{
+					MCVUpgradeLabel: clusterName,
+				},
+			},
+			Spec: managedclusterviewv1beta1.ViewSpec{
+				Scope: managedclusterviewv1beta1.ViewScope{
+					Group:     "config.openshift.io",
+					Kind:      "ClusterVersion",
+					Name:      "version",
+					Namespace: "",
+					Version:   "v1",
+				},
+			},
+		}
+
+		mcview := managedclusterviewv1beta1.ManagedClusterView{}
+		if err := client.Get(context.TODO(), types.NamespacedName{
+			Namespace: clusterName,
+			Name:      clusterName,
+		}, &mcview); err != nil && k8serrors.IsNotFound(err) {
+			klog.V(2).Info("Create managedclusterview " + clusterName)
+			if err := client.Create(context.TODO(), mcviewobj); err != nil {
+				return err, imageWithDigest
+			}
+		} else if err != nil {
+			return err, imageWithDigest
+		}
+
+		resultmcview := managedclusterviewv1beta1.ManagedClusterView{}
+		if err := waitForMCV(client, clusterName, clusterName, &resultmcview, getErr); err != nil {
+			return err, imageWithDigest
+		}
+
+		resultClusterVersion := resultmcview.Status.Result
+		clusterVersion := map[string]interface{}{}
+
+		if resultClusterVersion.Raw != nil {
+			err := json.Unmarshal(resultClusterVersion.Raw, &clusterVersion)
+			utils.CheckError(err)
+		} else {
+			return getErr, imageWithDigest
+		}
+
+		clusterConditionalUpdates := clusterVersion["status"].(map[string]interface{})["conditionalUpdates"]
+
+		klog.V(2).Info("Check for image digest in conditional updates")
+		if clusterConditionalUpdates != nil {
+			for _, conditionalUpdate := range clusterConditionalUpdates.([]interface{}) {
+				updateVersion := conditionalUpdate.(map[string]interface{})["release"].(map[string]interface{})["version"].(string)
+				if updateVersion == desiredUpdate {
+					klog.V(2).Info("Found conditional update image digest")
+					imageWithDigest = conditionalUpdate.(map[string]interface{})["release"].(map[string]interface{})["image"].(string)
+					isValidVersion = true
+					break
+				}
+			}
+		}
+
+		if !isValidVersion {
+			klog.V(2).Info("Check for image digest in available updates just in case")
+			clusterAvailableUpdates := clusterVersion["status"].(map[string]interface{})["availableUpdates"]
+
+			if clusterAvailableUpdates != nil {
+				for _, availableUpdate := range clusterAvailableUpdates.([]interface{}) {
+					updateVersion := availableUpdate.(map[string]interface{})["version"].(string)
+					if updateVersion == desiredUpdate {
+						klog.V(2).Info("Found available update image digest")
+						imageWithDigest = availableUpdate.(map[string]interface{})["image"].(string)
+						isValidVersion = true
+						break
+					}
+				}
+			}
+		}
+
+		if !isValidVersion {
+			klog.V(2).Info("Force upgrade option used, image digest not found, fallback to image tag")
+			isValidVersion = true
+		}
 	} else {
 		if desiredUpdate != "" && managedClusterInfo.Status.DistributionInfo.OCP.AvailableUpdates != nil {
 			for _, version := range managedClusterInfo.Status.DistributionInfo.OCP.AvailableUpdates {
@@ -732,7 +819,7 @@ func validateUpgradeVersion(client clientv1.Client, clusterName string, curator 
 		}
 	}
 	if desiredUpdate != "" && !isValidVersion {
-		return errors.New("Provided version is not valid")
+		return errors.New("Provided version is not valid"), imageWithDigest
 	}
 
 	isValidChannel := false
@@ -746,10 +833,10 @@ func validateUpgradeVersion(client clientv1.Client, clusterName string, curator 
 		}
 	}
 	if channel != "" && !isValidChannel {
-		return errors.New("Provided channel is not valid")
+		return errors.New("Provided channel is not valid"), imageWithDigest
 	}
 
-	return nil
+	return nil, imageWithDigest
 }
 
 func waitForMCV(client clientv1.Client, clusterName string, clusterNamespace string, mcv *managedclusterviewv1beta1.ManagedClusterView, err error) error {
@@ -841,7 +928,7 @@ func retreiveAndUpdateClusterVersion(
 	client clientv1.Client,
 	clusterName string,
 	curator *clustercuratorv1.ClusterCurator,
-	desiredUpdate string) (managedclusteractionv1beta1.ManagedClusterAction, error) {
+	desiredUpdate, imageWithDigest string) (managedclusteractionv1beta1.ManagedClusterAction, error) {
 
 	mcaStatus := managedclusteractionv1beta1.ManagedClusterAction{}
 	managedclusterview := &managedclusterviewv1beta1.ManagedClusterView{
@@ -923,15 +1010,29 @@ func retreiveAndUpdateClusterVersion(
 		cvDesiredUpdate := clusterVersion["spec"].(map[string]interface{})["desiredUpdate"]
 		if cvDesiredUpdate != nil {
 			cvDesiredUpdate.(map[string]interface{})["version"] = desiredUpdate
-			cvDesiredUpdate.(map[string]interface{})["force"] = true
-			cvDesiredUpdate.(map[string]interface{})["image"] =
-				"quay.io/openshift-release-dev/ocp-release:" + desiredUpdate + "-multi"
+			if imageWithDigest != "" {
+				cvDesiredUpdate.(map[string]interface{})["image"] = imageWithDigest
+			} else {
+				// only force when using image tag
+				cvDesiredUpdate.(map[string]interface{})["force"] = true
+				// fallback to using image tag if digest not found - also for backwards compatibility
+				cvDesiredUpdate.(map[string]interface{})["image"] =
+					"quay.io/openshift-release-dev/ocp-release:" + desiredUpdate + "-multi"
+			}
 		} else {
 			// For when desiredUpdate does not exist
-			clusterVersion["spec"].(map[string]interface{})["desiredUpdate"] = map[string]interface{}{
-				"version": desiredUpdate,
-				"force":   true,
-				"image":   "quay.io/openshift-release-dev/ocp-release:" + desiredUpdate + "-multi",
+			if imageWithDigest != "" {
+				clusterVersion["spec"].(map[string]interface{})["desiredUpdate"] = map[string]interface{}{
+					"version": desiredUpdate,
+					"image":   imageWithDigest,
+				}
+			} else {
+				// fallback to using image tag if digest not found - also for backwards compatibility
+				clusterVersion["spec"].(map[string]interface{})["desiredUpdate"] = map[string]interface{}{
+					"version": desiredUpdate,
+					"force":   true,
+					"image":   "quay.io/openshift-release-dev/ocp-release:" + desiredUpdate + "-multi",
+				}
 			}
 		}
 	} else {
