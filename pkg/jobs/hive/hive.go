@@ -293,7 +293,7 @@ func UpgradeCluster(client clientv1.Client, clusterName string, curator *cluster
 	imageWithDigest := ""
 	var err error
 
-	if err, imageWithDigest = validateUpgradeVersion(client, clusterName, curator); err != nil {
+	if imageWithDigest, err = validateUpgradeVersion(client, clusterName, curator); err != nil {
 		return err
 	}
 
@@ -693,7 +693,7 @@ func MonitorUpgradeStatus(client clientv1.Client, clusterName string, curator *c
 	return timeoutErr
 }
 
-func validateUpgradeVersion(client clientv1.Client, clusterName string, curator *clustercuratorv1.ClusterCurator) (error, string) {
+func validateUpgradeVersion(client clientv1.Client, clusterName string, curator *clustercuratorv1.ClusterCurator) (string, error) {
 
 	desiredUpdate := curator.Spec.Upgrade.DesiredUpdate
 	channel := curator.Spec.Upgrade.Channel
@@ -705,17 +705,17 @@ func validateUpgradeVersion(client clientv1.Client, clusterName string, curator 
 		Namespace: clusterName,
 		Name:      clusterName,
 	}, &managedClusterInfo); err != nil {
-		return err, imageWithDigest
+		return imageWithDigest, err
 	}
 
 	klog.V(2).Info("kubevendor: ", managedClusterInfo.Status.KubeVendor)
 
 	if managedClusterInfo.Status.KubeVendor != "OpenShift" && managedClusterInfo.Status.KubeVendor != "OpenShiftDedicated" {
-		return errors.New("Can not upgrade non openshift cluster"), imageWithDigest
+		return imageWithDigest, errors.New("Can not upgrade non openshift cluster")
 	}
 
 	if desiredUpdate == "" && channel == "" && upstream == "" {
-		return errors.New("Provide valid upgrade version or channel or upstream"), imageWithDigest
+		return imageWithDigest, errors.New("Provide valid upgrade version or channel or upstream")
 	}
 
 	curatorAnnotations := curator.GetAnnotations()
@@ -752,15 +752,15 @@ func validateUpgradeVersion(client clientv1.Client, clusterName string, curator 
 		}, &mcview); err != nil && k8serrors.IsNotFound(err) {
 			klog.V(2).Info("Create managedclusterview " + clusterName)
 			if err := client.Create(context.TODO(), mcviewobj); err != nil {
-				return err, imageWithDigest
+				return imageWithDigest, err
 			}
 		} else if err != nil {
-			return err, imageWithDigest
+			return imageWithDigest, err
 		}
 
 		resultmcview := managedclusterviewv1beta1.ManagedClusterView{}
 		if err := waitForMCV(client, clusterName, clusterName, &resultmcview, getErr); err != nil {
-			return err, imageWithDigest
+			return imageWithDigest, err
 		}
 
 		resultClusterVersion := resultmcview.Status.Result
@@ -770,7 +770,7 @@ func validateUpgradeVersion(client clientv1.Client, clusterName string, curator 
 			err := json.Unmarshal(resultClusterVersion.Raw, &clusterVersion)
 			utils.CheckError(err)
 		} else {
-			return getErr, imageWithDigest
+			return imageWithDigest, getErr
 		}
 
 		clusterConditionalUpdates := clusterVersion["status"].(map[string]interface{})["conditionalUpdates"]
@@ -819,7 +819,7 @@ func validateUpgradeVersion(client clientv1.Client, clusterName string, curator 
 		}
 	}
 	if desiredUpdate != "" && !isValidVersion {
-		return errors.New("Provided version is not valid"), imageWithDigest
+		return imageWithDigest, errors.New("Provided version is not valid")
 	}
 
 	isValidChannel := false
@@ -833,10 +833,10 @@ func validateUpgradeVersion(client clientv1.Client, clusterName string, curator 
 		}
 	}
 	if channel != "" && !isValidChannel {
-		return errors.New("Provided channel is not valid"), imageWithDigest
+		return imageWithDigest, errors.New("Provided channel is not valid")
 	}
 
-	return nil, imageWithDigest
+	return imageWithDigest, nil
 }
 
 func waitForMCV(client clientv1.Client, clusterName string, clusterNamespace string, mcv *managedclusterviewv1beta1.ManagedClusterView, err error) error {
