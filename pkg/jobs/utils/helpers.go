@@ -564,7 +564,7 @@ func GetMonitorAttempts(jobType string, curator *clustercuratorv1.ClusterCurator
 	return monitorAttempts
 }
 
-// Copied from https://github.com/stolostron/library-go which is no longed supported
+// Copied from https://github.com/stolostron/library-go which is no longer supported
 // but this is a useful func for local testing as we don't need to build the image
 // LoadConfig loads the kubeconfig and returns a *rest.Config
 // url: The url of the server
