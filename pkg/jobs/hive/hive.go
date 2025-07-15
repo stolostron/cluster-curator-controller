@@ -37,7 +37,7 @@ const ForceUpgradeAnnotation = "cluster.open-cluster-management.io/upgrade-allow
 const UpgradeClusterversionBackoffLimit = "cluster.open-cluster-management.io/upgrade-clusterversion-backoff-limit"
 const HiveReconcilePauseAnnotation = "hive.openshift.io/reconcile-pause"
 
-var getErr = errors.New("Failed to get remote clusterversion")
+var GetErrConst = errors.New("failed to get remote clusterversion")
 
 func ActivateDeploy(hiveset clientv1.Client, clusterName string) error {
 	klog.V(0).Info("* Initiate Provisioning")
@@ -439,7 +439,7 @@ func EUSUpgradeCluster(client clientv1.Client, clusterName string, curator *clus
 	}
 
 	resultmcview := managedclusterviewv1beta1.ManagedClusterView{}
-	if err := waitForMCV(client, clusterName, clusterName, &resultmcview, getErr); err != nil {
+	if err := waitForMCV(client, clusterName, clusterName, &resultmcview, GetErrConst); err != nil {
 		return err
 	}
 
@@ -450,7 +450,7 @@ func EUSUpgradeCluster(client clientv1.Client, clusterName string, curator *clus
 		err := json.Unmarshal(resultClusterVersion.Raw, &clusterVersion)
 		utils.CheckError(err)
 	} else {
-		return getErr
+		return GetErrConst
 	}
 
 	currentOCPVer := clusterVersion["status"].(map[string]interface{})["desired"].(map[string]interface{})["version"].(string)
@@ -705,17 +705,17 @@ func validateUpgradeVersion(client clientv1.Client, clusterName string, curator 
 		Namespace: clusterName,
 		Name:      clusterName,
 	}, &managedClusterInfo); err != nil {
-		return imageWithDigest, err
+		return "", err
 	}
 
 	klog.V(2).Info("kubevendor: ", managedClusterInfo.Status.KubeVendor)
 
 	if managedClusterInfo.Status.KubeVendor != "OpenShift" && managedClusterInfo.Status.KubeVendor != "OpenShiftDedicated" {
-		return imageWithDigest, errors.New("Can not upgrade non openshift cluster")
+		return "", errors.New("Can not upgrade non openshift cluster")
 	}
 
 	if desiredUpdate == "" && channel == "" && upstream == "" {
-		return imageWithDigest, errors.New("Provide valid upgrade version or channel or upstream")
+		return "", errors.New("Provide valid upgrade version or channel or upstream")
 	}
 
 	curatorAnnotations := curator.GetAnnotations()
@@ -723,91 +723,85 @@ func validateUpgradeVersion(client clientv1.Client, clusterName string, curator 
 	isValidVersion := false
 
 	if curatorAnnotations != nil && curatorAnnotations[ForceUpgradeAnnotation] == "true" {
-		klog.V(2).Info("Force upgrade option used")
+		klog.V(2).Info("Force upgrade option used, version validation disabled")
+		isValidVersion = true
 		// Get clusterversion from managed cluster to check conditionalUpdates
 		// this info is not in ManagedClusterInfo
-		mcviewobj := &managedclusterviewv1beta1.ManagedClusterView{
-			ObjectMeta: v1.ObjectMeta{
-				Name:      clusterName,
-				Namespace: clusterName,
-				Labels: map[string]string{
-					MCVUpgradeLabel: clusterName,
-				},
-			},
-			Spec: managedclusterviewv1beta1.ViewSpec{
-				Scope: managedclusterviewv1beta1.ViewScope{
-					Group:     "config.openshift.io",
-					Kind:      "ClusterVersion",
-					Name:      "version",
-					Namespace: "",
-					Version:   "v1",
-				},
-			},
-		}
-
 		mcview := managedclusterviewv1beta1.ManagedClusterView{}
 		if err := client.Get(context.TODO(), types.NamespacedName{
 			Namespace: clusterName,
 			Name:      clusterName,
 		}, &mcview); err != nil && k8serrors.IsNotFound(err) {
 			klog.V(2).Info("Create managedclusterview " + clusterName)
+			mcviewobj := &managedclusterviewv1beta1.ManagedClusterView{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      clusterName,
+					Namespace: clusterName,
+					Labels: map[string]string{
+						MCVUpgradeLabel: clusterName,
+					},
+				},
+				Spec: managedclusterviewv1beta1.ViewSpec{
+					Scope: managedclusterviewv1beta1.ViewScope{
+						Group:     "config.openshift.io",
+						Kind:      "ClusterVersion",
+						Name:      "version",
+						Namespace: "",
+						Version:   "v1",
+					},
+				},
+			}
 			if err := client.Create(context.TODO(), mcviewobj); err != nil {
-				return imageWithDigest, err
+				return "", err
 			}
 		} else if err != nil {
-			return imageWithDigest, err
+			return "", err
 		}
 
 		resultmcview := managedclusterviewv1beta1.ManagedClusterView{}
-		if err := waitForMCV(client, clusterName, clusterName, &resultmcview, getErr); err != nil {
-			return imageWithDigest, err
+		if err := waitForMCV(client, clusterName, clusterName, &resultmcview, GetErrConst); err != nil {
+			return "", err
 		}
 
 		resultClusterVersion := resultmcview.Status.Result
 		clusterVersion := map[string]interface{}{}
 
-		if resultClusterVersion.Raw != nil {
-			err := json.Unmarshal(resultClusterVersion.Raw, &clusterVersion)
-			utils.CheckError(err)
-		} else {
-			return imageWithDigest, getErr
+		if resultClusterVersion.Raw == nil {
+			return "", GetErrConst
 		}
 
-		clusterConditionalUpdates := clusterVersion["status"].(map[string]interface{})["conditionalUpdates"]
+		err := json.Unmarshal(resultClusterVersion.Raw, &clusterVersion)
+		utils.CheckError(err)
 
 		klog.V(2).Info("Check for image digest in conditional updates")
-		if clusterConditionalUpdates != nil {
+		if clusterConditionalUpdates, ok := clusterVersion["status"].(map[string]interface{})["conditionalUpdates"]; ok {
 			for _, conditionalUpdate := range clusterConditionalUpdates.([]interface{}) {
 				updateVersion := conditionalUpdate.(map[string]interface{})["release"].(map[string]interface{})["version"].(string)
 				if updateVersion == desiredUpdate {
 					klog.V(2).Info("Found conditional update image digest")
 					imageWithDigest = conditionalUpdate.(map[string]interface{})["release"].(map[string]interface{})["image"].(string)
-					isValidVersion = true
 					break
 				}
 			}
 		}
 
-		if !isValidVersion {
+		if imageWithDigest == "" {
 			klog.V(2).Info("Check for image digest in available updates just in case")
-			clusterAvailableUpdates := clusterVersion["status"].(map[string]interface{})["availableUpdates"]
 
-			if clusterAvailableUpdates != nil {
+			if clusterAvailableUpdates, ok := clusterVersion["status"].(map[string]interface{})["availableUpdates"]; ok {
 				for _, availableUpdate := range clusterAvailableUpdates.([]interface{}) {
 					updateVersion := availableUpdate.(map[string]interface{})["version"].(string)
 					if updateVersion == desiredUpdate {
 						klog.V(2).Info("Found available update image digest")
 						imageWithDigest = availableUpdate.(map[string]interface{})["image"].(string)
-						isValidVersion = true
 						break
 					}
 				}
 			}
 		}
 
-		if !isValidVersion {
-			klog.V(2).Info("Force upgrade option used, image digest not found, fallback to image tag")
-			isValidVersion = true
+		if imageWithDigest == "" {
+			klog.V(2).Info("Image digest not found, fallback to image tag")
 		}
 	} else {
 		if desiredUpdate != "" && managedClusterInfo.Status.DistributionInfo.OCP.AvailableUpdates != nil {
@@ -962,7 +956,6 @@ func retreiveAndUpdateClusterVersion(
 		}
 	}
 
-	getErr := errors.New("Failed to get remote clusterversion")
 	resultmcview := managedclusterviewv1beta1.ManagedClusterView{}
 	for i := 1; i <= 5; i++ {
 		time.Sleep(utils.PauseFiveSeconds)
@@ -972,21 +965,21 @@ func retreiveAndUpdateClusterVersion(
 		}, &resultmcview); err != nil {
 			if i == 5 {
 				klog.Warning(err)
-				return mcaStatus, getErr
+				return mcaStatus, GetErrConst
 			}
 			klog.Warning(err)
 			continue
 		}
 		labels := resultmcview.ObjectMeta.GetLabels()
 		if len(labels) == 0 {
-			return mcaStatus, getErr
+			return mcaStatus, GetErrConst
 		}
 		if _, ok := labels[MCVUpgradeLabel]; ok {
 			if resultmcview.Status.Result.Raw != nil {
 				break
 			}
 		} else {
-			return mcaStatus, getErr
+			return mcaStatus, GetErrConst
 		}
 	}
 
@@ -998,7 +991,7 @@ func retreiveAndUpdateClusterVersion(
 		err := json.Unmarshal(resultClusterVersion.Raw, &clusterVersion)
 		utils.CheckError(err)
 	} else {
-		return mcaStatus, getErr
+		return mcaStatus, GetErrConst
 	}
 
 	curatorAnnotations := curator.GetAnnotations()
@@ -1125,7 +1118,7 @@ func eusRetreiveAndUpdateClusterVersion(
 		return mcaStatus, err
 	}
 
-	if err := waitForMCV(client, clusterName, clusterName, &resultmcview, getErr); err != nil {
+	if err := waitForMCV(client, clusterName, clusterName, &resultmcview, GetErrConst); err != nil {
 		return mcaStatus, err
 	}
 	resultClusterVersion := resultmcview.Status.Result
@@ -1134,7 +1127,7 @@ func eusRetreiveAndUpdateClusterVersion(
 		err := json.Unmarshal(resultClusterVersion.Raw, &clusterVersion)
 		utils.CheckError(err)
 	} else {
-		return mcaStatus, getErr
+		return mcaStatus, GetErrConst
 	}
 
 	cvDesiredUpdate := clusterVersion["spec"].(map[string]interface{})["desiredUpdate"]

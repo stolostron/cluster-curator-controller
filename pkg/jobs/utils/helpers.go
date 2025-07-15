@@ -8,8 +8,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/user"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -178,7 +176,7 @@ func patchDyn(dynset dynamic.Interface, clusterName string, containerName string
 
 func GetDynset(dynset dynamic.Interface) (dynamic.Interface, error) {
 
-	config, err := LoadConfig("", "", "")
+	config, err := LoadConfig("", "")
 	if err != nil {
 		return nil, err
 	}
@@ -188,7 +186,7 @@ func GetDynset(dynset dynamic.Interface) (dynamic.Interface, error) {
 
 func GetClient() (clientv1.Client, error) {
 
-	config, err := LoadConfig("", "", "")
+	config, err := LoadConfig("", "")
 	if err != nil {
 		return nil, err
 	}
@@ -578,33 +576,13 @@ func GetMonitorAttempts(jobType string, curator *clustercuratorv1.ClusterCurator
 // If the context is provided, it returns a *rest.Config for the provided context.
 func LoadConfig(
 	url,
-	kubeconfig,
 	context string,
 ) (*rest.Config, error) {
-	if kubeconfig == "" {
-		kubeconfig = os.Getenv("KUBECONFIG")
-	}
-	klog.V(5).Infof("Kubeconfig path %s\n", kubeconfig)
-	// If we have an explicit indication of where the kubernetes config lives, read that.
+	kubeconfig := os.Getenv("DEV_ONLY_KUBECONFIG")
 	if kubeconfig != "" {
 		return configFromFile(url, kubeconfig, context)
 	}
-	// If not, try the in-cluster config.
-	if c, err := rest.InClusterConfig(); err == nil {
-		return c, nil
-	}
-	// If no in-cluster config, try the default location in the user's home directory.
-	if usr, err := user.Current(); err == nil {
-		klog.V(5).Infof("clientcmd.BuildConfigFromFlags for url %s using %s\n",
-			url,
-			filepath.Join(usr.HomeDir,
-				".kube",
-				"config"))
-		return configFromFile(url, filepath.Join(usr.HomeDir, ".kube", "config"), context)
-	}
-
-	return nil, fmt.Errorf("could not create a valid kubeconfig")
-
+	return rest.InClusterConfig()
 }
 
 func configFromFile(url, kubeconfig, context string) (*rest.Config, error) {
