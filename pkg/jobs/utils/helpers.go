@@ -176,7 +176,7 @@ func patchDyn(dynset dynamic.Interface, clusterName string, containerName string
 
 func GetDynset(dynset dynamic.Interface) (dynamic.Interface, error) {
 
-	config, err := LoadConfig("", "")
+	config, err := LoadConfig()
 	if err != nil {
 		return nil, err
 	}
@@ -186,7 +186,7 @@ func GetDynset(dynset dynamic.Interface) (dynamic.Interface, error) {
 
 func GetClient() (clientv1.Client, error) {
 
-	config, err := LoadConfig("", "")
+	config, err := LoadConfig()
 	if err != nil {
 		return nil, err
 	}
@@ -574,35 +574,20 @@ func GetMonitorAttempts(jobType string, curator *clustercuratorv1.ClusterCurator
 // If the context is not provided and the url is not provided, it returns a *rest.Config the for the current-context.
 // If the context is not provided but the url provided, it returns a *rest.Config for the server identified by the url.
 // If the context is provided, it returns a *rest.Config for the provided context.
-func LoadConfig(
-	url,
-	context string,
-) (*rest.Config, error) {
+func LoadConfig() (*rest.Config, error) {
 	kubeconfig := os.Getenv("DEV_ONLY_KUBECONFIG")
 	if kubeconfig != "" {
-		return configFromFile(url, kubeconfig, context)
+		return configFromFile(kubeconfig)
 	}
 	return rest.InClusterConfig()
 }
 
-func configFromFile(url, kubeconfig, context string) (*rest.Config, error) {
-	if context == "" {
-		// klog.V(5).Infof("clientcmd.BuildConfigFromFlags with %s and %s", url, kubeconfig)
-		// Retreive the config for the current context
-		if url == "" {
-			config, err := clientcmd.LoadFromFile(kubeconfig)
-			if err != nil {
-				return nil, err
-			}
-			return clientcmd.NewDefaultClientConfig(
-				*config,
-				&clientcmd.ConfigOverrides{}).ClientConfig()
-		}
-		return clientcmd.BuildConfigFromFlags(url, kubeconfig)
+func configFromFile(kubeconfig string) (*rest.Config, error) {
+	config, err := clientcmd.LoadFromFile(kubeconfig)
+	if err != nil {
+		return nil, err
 	}
-	return clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
-		&clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeconfig},
-		&clientcmd.ConfigOverrides{
-			CurrentContext: context,
-		}).ClientConfig()
+	return clientcmd.NewDefaultClientConfig(
+		*config,
+		&clientcmd.ConfigOverrides{}).ClientConfig()
 }
