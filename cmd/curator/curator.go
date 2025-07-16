@@ -55,7 +55,7 @@ func main() {
 	}
 
 	// Build a connection to the Hub OCP
-	config, err := rest.InClusterConfig()
+	config, err := utils.LoadConfig()
 	utils.CheckError(err)
 
 	client, err := utils.GetClient()
