@@ -8,7 +8,7 @@ metadata:
     build.appstudio.redhat.com/target_branch: '{{target_branch}}'
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request" && target_branch == "backplane-2.7"
-  creationTimestamp:
+  creationTimestamp: null
   labels:
     appstudio.openshift.io/application: release-mce-27
     appstudio.openshift.io/component: cluster-curator-controller-mce-27
@@ -35,6 +35,9 @@ spec:
     value: "true"
   - name: prefetch-input
     value: '[{"type": "gomod", "path": "."}]'
+  - name: build-platforms
+    value:
+      - linux/x86_64
   pipelineSpec:
     resolver: git
     params:
@@ -46,17 +49,6 @@ spec:
         value: pipelines/common_mce_2.7.yaml
   taskRunTemplate: {}
   workspaces:
-  - name: workspace
-    volumeClaimTemplate:
-      metadata:
-        creationTimestamp:
-      spec:
-        accessModes:
-        - ReadWriteOnce
-        resources:
-          requests:
-            storage: 1Gi
-      status: {}
   - name: git-auth
     secret:
       secretName: '{{ git_auth_secret }}'
