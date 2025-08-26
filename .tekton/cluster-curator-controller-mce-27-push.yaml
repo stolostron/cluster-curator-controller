@@ -38,7 +38,7 @@ spec:
       - linux/arm64
       - linux/ppc64le
       - linux/s390x
-  pipelineSpec:
+  pipelineRef:
     resolver: git
     params:
       - name: url
