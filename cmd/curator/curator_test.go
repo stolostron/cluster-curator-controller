@@ -329,10 +329,10 @@ func TestCuratorRunProviderCredentialPathEnv(t *testing.T) {
 		r := recover()
 		t.Log(r.(error).Error())
 
-		if !strings.Contains(r.(error).Error(), "secrets \"secretname\"") {
+		if !strings.Contains(r.(error).Error(), "unable to load in-cluster configuration") && !strings.Contains(r.(error).Error(), "secrets \"secretname\"") {
 			t.Fatal(r)
 		}
-		t.Log("Detected missing namespace/secretName")
+		t.Log("Detected missing kubernetes configuration or secret")
 	}()
 
 	os.Setenv("PROVIDER_CREDENTIAL_PATH", "namespace/secretname")

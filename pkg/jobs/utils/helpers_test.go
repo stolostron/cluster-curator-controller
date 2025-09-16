@@ -132,12 +132,12 @@ func TestGetDynset(t *testing.T) {
 
 func TestGetClient(t *testing.T) {
 	_, err := GetClient()
-	assert.Nil(t, err, "err is nil, when client is initialized")
+	assert.Nil(t, err, "err is nil, when dynset is initialized")
 }
 
 func TestGetKubeset(t *testing.T) {
 	_, err := GetKubeset()
-	assert.Nil(t, err, "err is nil, when kubset is initialized")
+	assert.Nil(t, err, "err is nil, when dynset is initialized")
 }
 
 func TestRecordCuratedStatusCondition(t *testing.T) {
