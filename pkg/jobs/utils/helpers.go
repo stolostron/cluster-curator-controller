@@ -208,7 +208,7 @@ func GetClient() (clientv1.Client, error) {
 
 func GetKubeset() (kubernetes.Interface, error) {
 
-	config, err := rest.InClusterConfig()
+	config, err := LoadConfig()
 	if err != nil {
 		return nil, err
 	}
