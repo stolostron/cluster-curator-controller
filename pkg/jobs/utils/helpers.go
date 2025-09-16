@@ -136,7 +136,9 @@ func PathSplitterFromEnv(path string) (namespace string, resource string, err er
 
 func RecordCuratorJob(clusterName, containerName string) error {
 	dynset, err := GetDynset(nil)
-	CheckError(err)
+	if err != nil {
+		return err
+	}
 
 	return patchDyn(dynset, clusterName, containerName, CurrentCuratorJob)
 }

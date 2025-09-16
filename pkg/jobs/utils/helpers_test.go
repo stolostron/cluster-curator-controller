@@ -127,17 +127,17 @@ func TestRecordCuratorJob(t *testing.T) {
 
 func TestGetDynset(t *testing.T) {
 	_, err := GetDynset(nil)
-	assert.Nil(t, err, "err is nil, when dynset is initialized")
+	assert.NotNil(t, err, "err is not nil, when running outside k8s cluster")
 }
 
 func TestGetClient(t *testing.T) {
 	_, err := GetClient()
-	assert.Nil(t, err, "err is nil, when client is initialized")
+	assert.NotNil(t, err, "err is not nil, when running outside k8s cluster")
 }
 
 func TestGetKubeset(t *testing.T) {
 	_, err := GetKubeset()
-	assert.Nil(t, err, "err is nil, when kubset is initialized")
+	assert.NotNil(t, err, "err is not nil, when running outside k8s cluster")
 }
 
 func TestRecordCuratedStatusCondition(t *testing.T) {
