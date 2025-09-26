@@ -13,6 +13,7 @@ FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
 ENV USER_UID=1001
 
 LABEL \
+      url="https://github.com/stolostron/cluster-curator-controller" \
     name="cluster-curator" \
     com.redhat.component="cluster-curator" \
     description="Cluster curator controller" \
