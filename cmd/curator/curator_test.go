@@ -330,7 +330,7 @@ func TestCuratorRunProviderCredentialPathEnv(t *testing.T) {
 		r := recover()
 		t.Log(r.(error).Error())
 
-		if !strings.Contains(r.(error).Error(), "secrets \"secretname\"") {
+		if !strings.Contains(r.(error).Error(), "secrets/secretname") {
 			t.Fatal(r)
 		}
 		t.Log("Detected missing namespace/secretName")
