@@ -47,7 +47,8 @@ spec:
         value: main
       - name: pathInRepo
         value: pipelines/common_mce_2.6.yaml
-  taskRunTemplate: {}
+  taskRunTemplate:
+    serviceAccountName: build-pipeline-cluster-curator-controller-mce-26
   workspaces:
   - name: workspace
     volumeClaimTemplate:
