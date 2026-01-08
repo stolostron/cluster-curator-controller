@@ -54,6 +54,48 @@ func getHostedCluster(hcType string, hcConditions []interface{}) *unstructured.U
 	}
 }
 
+func getHostedClusterWithChannel(hcType string, channel string, hcConditions []interface{}) *unstructured.Unstructured {
+	return &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "hypershift.openshift.io/v1beta1",
+			"kind":       "HostedCluster",
+			"metadata": map[string]interface{}{
+				"name":      ClusterName,
+				"namespace": ClusterNamespace,
+				"labels": map[string]interface{}{
+					"hypershift.openshift.io/auto-created-for-infra": ClusterName + "-xyz",
+				},
+			},
+			"spec": map[string]interface{}{
+				"pausedUntil": "true",
+				"channel":     channel,
+				"platform": map[string]interface{}{
+					"type": hcType,
+				},
+				"release": map[string]interface{}{
+					"image": "quay.io/openshift-release-dev/ocp-release:4.13.6-multi",
+				},
+			},
+			"status": map[string]interface{}{
+				"conditions": hcConditions,
+				"version": map[string]interface{}{
+					"desired": map[string]interface{}{
+						"channels": []interface{}{
+							"candidate-4.13",
+							"candidate-4.14",
+							"fast-4.13",
+							"fast-4.14",
+							"stable-4.13",
+							"stable-4.14",
+						},
+						"version": "4.13.6",
+					},
+				},
+			},
+		},
+	}
+}
+
 func getHostedClusterNoLabel(hcType string, hcConditions []interface{}) *unstructured.Unstructured {
 	return &unstructured.Unstructured{
 		Object: map[string]interface{}{
@@ -121,6 +163,45 @@ func getUpgradeClusterCurator(desiredUpdate string) *clustercuratorv1.ClusterCur
 			DesiredCuration: "upgrade",
 			Upgrade: clustercuratorv1.UpgradeHooks{
 				DesiredUpdate:  desiredUpdate,
+				MonitorTimeout: 5,
+			},
+			Destroy: clustercuratorv1.Hooks{
+				JobMonitorTimeout: 1,
+			},
+		},
+	}
+}
+
+func getChannelOnlyClusterCurator(channel string) *clustercuratorv1.ClusterCurator {
+	return &clustercuratorv1.ClusterCurator{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      ClusterName,
+			Namespace: ClusterNamespace,
+		},
+		Spec: clustercuratorv1.ClusterCuratorSpec{
+			DesiredCuration: "upgrade",
+			Upgrade: clustercuratorv1.UpgradeHooks{
+				Channel:        channel,
+				MonitorTimeout: 5,
+			},
+			Destroy: clustercuratorv1.Hooks{
+				JobMonitorTimeout: 1,
+			},
+		},
+	}
+}
+
+func getUpgradeWithChannelClusterCurator(desiredUpdate string, channel string) *clustercuratorv1.ClusterCurator {
+	return &clustercuratorv1.ClusterCurator{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      ClusterName,
+			Namespace: ClusterNamespace,
+		},
+		Spec: clustercuratorv1.ClusterCuratorSpec{
+			DesiredCuration: "upgrade",
+			Upgrade: clustercuratorv1.UpgradeHooks{
+				DesiredUpdate:  desiredUpdate,
+				Channel:        channel,
 				MonitorTimeout: 5,
 			},
 			Destroy: clustercuratorv1.Hooks{
@@ -751,4 +832,218 @@ func TestDetachAndMonitorKubeVirt(t *testing.T) {
 		DetachAndMonitor(dynfake, ClusterName, clusterCurator),
 		"err is nil, when user is destroying KubeVirt HC",
 	)
+}
+
+// Channel-only update tests
+func TestUpgradeClusterChannelOnly(t *testing.T) {
+	clusterCurator := getChannelOnlyClusterCurator("fast-4.14")
+	dynfake := dynfake.NewSimpleDynamicClient(
+		runtime.NewScheme(),
+		getHostedClusterWithChannel("AWS", "stable-4.13", []interface{}{
+			map[string]interface{}{
+				"type":    "Degraded",
+				"status":  "False",
+				"message": "The hosted cluster is not degraded",
+			},
+			map[string]interface{}{
+				"type":    "ClusterVersionAvailable",
+				"status":  "True",
+				"message": "Done applying 4.13.6",
+			},
+			map[string]interface{}{
+				"type":    "Available",
+				"status":  "True",
+				"message": "The hosted control plane is available",
+			},
+			map[string]interface{}{
+				"type":    "ClusterVersionProgressing",
+				"status":  "False",
+				"message": "Cluster version is 4.13.6",
+			},
+			map[string]interface{}{
+				"type":    "Progressing",
+				"status":  "False",
+				"message": "HostedCluster is at expected version",
+			},
+		}),
+		getNodepool(NodepoolName, ClusterNamespace, ClusterName),
+	)
+	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
+	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(clusterCurator).Build()
+
+	assert.Nil(
+		t,
+		UpgradeCluster(client, dynfake, ClusterName, clusterCurator),
+		"err is nil, when channel-only update is performed",
+	)
+
+	// Verify the channel was updated
+	hc, err := dynfake.Resource(utils.HCGVR).Namespace(ClusterNamespace).Get(context.TODO(), ClusterName, v1.GetOptions{})
+	assert.Nil(t, err, "should be able to get HostedCluster")
+	spec := hc.Object["spec"].(map[string]interface{})
+	assert.Equal(t, "fast-4.14", spec["channel"], "channel should be updated to fast-4.14")
+}
+
+func TestUpgradeClusterNoVersionOrChannel(t *testing.T) {
+	clusterCurator := &clustercuratorv1.ClusterCurator{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      ClusterName,
+			Namespace: ClusterNamespace,
+		},
+		Spec: clustercuratorv1.ClusterCuratorSpec{
+			DesiredCuration: "upgrade",
+			Upgrade: clustercuratorv1.UpgradeHooks{
+				MonitorTimeout: 5,
+			},
+		},
+	}
+	dynfake := dynfake.NewSimpleDynamicClient(
+		runtime.NewScheme(),
+		getHostedCluster("AWS", []interface{}{}),
+		getNodepool(NodepoolName, ClusterNamespace, ClusterName),
+	)
+	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
+	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(clusterCurator).Build()
+
+	err := UpgradeCluster(client, dynfake, ClusterName, clusterCurator)
+	assert.NotNil(t, err, "err should not be nil when neither version nor channel is provided")
+	assert.Contains(t, err.Error(), "Provide valid upgrade version or channel")
+}
+
+func TestUpgradeClusterWithVersionAndChannel(t *testing.T) {
+	clusterCurator := getUpgradeWithChannelClusterCurator("4.13.7", "fast-4.14")
+	managedClusterInfo := getManagedClusterInfo()
+	dynfake := dynfake.NewSimpleDynamicClient(
+		runtime.NewScheme(),
+		getHostedClusterWithChannel("AWS", "stable-4.13", []interface{}{
+			map[string]interface{}{
+				"type":    "Degraded",
+				"status":  "False",
+				"message": "The hosted cluster is not degraded",
+			},
+			map[string]interface{}{
+				"type":    "ClusterVersionAvailable",
+				"status":  "True",
+				"message": "Done applying 4.13.6",
+			},
+			map[string]interface{}{
+				"type":    "Available",
+				"status":  "False",
+				"message": "The hosted control plane is available",
+			},
+			map[string]interface{}{
+				"type":    "ClusterVersionProgressing",
+				"status":  "False",
+				"message": "Cluster version is 4.13.6",
+			},
+			map[string]interface{}{
+				"type":    "Progressing",
+				"status":  "False",
+				"message": "HostedCluster is at expected version",
+			},
+		}),
+		getNodepool(NodepoolName, ClusterNamespace, ClusterName),
+	)
+	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
+	s.AddKnownTypes(managedclusterinfov1beta1.SchemeGroupVersion, &managedclusterinfov1beta1.ManagedClusterInfo{})
+	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(clusterCurator, managedClusterInfo).Build()
+
+	assert.Nil(
+		t,
+		UpgradeCluster(client, dynfake, ClusterName, clusterCurator),
+		"err is nil, when both version and channel are provided",
+	)
+
+	// Verify both channel and release image were updated
+	hc, err := dynfake.Resource(utils.HCGVR).Namespace(ClusterNamespace).Get(context.TODO(), ClusterName, v1.GetOptions{})
+	assert.Nil(t, err, "should be able to get HostedCluster")
+	spec := hc.Object["spec"].(map[string]interface{})
+	assert.Equal(t, "fast-4.14", spec["channel"], "channel should be updated to fast-4.14")
+	release := spec["release"].(map[string]interface{})
+	assert.Equal(t, "quay.io/openshift-release-dev/ocp-release:4.13.7-multi", release["image"], "release image should be updated")
+}
+
+func TestMonitorUpgradeStatusChannelOnly(t *testing.T) {
+	clusterCurator := getChannelOnlyClusterCurator("fast-4.14")
+	dynfake := dynfake.NewSimpleDynamicClient(
+		runtime.NewScheme(),
+		getHostedClusterWithChannel("AWS", "fast-4.14", []interface{}{
+			map[string]interface{}{
+				"type":    "Degraded",
+				"status":  "False",
+				"message": "The hosted cluster is not degraded",
+			},
+			map[string]interface{}{
+				"type":    "ClusterVersionAvailable",
+				"status":  "True",
+				"message": "Done applying 4.13.6",
+			},
+			map[string]interface{}{
+				"type":    "Available",
+				"status":  "True",
+				"message": "The hosted control plane is available",
+			},
+			map[string]interface{}{
+				"type":    "ClusterVersionProgressing",
+				"status":  "False",
+				"message": "Cluster version is 4.13.6",
+			},
+			map[string]interface{}{
+				"type":    "Progressing",
+				"status":  "False",
+				"message": "HostedCluster is at expected version",
+			},
+		}),
+		getNodepool(NodepoolName, ClusterNamespace, ClusterName),
+	)
+	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
+	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(clusterCurator).Build()
+
+	assert.Nil(
+		t,
+		MonitorUpgradeStatus(dynfake, client, ClusterName, clusterCurator),
+		"err is nil, when channel-only update is detected",
+	)
+}
+
+func TestUpgradeClusterInvalidChannel(t *testing.T) {
+	clusterCurator := getChannelOnlyClusterCurator("invalid-channel")
+	dynfake := dynfake.NewSimpleDynamicClient(
+		runtime.NewScheme(),
+		getHostedClusterWithChannel("AWS", "stable-4.13", []interface{}{
+			map[string]interface{}{
+				"type":    "Degraded",
+				"status":  "False",
+				"message": "The hosted cluster is not degraded",
+			},
+			map[string]interface{}{
+				"type":    "ClusterVersionAvailable",
+				"status":  "True",
+				"message": "Done applying 4.13.6",
+			},
+			map[string]interface{}{
+				"type":    "Available",
+				"status":  "True",
+				"message": "The hosted control plane is available",
+			},
+			map[string]interface{}{
+				"type":    "ClusterVersionProgressing",
+				"status":  "False",
+				"message": "Cluster version is 4.13.6",
+			},
+			map[string]interface{}{
+				"type":    "Progressing",
+				"status":  "False",
+				"message": "HostedCluster is at expected version",
+			},
+		}),
+		getNodepool(NodepoolName, ClusterNamespace, ClusterName),
+	)
+	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
+	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(clusterCurator).Build()
+
+	err := UpgradeCluster(client, dynfake, ClusterName, clusterCurator)
+	assert.NotNil(t, err, "err should not be nil when invalid channel is provided")
+	assert.Contains(t, err.Error(), "is not valid")
+	assert.Contains(t, err.Error(), "Available channels")
 }
