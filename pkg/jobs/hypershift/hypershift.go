@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"strconv"
 	"strings"
@@ -368,29 +369,41 @@ func UpgradeCluster(
 	klog.V(2).Info("Looking up managedclusterinfo " + clusterName)
 
 	desiredUpdate := curator.Spec.Upgrade.DesiredUpdate
+	channel := curator.Spec.Upgrade.Channel
 
-	if err := validateUpgradeVersion(client, clusterName, curator, desiredUpdate); err != nil {
+	if err := validateUpgradeVersion(client, dc, clusterName, curator, desiredUpdate, channel); err != nil {
 		return err
 	}
 
-	// Only support upgrading HC AND NPs to same versions for now
-	image := "quay.io/openshift-release-dev/ocp-release:" + desiredUpdate + "-multi"
+	// Handle channel-only update
+	if channel != "" {
+		klog.V(2).Info("Patching HostedCluster channel to " + channel)
+		if err := patchChannel(dc, clusterName, curator.Namespace, channel); err != nil {
+			return err
+		}
+	}
 
-	// Patch HostedCluster with new image
-	err := patchUpgradeVersion(dc, clusterName, curator.Namespace, utils.HCGVR, image)
-	utils.CheckError(err)
+	// Handle version upgrade (if desiredUpdate is specified)
+	if desiredUpdate != "" {
+		// Only support upgrading HC AND NPs to same versions for now
+		image := "quay.io/openshift-release-dev/ocp-release:" + desiredUpdate + "-multi"
 
-	// Need to account for 0 or multiple NodePools
-	nodePools, err := dc.Resource(utils.NPGVR).Namespace(curator.Namespace).List(context.TODO(), v1.ListOptions{})
-	utils.CheckError(err)
+		// Patch HostedCluster with new image
+		err := patchUpgradeVersion(dc, clusterName, curator.Namespace, utils.HCGVR, image)
+		utils.CheckError(err)
 
-	for _, np := range nodePools.Items {
-		spec := np.Object["spec"].(map[string]interface{})
-		npClusterName := spec["clusterName"].(string)
-		if npClusterName == clusterName {
-			npName := np.Object["metadata"].(map[string]interface{})["name"].(string)
-			err = patchUpgradeVersion(dc, npName, curator.Namespace, utils.NPGVR, image)
-			utils.CheckError(err)
+		// Need to account for 0 or multiple NodePools
+		nodePools, err := dc.Resource(utils.NPGVR).Namespace(curator.Namespace).List(context.TODO(), v1.ListOptions{})
+		utils.CheckError(err)
+
+		for _, np := range nodePools.Items {
+			spec := np.Object["spec"].(map[string]interface{})
+			npClusterName := spec["clusterName"].(string)
+			if npClusterName == clusterName {
+				npName := np.Object["metadata"].(map[string]interface{})["name"].(string)
+				err = patchUpgradeVersion(dc, npName, curator.Namespace, utils.NPGVR, image)
+				utils.CheckError(err)
+			}
 		}
 	}
 
@@ -406,6 +419,9 @@ func MonitorUpgradeStatus(
 	klog.V(0).Info("Monitoring up to " + strconv.Itoa(upgradeAttempts) + " attempts for Hypershift Upgrade job")
 	elapsedTime := 0
 
+	desiredUpdate := curator.Spec.Upgrade.DesiredUpdate
+	channel := curator.Spec.Upgrade.Channel
+
 	// Refresh the hostedCluster resource
 	hostedCluster, err := dc.Resource(utils.HCGVR).Namespace(curator.Namespace).Get(
 		context.TODO(), clusterName, v1.GetOptions{})
@@ -413,6 +429,38 @@ func MonitorUpgradeStatus(
 		return err
 	}
 
+	// Handle channel-only update monitoring
+	if desiredUpdate == "" && channel != "" {
+		for i := 0; i < upgradeAttempts; i++ {
+			hostedCluster, err = dc.Resource(utils.HCGVR).Namespace(curator.Namespace).Get(
+				context.TODO(), clusterName, v1.GetOptions{})
+			if err != nil {
+				return err
+			}
+
+			spec := hostedCluster.Object["spec"].(map[string]interface{})
+			if spec["channel"] != nil && spec["channel"].(string) == channel {
+				klog.V(2).Info("Channel update succeeded ✓")
+				utils.CheckError(utils.RecordCurrentStatusCondition(
+					client,
+					clusterName,
+					curator.Namespace,
+					"hypershift-upgrade-job",
+					v1.ConditionTrue,
+					"channel-update-job"))
+				return nil
+			}
+
+			if elapsedTime%6 == 0 {
+				klog.V(0).Info("Channel Update Job:  - " + strconv.Itoa(elapsedTime/6) + "min")
+			}
+			time.Sleep(utils.PauseTenSeconds) // 10s
+			elapsedTime++
+		}
+		return errors.New("Timed out waiting for channel update")
+	}
+
+	// Handle version upgrade monitoring
 	for i := 0; i < upgradeAttempts; i++ {
 		if isHostedReady(hostedCluster, true) {
 			klog.V(2).Info("Upgrade succeeded ✓")
@@ -481,11 +529,60 @@ func patchUpgradeVersion(
 	return err
 }
 
+func patchChannel(
+	dc dynamic.Interface,
+	clusterName string,
+	namespace string,
+	channel string) error {
+	err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+		// Update the channel spec
+		patch := []utils.PatchStringValue{{
+			Op:    "replace",
+			Path:  "/spec/channel",
+			Value: channel,
+		}}
+
+		patchInBytes, _ := json.Marshal(patch)
+
+		klog.V(2).Infof("Patching HostedCluster %v channel in namespace %v ✓", clusterName, namespace)
+		_, err := dc.Resource(utils.HCGVR).Namespace(namespace).Patch(
+			context.TODO(), clusterName, types.JSONPatchType, patchInBytes, v1.PatchOptions{})
+		if err != nil {
+			return err
+		}
+		log.Println("Updated HostedCluster channel ✓")
+		return nil
+	})
+
+	return err
+}
+
 func validateUpgradeVersion(
 	client clientv1.Client,
+	dc dynamic.Interface,
 	clusterName string,
 	curator *clustercuratorv1.ClusterCurator,
-	desiredUpdate string) error {
+	desiredUpdate string,
+	channel string) error {
+
+	// At least one of desiredUpdate or channel must be provided
+	if desiredUpdate == "" && channel == "" {
+		return errors.New("Provide valid upgrade version or channel")
+	}
+
+	// Validate channel if provided
+	if channel != "" {
+		if err := validateChannel(dc, clusterName, curator.Namespace, channel); err != nil {
+			return err
+		}
+	}
+
+	// Channel-only update doesn't require version validation
+	if desiredUpdate == "" && channel != "" {
+		klog.V(2).Info("Channel-only update requested, skipping version validation")
+		return nil
+	}
+
 	managedClusterInfo := managedclusterinfov1beta1.ManagedClusterInfo{}
 	if err := client.Get(context.TODO(), types.NamespacedName{
 		Namespace: clusterName,
@@ -506,6 +603,66 @@ func validateUpgradeVersion(
 		return errors.New("Cannot upgrade to the same version")
 	}
 
+	return nil
+}
+
+func validateChannel(
+	dc dynamic.Interface,
+	clusterName string,
+	namespace string,
+	channel string) error {
+
+	klog.V(2).Info("Validating channel " + channel + " against HostedCluster available channels")
+
+	hostedCluster, err := dc.Resource(utils.HCGVR).Namespace(namespace).Get(
+		context.TODO(), clusterName, v1.GetOptions{})
+	if err != nil {
+		return err
+	}
+
+	// Extract available channels from status.version.desired.channels
+	// If not available, log warning and allow the channel to be set anyway.
+	// Channel list is not available if the hosted cluster's channel has not been set yet.
+	status, ok := hostedCluster.Object["status"].(map[string]interface{})
+	if !ok {
+		return errors.New("Failed to get HostedCluster status")
+	}
+
+	version, ok := status["version"].(map[string]interface{})
+	if !ok {
+		return errors.New("Failed to get HostedCluster status.version")
+	}
+
+	desired, ok := version["desired"].(map[string]interface{})
+	if !ok {
+		return errors.New("Failed to get HostedCluster status.version.desired")
+	}
+
+	availableChannels, ok := desired["channels"].([]interface{})
+	if !ok {
+		klog.Warning("HostedCluster available channels not found, skipping channel validation")
+		return nil
+	}
+
+	// Check if the provided channel is in the available channels list
+	isValidChannel := false
+	for _, c := range availableChannels {
+		if c.(string) == channel {
+			isValidChannel = true
+			break
+		}
+	}
+
+	if !isValidChannel {
+		availableList := make([]string, len(availableChannels))
+		for i, c := range availableChannels {
+			availableList[i] = c.(string)
+		}
+		return fmt.Errorf("Provided channel '%s' is not valid. Available channels: %s",
+			channel, strings.Join(availableList, ", "))
+	}
+
+	klog.V(2).Info("Channel " + channel + " is valid ✓")
 	return nil
 }
 

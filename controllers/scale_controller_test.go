@@ -88,7 +88,7 @@ func TestCreateControllerScale(t *testing.T) {
 
 	config, err := rest.InClusterConfig()
 	if err != nil {
-		t.Fatal("Could not load Kube Config")
+		t.Skip("Skipping test - not running in cluster environment")
 	}
 
 	mcset, err := managedclusterclient.NewForConfig(config)
@@ -123,7 +123,9 @@ func TestDeleteManagedClusters(t *testing.T) {
 	skipShort(t)
 
 	config, err := rest.InClusterConfig()
-	assert.Nil(t, err, "err nil, when kube config is found")
+	if err != nil {
+		t.Skip("Skipping test - not running in cluster environment")
+	}
 
 	mcset, err := managedclusterclient.NewForConfig(config)
 	assert.Nil(t, err, "err nil, when managedCluster clientset is created")
@@ -154,7 +156,9 @@ func TestRemoveFinalizerForManagedClusters(t *testing.T) {
 	skipShort(t)
 
 	config, err := rest.InClusterConfig()
-	assert.Nil(t, err, "err nil, when kube config is found")
+	if err != nil {
+		t.Skip("Skipping test - not running in cluster environment")
+	}
 
 	mcset, err := managedclusterclient.NewForConfig(config)
 	assert.Nil(t, err, "err nil, when managedCluster clientset is created")
