@@ -50,17 +50,6 @@ spec:
   taskRunTemplate:
     serviceAccountName: build-pipeline-cluster-curator-controller-mce-26
   workspaces:
-  - name: workspace
-    volumeClaimTemplate:
-      metadata:
-        creationTimestamp:
-      spec:
-        accessModes:
-        - ReadWriteOnce
-        resources:
-          requests:
-            storage: 1Gi
-      status: {}
   - name: git-auth
     secret:
       secretName: '{{ git_auth_secret }}'
