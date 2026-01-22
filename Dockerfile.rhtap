@@ -1,4 +1,4 @@
-FROM brew.registry.redhat.io/rh-osbs/openshift-golang-builder:rhel_9_1.24 AS builder
+FROM brew.registry.redhat.io/rh-osbs/openshift-golang-builder:rhel_9_1.25 AS builder
 
 WORKDIR /go/src/github.com/stolostron/cluster-curator-controller
 COPY . .
@@ -14,7 +14,8 @@ ENV USER_UID=1001
 
 LABEL \
       url="https://github.com/stolostron/cluster-curator-controller" \
-    name="cluster-curator" \
+    name="multicluster-engine/cluster-curator-controller-rhel9" \
+    cpe="cpe:/a:redhat:multicluster_engine:2.11::el9" \
     com.redhat.component="cluster-curator" \
     description="Cluster curator controller" \
     maintainer="acm-contact@redhat.com" \
