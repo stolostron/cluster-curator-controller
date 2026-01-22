@@ -9,6 +9,9 @@
 
 set -o pipefail
 
+# Set GOPATH to default if not already set (needed for Go modules mode)
+export GOPATH=${GOPATH:-$HOME/go}
+
 _package=$1
 _cover_pkgs=$2
 echo -e "\nTesting package $_package"
