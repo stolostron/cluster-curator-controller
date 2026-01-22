@@ -416,10 +416,22 @@ func NeedToUpgrade(curator clustercuratorv1.ClusterCurator) (bool, error) {
 
 	if strings.Contains(jobCondtion.Message, "Failed") {
 		klog.V(2).Info(fmt.Sprintf("Previous curator %q is failed, %q", curator.Name, jobCondtion.Message))
-		if strings.Contains(jobCondtion.Message, GetCurrentVersionInfo(&curator)) {
-			// last job failed and desired version is unchanged, do nothing
-			klog.V(2).Info(fmt.Sprintf("last job failed and desired version is unchanged, do not need to upgrade"))
-			return false, nil
+
+		// Check if the basic version info matches (for backward compatibility with old messages)
+		basicVersionInfo := fmt.Sprintf("%s;%s;%s", curator.Spec.Upgrade.DesiredUpdate, curator.Spec.Upgrade.Channel, curator.Spec.Upgrade.Upstream)
+		if strings.Contains(jobCondtion.Message, basicVersionInfo) {
+			// Also check if upgradeType and nodePoolNames changed (for new messages)
+			currentUpgradeType, currentNodePoolNames := parseExtendedVersionInfo(jobCondtion.Message)
+			desiredNodePoolNames := strings.Join(curator.Spec.Upgrade.NodePoolNames, ",")
+
+			if string(curator.Spec.Upgrade.UpgradeType) == currentUpgradeType && desiredNodePoolNames == currentNodePoolNames {
+				// last job failed and all upgrade params are unchanged, do nothing
+				klog.V(2).Info(fmt.Sprintf("last job failed and desired version is unchanged, do not need to upgrade"))
+				return false, nil
+			}
+			// upgradeType or nodePoolNames changed, need to upgrade
+			klog.V(2).Info(fmt.Sprintf("last job failed but upgradeType or nodePoolNames changed, need to upgrade"))
+			return true, nil
 		}
 
 		// To be compatible with 2.2.0 version
@@ -465,12 +477,53 @@ func NeedToUpgrade(curator clustercuratorv1.ClusterCurator) (bool, error) {
 		return true, nil
 	}
 
+	// Check if upgradeType or nodePoolNames changed (for hosted cluster upgrades)
+	// Parse the extended version info if present in the message
+	currentUpgradeType, currentNodePoolNames := parseExtendedVersionInfo(jobCondtion.Message)
+
+	if string(curator.Spec.Upgrade.UpgradeType) != currentUpgradeType {
+		klog.V(2).Info(fmt.Sprintf("Curator %q upgradeType changed, current=%v desired=%v", curator.Name, currentUpgradeType, curator.Spec.Upgrade.UpgradeType))
+		return true, nil
+	}
+
+	desiredNodePoolNames := strings.Join(curator.Spec.Upgrade.NodePoolNames, ",")
+	if desiredNodePoolNames != currentNodePoolNames {
+		klog.V(2).Info(fmt.Sprintf("Curator %q nodePoolNames changed, current=%v desired=%v", curator.Name, currentNodePoolNames, desiredNodePoolNames))
+		return true, nil
+	}
+
 	// desired version is less than or equal to current version, or channel or upstream is not changed, do nothing
 	return false, nil
 }
 
 func GetCurrentVersionInfo(curator *clustercuratorv1.ClusterCurator) string {
-	return fmt.Sprintf("%s;%s;%s", curator.Spec.Upgrade.DesiredUpdate, curator.Spec.Upgrade.Channel, curator.Spec.Upgrade.Upstream)
+	nodePoolNames := strings.Join(curator.Spec.Upgrade.NodePoolNames, ",")
+	return fmt.Sprintf("%s;%s;%s;%s;%s", curator.Spec.Upgrade.DesiredUpdate, curator.Spec.Upgrade.Channel, curator.Spec.Upgrade.Upstream, curator.Spec.Upgrade.UpgradeType, nodePoolNames)
+}
+
+// parseExtendedVersionInfo extracts upgradeType and nodePoolNames from the condition message
+// Message format: "... Version (desiredUpdate;channel;upstream;upgradeType;nodePoolNames)"
+// For backward compatibility, returns empty strings if the extended fields are not present
+func parseExtendedVersionInfo(msg string) (upgradeType string, nodePoolNames string) {
+	index := strings.Index(msg, "(")
+	if index == -1 {
+		return "", ""
+	}
+	versionInfo := msg[index:]
+	lastIndex := strings.Index(versionInfo, ")")
+	if lastIndex == -1 {
+		return "", ""
+	}
+
+	infos := strings.Split(versionInfo[1:lastIndex], ";")
+	// Extended format: desiredUpdate;channel;upstream;upgradeType;nodePoolNames
+	if len(infos) >= 4 {
+		upgradeType = infos[3]
+	}
+	if len(infos) >= 5 {
+		nodePoolNames = infos[4]
+	}
+	return upgradeType, nodePoolNames
 }
 
 func parseVersionInfo(msg string) (channel, upstream string, semversion semver.Version, err error) {
@@ -485,7 +538,8 @@ func parseVersionInfo(msg string) (channel, upstream string, semversion semver.V
 	}
 
 	infos := strings.Split(versionInfo[1:lastIndex], ";")
-	if len(infos) != 3 {
+	// Support both old format (3 fields) and new format (5 fields)
+	if len(infos) < 3 {
 		return channel, upstream, semversion, fmt.Errorf("wrong split message")
 	}
 

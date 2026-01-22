@@ -1,0 +1,86 @@
+# Sample ClusterCurator resources for upgrading hosted clusters
+# See docs/hosted-cluster-upgrade.md for detailed documentation
+
+---
+# Example 1: Upgrade both control plane and NodePools (default behavior)
+apiVersion: cluster.open-cluster-management.io/v1beta1
+kind: ClusterCurator
+metadata:
+  name: my-hosted-cluster
+  namespace: clusters
+  labels:
+    open-cluster-management: curator
+spec:
+  desiredCuration: upgrade
+  upgrade:
+    desiredUpdate: "4.14.5"
+    # upgradeType is empty, so both control plane and NodePools will be upgraded
+
+---
+# Example 2: Upgrade only the control plane (HostedCluster)
+apiVersion: cluster.open-cluster-management.io/v1beta1
+kind: ClusterCurator
+metadata:
+  name: my-hosted-cluster
+  namespace: clusters
+  labels:
+    open-cluster-management: curator
+spec:
+  desiredCuration: upgrade
+  upgrade:
+    desiredUpdate: "4.14.5"
+    upgradeType: ControlPlane
+
+---
+# Example 3: Upgrade only the NodePools (worker nodes)
+# NOTE: The NodePools version cannot be higher than the HostedCluster control plane version.
+#       Upgrade the control plane first if needed.
+apiVersion: cluster.open-cluster-management.io/v1beta1
+kind: ClusterCurator
+metadata:
+  name: my-hosted-cluster
+  namespace: clusters
+  labels:
+    open-cluster-management: curator
+spec:
+  desiredCuration: upgrade
+  upgrade:
+    desiredUpdate: "4.14.5"
+    upgradeType: NodePools
+
+---
+# Example 4: Update channel only
+apiVersion: cluster.open-cluster-management.io/v1beta1
+kind: ClusterCurator
+metadata:
+  name: my-hosted-cluster
+  namespace: clusters
+  labels:
+    open-cluster-management: curator
+spec:
+  desiredCuration: upgrade
+  upgrade:
+    channel: "fast-4.14"
+
+---
+# Example 5: Upgrade with version, channel, and Ansible hooks
+apiVersion: cluster.open-cluster-management.io/v1beta1
+kind: ClusterCurator
+metadata:
+  name: my-hosted-cluster
+  namespace: clusters
+  labels:
+    open-cluster-management: curator
+spec:
+  desiredCuration: upgrade
+  upgrade:
+    desiredUpdate: "4.14.5"
+    channel: "fast-4.14"
+    monitorTimeout: 180  # Wait up to 180 minutes
+    towerAuthSecret: toweraccess
+    prehook:
+      - name: Pre-Upgrade Health Check
+        extra_vars:
+          cluster_name: my-hosted-cluster
+    posthook:
+      - name: Post-Upgrade Validation

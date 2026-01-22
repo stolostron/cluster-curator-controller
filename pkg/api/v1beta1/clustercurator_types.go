@@ -130,6 +130,22 @@ type UpgradeHooks struct {
 	// +optional
 	Upstream string `json:"upstream,omitempty"`
 
+	// UpgradeType specifies which components to upgrade for HostedCluster deployments.
+	// For standalone clusters, this field is ignored.
+	// Supported values are:
+	// - "ControlPlane" - upgrade only the HostedCluster control plane
+	// - "NodePools" - upgrade only the NodePools (worker nodes)
+	// - "" (empty, default) - upgrade both control plane and node pools
+	// +optional
+	// +kubebuilder:validation:Enum=ControlPlane;NodePools;""
+	UpgradeType UpgradeType `json:"upgradeType,omitempty"`
+
+	// NodePoolNames specifies which NodePools to upgrade when upgradeType is "NodePools" or empty (default).
+	// If not specified or empty, all NodePools associated with the HostedCluster will be upgraded.
+	// This field is ignored when upgradeType is "ControlPlane".
+	// +optional
+	NodePoolNames []string `json:"nodePoolNames,omitempty"`
+
 	// Jobs to run before the cluster upgrade.
 	Prehook []Hook `json:"prehook,omitempty"`
 
@@ -165,6 +181,18 @@ const (
 
 	// HookTypeWorkflow, the hook is an Ansible Workflow template
 	HookTypeWorkflow HookType = "Workflow"
+)
+
+// UpgradeType indicates which components to upgrade for HostedCluster deployments.
+// +kubebuilder:validation:Enum=ControlPlane;NodePools;""
+type UpgradeType string
+
+const (
+	// UpgradeTypeControlPlane upgrades only the HostedCluster control plane
+	UpgradeTypeControlPlane UpgradeType = "ControlPlane"
+
+	// UpgradeTypeNodePools upgrades only the NodePools (worker nodes)
+	UpgradeTypeNodePools UpgradeType = "NodePools"
 )
 
 // +kubebuilder:object:root=true

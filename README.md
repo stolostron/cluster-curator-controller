@@ -199,6 +199,28 @@ For more details on job flow within our architecture see our [**swimlane chart**
   Note: The `desiredCuration` commands are exactly the same as the Hive cluster since the controller will auto-detect the cluster type
 
   * To monitor the status of the provision you can look at either the `ClusterCurator` status or look at the job logs from the `HostedCluster` namespace.
+
+### Hosted cluster upgrade example:
+
+  For detailed documentation on upgrading hosted clusters including control plane only, NodePools only, and channel updates, see the [Hosted Cluster Upgrade Guide](docs/hosted-cluster-upgrade.md).
+
+  Quick example - upgrade both control plane and NodePools:
+  ```yaml
+  apiVersion: cluster.open-cluster-management.io/v1beta1
+  kind: ClusterCurator
+  metadata:
+    name: my-hosted-cluster
+    namespace: clusters
+  spec:
+    desiredCuration: upgrade
+    upgrade:
+      desiredUpdate: "4.14.5"
+  ```
+
+  To upgrade only the control plane, add `upgradeType: ControlPlane`. To upgrade only NodePools, add `upgradeType: NodePools`.
+
+  See [deploy/samples/clusterCurator-upgrade.yaml](deploy/samples/clusterCurator-upgrade.yaml) for more examples.
+
 ---
 
 - ### Diagnostic steps:
