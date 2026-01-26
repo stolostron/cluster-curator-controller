@@ -643,6 +643,119 @@ func TestNeedToUpgrade(t *testing.T) {
 			expectedUpgrade: true,
 			expectedErr:     false,
 		},
+		{
+			name: "upgradeType is changed",
+			curator: clustercuratorv1.ClusterCurator{
+				Spec: clustercuratorv1.ClusterCuratorSpec{
+					Upgrade: clustercuratorv1.UpgradeHooks{
+						DesiredUpdate: "4.14.0",
+						UpgradeType:   clustercuratorv1.UpgradeTypeNodePools,
+					},
+				},
+				Status: clustercuratorv1.ClusterCuratorStatus{
+					Conditions: []v1.Condition{
+						{
+							Message: "curator-job-xxxx DesiredCuration: upgrade Version (4.14.0;;;;)",
+							Status:  v1.ConditionTrue,
+							Type:    "clustercurator-job",
+						},
+					},
+				},
+			},
+			expectedUpgrade: true,
+			expectedErr:     false,
+		},
+		{
+			name: "nodePoolNames is changed",
+			curator: clustercuratorv1.ClusterCurator{
+				Spec: clustercuratorv1.ClusterCuratorSpec{
+					Upgrade: clustercuratorv1.UpgradeHooks{
+						DesiredUpdate: "4.14.0",
+						UpgradeType:   clustercuratorv1.UpgradeTypeNodePools,
+						NodePoolNames: []string{"nodepool-2"},
+					},
+				},
+				Status: clustercuratorv1.ClusterCuratorStatus{
+					Conditions: []v1.Condition{
+						{
+							Message: "curator-job-xxxx DesiredCuration: upgrade Version (4.14.0;;;NodePools;nodepool-1)",
+							Status:  v1.ConditionTrue,
+							Type:    "clustercurator-job",
+						},
+					},
+				},
+			},
+			expectedUpgrade: true,
+			expectedErr:     false,
+		},
+		{
+			name: "upgradeType and nodePoolNames unchanged",
+			curator: clustercuratorv1.ClusterCurator{
+				Spec: clustercuratorv1.ClusterCuratorSpec{
+					Upgrade: clustercuratorv1.UpgradeHooks{
+						DesiredUpdate: "4.14.0",
+						UpgradeType:   clustercuratorv1.UpgradeTypeNodePools,
+						NodePoolNames: []string{"nodepool-1"},
+					},
+				},
+				Status: clustercuratorv1.ClusterCuratorStatus{
+					Conditions: []v1.Condition{
+						{
+							Message: "curator-job-xxxx DesiredCuration: upgrade Version (4.14.0;;;NodePools;nodepool-1)",
+							Status:  v1.ConditionTrue,
+							Type:    "clustercurator-job",
+						},
+					},
+				},
+			},
+			expectedUpgrade: false,
+			expectedErr:     false,
+		},
+		{
+			name: "failed job - upgradeType changed",
+			curator: clustercuratorv1.ClusterCurator{
+				Spec: clustercuratorv1.ClusterCuratorSpec{
+					Upgrade: clustercuratorv1.UpgradeHooks{
+						DesiredUpdate: "4.14.0",
+						UpgradeType:   clustercuratorv1.UpgradeTypeNodePools,
+					},
+				},
+				Status: clustercuratorv1.ClusterCuratorStatus{
+					Conditions: []v1.Condition{
+						{
+							Message: "curator-job-xxxx DesiredCuration: upgrade Version (4.14.0;;;;) Failed - error",
+							Status:  v1.ConditionTrue,
+							Type:    "clustercurator-job",
+						},
+					},
+				},
+			},
+			expectedUpgrade: true,
+			expectedErr:     false,
+		},
+		{
+			name: "failed job - nodePoolNames changed",
+			curator: clustercuratorv1.ClusterCurator{
+				Spec: clustercuratorv1.ClusterCuratorSpec{
+					Upgrade: clustercuratorv1.UpgradeHooks{
+						DesiredUpdate: "4.14.0",
+						UpgradeType:   clustercuratorv1.UpgradeTypeNodePools,
+						NodePoolNames: []string{"nodepool-2"},
+					},
+				},
+				Status: clustercuratorv1.ClusterCuratorStatus{
+					Conditions: []v1.Condition{
+						{
+							Message: "curator-job-xxxx DesiredCuration: upgrade Version (4.14.0;;;NodePools;nodepool-1) Failed - error",
+							Status:  v1.ConditionTrue,
+							Type:    "clustercurator-job",
+						},
+					},
+				},
+			},
+			expectedUpgrade: true,
+			expectedErr:     false,
+		},
 	}
 
 	for _, c := range cases {

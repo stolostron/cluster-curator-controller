@@ -370,13 +370,16 @@ func UpgradeCluster(
 
 	desiredUpdate := curator.Spec.Upgrade.DesiredUpdate
 	channel := curator.Spec.Upgrade.Channel
+	upgradeType := curator.Spec.Upgrade.UpgradeType
+
+	klog.V(2).Info("Upgrade type: " + string(upgradeType))
 
 	if err := validateUpgradeVersion(client, dc, clusterName, curator, desiredUpdate, channel); err != nil {
 		return err
 	}
 
-	// Handle channel-only update
-	if channel != "" {
+	// Handle channel-only update (only applies to control plane/HostedCluster)
+	if channel != "" && upgradeType != clustercuratorv1.UpgradeTypeNodePools {
 		klog.V(2).Info("Patching HostedCluster channel to " + channel)
 		if err := patchChannel(dc, clusterName, curator.Namespace, channel); err != nil {
 			return err
@@ -385,24 +388,43 @@ func UpgradeCluster(
 
 	// Handle version upgrade (if desiredUpdate is specified)
 	if desiredUpdate != "" {
-		// Only support upgrading HC AND NPs to same versions for now
 		image := "quay.io/openshift-release-dev/ocp-release:" + desiredUpdate + "-multi"
 
-		// Patch HostedCluster with new image
-		err := patchUpgradeVersion(dc, clusterName, curator.Namespace, utils.HCGVR, image)
-		utils.CheckError(err)
+		// Upgrade control plane (HostedCluster) if upgradeType is ControlPlane or empty (default)
+		if upgradeType == clustercuratorv1.UpgradeTypeControlPlane || upgradeType == "" {
+			klog.V(2).Info("Upgrading HostedCluster control plane to " + desiredUpdate)
+			err := patchUpgradeVersion(dc, clusterName, curator.Namespace, utils.HCGVR, image)
+			utils.CheckError(err)
+		}
 
-		// Need to account for 0 or multiple NodePools
-		nodePools, err := dc.Resource(utils.NPGVR).Namespace(curator.Namespace).List(context.TODO(), v1.ListOptions{})
-		utils.CheckError(err)
+		// Upgrade NodePools if upgradeType is NodePools or empty (default)
+		if upgradeType == clustercuratorv1.UpgradeTypeNodePools || upgradeType == "" {
+			nodePoolNames := curator.Spec.Upgrade.NodePoolNames
+			if len(nodePoolNames) > 0 {
+				klog.V(2).Infof("Upgrading specific NodePools %v to %s", nodePoolNames, desiredUpdate)
+			} else {
+				klog.V(2).Info("Upgrading all NodePools to " + desiredUpdate)
+			}
 
-		for _, np := range nodePools.Items {
-			spec := np.Object["spec"].(map[string]interface{})
-			npClusterName := spec["clusterName"].(string)
-			if npClusterName == clusterName {
-				npName := np.Object["metadata"].(map[string]interface{})["name"].(string)
-				err = patchUpgradeVersion(dc, npName, curator.Namespace, utils.NPGVR, image)
-				utils.CheckError(err)
+			// Need to account for 0 or multiple NodePools
+			nodePools, err := dc.Resource(utils.NPGVR).Namespace(curator.Namespace).List(context.TODO(), v1.ListOptions{})
+			utils.CheckError(err)
+
+			for _, np := range nodePools.Items {
+				spec := np.Object["spec"].(map[string]interface{})
+				npClusterName := spec["clusterName"].(string)
+				if npClusterName == clusterName {
+					npName := np.Object["metadata"].(map[string]interface{})["name"].(string)
+
+					// If specific NodePool names are provided, only upgrade those
+					if len(nodePoolNames) > 0 && !containsString(nodePoolNames, npName) {
+						klog.V(4).Infof("Skipping NodePool %s (not in specified list)", npName)
+						continue
+					}
+
+					err = patchUpgradeVersion(dc, npName, curator.Namespace, utils.NPGVR, image)
+					utils.CheckError(err)
+				}
 			}
 		}
 	}
@@ -421,6 +443,9 @@ func MonitorUpgradeStatus(
 
 	desiredUpdate := curator.Spec.Upgrade.DesiredUpdate
 	channel := curator.Spec.Upgrade.Channel
+	upgradeType := curator.Spec.Upgrade.UpgradeType
+
+	klog.V(2).Info("Monitoring upgrade type: " + string(upgradeType))
 
 	// Refresh the hostedCluster resource
 	hostedCluster, err := dc.Resource(utils.HCGVR).Namespace(curator.Namespace).Get(
@@ -429,7 +454,7 @@ func MonitorUpgradeStatus(
 		return err
 	}
 
-	// Handle channel-only update monitoring
+	// Handle channel-only update monitoring (only applies to control plane)
 	if desiredUpdate == "" && channel != "" {
 		for i := 0; i < upgradeAttempts; i++ {
 			hostedCluster, err = dc.Resource(utils.HCGVR).Namespace(curator.Namespace).Get(
@@ -460,9 +485,36 @@ func MonitorUpgradeStatus(
 		return errors.New("Timed out waiting for channel update")
 	}
 
-	// Handle version upgrade monitoring
+	// Handle NodePools-only upgrade monitoring
+	if upgradeType == clustercuratorv1.UpgradeTypeNodePools {
+		return monitorNodePoolsUpgrade(dc, client, clusterName, curator, upgradeAttempts)
+	}
+
+	// Handle ControlPlane-only or default (both) upgrade monitoring
+	// For both cases, we monitor the HostedCluster status
 	for i := 0; i < upgradeAttempts; i++ {
 		if isHostedReady(hostedCluster, true) {
+			// For default upgrade type, also check NodePools
+			if upgradeType == "" {
+				klog.V(2).Info("Control plane upgrade succeeded, checking NodePools...")
+				nodePoolNames := curator.Spec.Upgrade.NodePoolNames
+				nodePoolsReady, npErr := areNodePoolsReady(dc, clusterName, curator.Namespace, desiredUpdate, nodePoolNames)
+				if npErr != nil {
+					return npErr
+				}
+				if !nodePoolsReady {
+					klog.V(2).Info("NodePools not yet ready, continuing to monitor...")
+					// Continue monitoring
+					time.Sleep(utils.PauseTenSeconds)
+					elapsedTime++
+					hostedCluster, err = dc.Resource(utils.HCGVR).Namespace(curator.Namespace).Get(
+						context.TODO(), clusterName, v1.GetOptions{})
+					if err != nil {
+						return err
+					}
+					continue
+				}
+			}
 			klog.V(2).Info("Upgrade succeeded ✓")
 			utils.CheckError(utils.RecordCurrentStatusCondition(
 				client,
@@ -498,6 +550,133 @@ func MonitorUpgradeStatus(
 		klog.Warning(hostedCluster.Object["status"].(map[string]interface{})["conditions"])
 	}
 	return errors.New("Timed out waiting for job")
+}
+
+// monitorNodePoolsUpgrade monitors the upgrade status of NodePools only
+func monitorNodePoolsUpgrade(
+	dc dynamic.Interface,
+	client clientv1.Client,
+	clusterName string,
+	curator *clustercuratorv1.ClusterCurator,
+	upgradeAttempts int) error {
+
+	desiredUpdate := curator.Spec.Upgrade.DesiredUpdate
+	elapsedTime := 0
+
+	nodePoolNames := curator.Spec.Upgrade.NodePoolNames
+
+	for i := 0; i < upgradeAttempts; i++ {
+		allReady, err := areNodePoolsReady(dc, clusterName, curator.Namespace, desiredUpdate, nodePoolNames)
+		if err != nil {
+			return err
+		}
+
+		if allReady {
+			klog.V(2).Info("NodePools upgrade succeeded ✓")
+			utils.CheckError(utils.RecordCurrentStatusCondition(
+				client,
+				clusterName,
+				curator.Namespace,
+				"hypershift-upgrade-job",
+				v1.ConditionTrue,
+				"nodepools-upgrade-job"))
+			return nil
+		}
+
+		if elapsedTime%6 == 0 {
+			klog.V(0).Info("NodePools Upgrade Job:  - " + strconv.Itoa(elapsedTime/6) + "min")
+		}
+		time.Sleep(utils.PauseTenSeconds) // 10s
+		elapsedTime++
+	}
+
+	return errors.New("Timed out waiting for NodePools upgrade")
+}
+
+// areNodePoolsReady checks if NodePools for a cluster are ready and at the desired version
+// If nodePoolNames is provided, only those NodePools are checked; otherwise all NodePools are checked
+func areNodePoolsReady(
+	dc dynamic.Interface,
+	clusterName string,
+	namespace string,
+	desiredUpdate string,
+	nodePoolNames []string) (bool, error) {
+
+	nodePools, err := dc.Resource(utils.NPGVR).Namespace(namespace).List(context.TODO(), v1.ListOptions{})
+	if err != nil {
+		return false, err
+	}
+
+	expectedImage := "quay.io/openshift-release-dev/ocp-release:" + desiredUpdate + "-multi"
+
+	for _, np := range nodePools.Items {
+		spec := np.Object["spec"].(map[string]interface{})
+		npClusterName := spec["clusterName"].(string)
+
+		if npClusterName != clusterName {
+			continue
+		}
+
+		npName := np.Object["metadata"].(map[string]interface{})["name"].(string)
+
+		// If specific NodePool names are provided, only check those
+		if len(nodePoolNames) > 0 && !containsString(nodePoolNames, npName) {
+			continue
+		}
+
+		// Check if NodePool has status
+		if np.Object["status"] == nil {
+			klog.V(4).Info("NodePool " + npName + " has no status yet")
+			return false, nil
+		}
+
+		status := np.Object["status"].(map[string]interface{})
+
+		// Check conditions for UpdatingVersion
+		if status["conditions"] != nil {
+			conditions := status["conditions"].([]interface{})
+			for _, condition := range conditions {
+				conditionMap := condition.(map[string]interface{})
+				conditionType := conditionMap["type"].(string)
+				conditionStatus := conditionMap["status"].(string)
+
+				// If UpdatingVersion is True, upgrade is still in progress
+				if conditionType == "UpdatingVersion" && conditionStatus == "True" {
+					klog.V(4).Info("NodePool " + npName + " is still updating version")
+					return false, nil
+				}
+
+				// Check Ready condition
+				if conditionType == "Ready" && conditionStatus != "True" {
+					klog.V(4).Info("NodePool " + npName + " is not ready")
+					return false, nil
+				}
+			}
+		}
+
+		// Verify the release image matches expected version in spec
+		release := spec["release"].(map[string]interface{})
+		currentImage := release["image"].(string)
+		if currentImage != expectedImage {
+			klog.V(4).Info("NodePool " + npName + " spec image " + currentImage + " does not match expected " + expectedImage)
+			return false, nil
+		}
+
+		// Verify status.version matches the desired version
+		if status["version"] == nil {
+			klog.V(4).Info("NodePool " + npName + " has no status.version yet")
+			return false, nil
+		}
+		statusVersion := status["version"].(string)
+		if statusVersion != desiredUpdate {
+			klog.V(4).Info("NodePool " + npName + " status.version " + statusVersion + " does not match expected " + desiredUpdate)
+			return false, nil
+		}
+
+		klog.V(4).Info("NodePool " + npName + " is ready at version " + desiredUpdate)
+	}
+
+	return true, nil
 }
 
 func patchUpgradeVersion(
@@ -565,13 +744,15 @@ func validateUpgradeVersion(
 	desiredUpdate string,
 	channel string) error {
 
+	upgradeType := curator.Spec.Upgrade.UpgradeType
+
 	// At least one of desiredUpdate or channel must be provided
 	if desiredUpdate == "" && channel == "" {
 		return errors.New("Provide valid upgrade version or channel")
 	}
 
-	// Validate channel if provided
-	if channel != "" {
+	// Validate channel if provided (skip for NodePools-only upgrades since channel doesn't apply)
+	if channel != "" && upgradeType != clustercuratorv1.UpgradeTypeNodePools {
 		if err := validateChannel(dc, clusterName, curator.Namespace, channel); err != nil {
 			return err
 		}
@@ -583,6 +764,34 @@ func validateUpgradeVersion(
 		return nil
 	}
 
+	desiredSemver, err := semver.Make(desiredUpdate)
+	if err != nil {
+		return err
+	}
+
+	// For NodePools-only upgrades, validate that the desired version is not higher than HostedCluster version
+	// Skip the "same version" check since ManagedClusterInfo reports control plane version, not NodePool version
+	if upgradeType == clustercuratorv1.UpgradeTypeNodePools {
+		hostedClusterVersion, err := getHostedClusterVersion(dc, clusterName, curator.Namespace)
+		if err != nil {
+			return err
+		}
+
+		hcSemver, err := semver.Make(hostedClusterVersion)
+		if err != nil {
+			return fmt.Errorf("Failed to parse HostedCluster version %s: %v", hostedClusterVersion, err)
+		}
+
+		if desiredSemver.GT(hcSemver) {
+			return fmt.Errorf("NodePools cannot be upgraded to version %s which is higher than HostedCluster version %s. Upgrade the control plane first",
+				desiredUpdate, hostedClusterVersion)
+		}
+		klog.V(2).Infof("NodePools upgrade version %s is valid (HostedCluster version: %s)", desiredUpdate, hostedClusterVersion)
+		return nil
+	}
+
+	// For ControlPlane or default upgrades, check that we're not upgrading to the same version
+	// ManagedClusterInfo reports the control plane version
 	managedClusterInfo := managedclusterinfov1beta1.ManagedClusterInfo{}
 	if err := client.Get(context.TODO(), types.NamespacedName{
 		Namespace: clusterName,
@@ -591,10 +800,6 @@ func validateUpgradeVersion(
 		return err
 	}
 
-	desiredSemver, err := semver.Make(desiredUpdate)
-	if err != nil {
-		return err
-	}
 	currentSemver, err := semver.Make(managedClusterInfo.Status.DistributionInfo.OCP.Version)
 	if err != nil {
 		return err
@@ -604,6 +809,41 @@ func validateUpgradeVersion(
 	}
 
 	return nil
+}
+
+// getHostedClusterVersion retrieves the current version of the HostedCluster from status.version.history
+func getHostedClusterVersion(dc dynamic.Interface, clusterName string, namespace string) (string, error) {
+	hostedCluster, err := dc.Resource(utils.HCGVR).Namespace(namespace).Get(
+		context.TODO(), clusterName, v1.GetOptions{})
+	if err != nil {
+		return "", err
+	}
+
+	// Try to get version from status.version.history[0].version
+	if hostedCluster.Object["status"] != nil {
+		status := hostedCluster.Object["status"].(map[string]interface{})
+		if status["version"] != nil {
+			version := status["version"].(map[string]interface{})
+			if version["history"] != nil {
+				history := version["history"].([]interface{})
+				if len(history) > 0 {
+					firstHistory := history[0].(map[string]interface{})
+					if firstHistory["version"] != nil {
+						return firstHistory["version"].(string), nil
+					}
+				}
+			}
+			// Fallback to status.version.desired.version if history is not available
+			if version["desired"] != nil {
+				desired := version["desired"].(map[string]interface{})
+				if desired["version"] != nil {
+					return desired["version"].(string), nil
+				}
+			}
+		}
+	}
+
+	return "", errors.New("Unable to determine HostedCluster version from status")
 }
 
 func validateChannel(
@@ -746,4 +986,14 @@ func DetachAndMonitor(dc dynamic.Interface, clusterName string, curator *cluster
 		time.Sleep(utils.PauseTenSeconds * 3)
 	}
 	return errors.New("Time out waiting for hosted cluster to detach")
+}
+
+// containsString checks if a string slice contains a specific string
+func containsString(slice []string, s string) bool {
+	for _, item := range slice {
+		if item == s {
+			return true
+		}
+	}
+	return false
 }
