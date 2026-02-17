@@ -37,13 +37,11 @@ export DOCKER_TAG        ?= $(shell whoami)
 #CRD_OPTIONS ?= "crd"
 CRD_OPTIONS ?= "crd:trivialVersions=true"
 
-TEST_TMP := /tmp
-export KUBEBUILDER_ASSETS ?= $(TEST_TMP)/kubebuilder/bin
-K8S_VERSION ?= 1.27.1
-GOHOSTOS ?= $(shell go env GOHOSTOS)
-GOHOSTARCH ?= $(shell go env GOHOSTARCH)
-KB_TOOLS_ARCHIVE_NAME := kubebuilder-tools-$(K8S_VERSION)-$(GOHOSTOS)-$(GOHOSTARCH).tar.gz
-KB_TOOLS_ARCHIVE_PATH := $(TEST_TMP)/$(KB_TOOLS_ARCHIVE_NAME)
+# Use setup-envtest to download envtest binaries from the new location (controller-tools releases).
+# See: https://github.com/kubernetes-sigs/kubebuilder/discussions/4082
+ENVTEST_K8S_VERSION ?= 1.30.0
+ENVTEST_VERSION ?= v0.20.4
+
 
 BEFORE_SCRIPT := $(shell build/before-make.sh)
 
@@ -120,10 +118,9 @@ lint:
 .PHONY: unit-tests
 ## Runs go unit tests
 unit-tests: ensure-kubebuilder-tools
-	@build/run-unit-tests.sh
-	#GOFLAGS="" go test -timeout 2000s -v ./pkg/...
-	#GOFLAGS="" go test -timeout 60s -v -short ./cmd/...
-	#GOFLAGS="" go test -timeout 60s -v -short ./controllers/...
+	@export KUBEBUILDER_ASSETS=$$(setup-envtest use -i -p path $(ENVTEST_K8S_VERSION)); \
+	build/run-unit-tests.sh
+
 
 .PHONY: push-curator
 push-curator: build-curator
@@ -156,14 +153,8 @@ scale-up-test:
 scale-down-test:
 	go test -v -timeout 500s ./cmd/controller/controller_test.go -run TestDeleteManagedClusters
 
+
+# Install setup-envtest (used to download envtest binaries from controller-tools GitHub releases).
 .PHONY: ensure-kubebuilder-tools
-# download the kubebuilder-tools to get kube-apiserver binaries from it
 ensure-kubebuilder-tools:
-ifeq "" "$(wildcard $(KUBEBUILDER_ASSETS))"
-	$(info Downloading kube-apiserver into '$(KUBEBUILDER_ASSETS)')
-	mkdir -p '$(KUBEBUILDER_ASSETS)'
-	curl -s -f -L https://storage.googleapis.com/kubebuilder-tools/$(KB_TOOLS_ARCHIVE_NAME) -o '$(KB_TOOLS_ARCHIVE_PATH)'
-	tar -C '$(KUBEBUILDER_ASSETS)' --strip-components=2 -zvxf '$(KB_TOOLS_ARCHIVE_PATH)'
-else
-	$(info Using existing kube-apiserver from "$(KUBEBUILDER_ASSETS)")
-endif
+	@which setup-envtest >/dev/null 2>&1 || go install sigs.k8s.io/controller-runtime/tools/setup-envtest@$(ENVTEST_VERSION)
