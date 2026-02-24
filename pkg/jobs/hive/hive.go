@@ -1005,6 +1005,7 @@ func retreiveAndUpdateClusterVersion(
 		cvDesiredUpdate := clusterVersion["spec"].(map[string]interface{})["desiredUpdate"]
 		if cvDesiredUpdate != nil {
 			cvDesiredUpdate.(map[string]interface{})["version"] = desiredUpdate
+			delete(cvDesiredUpdate.(map[string]interface{}), "architecture")
 			if imageWithDigest != "" {
 				cvDesiredUpdate.(map[string]interface{})["image"] = imageWithDigest
 			} else {
@@ -1034,7 +1035,9 @@ func retreiveAndUpdateClusterVersion(
 		if cvAvailableUpdates, ok := clusterVersion["status"].(map[string]interface{})["availableUpdates"].([]interface{}); ok {
 			for _, version := range cvAvailableUpdates {
 				if version.(map[string]interface{})["version"] == desiredUpdate {
-					clusterVersion["spec"].(map[string]interface{})["desiredUpdate"] = version
+					versionMap := version.(map[string]interface{})
+					delete(versionMap, "architecture")
+					clusterVersion["spec"].(map[string]interface{})["desiredUpdate"] = versionMap
 					break
 				}
 			}
@@ -1138,6 +1141,7 @@ func eusRetreiveAndUpdateClusterVersion(
 	// Using the version image tag to upgrade will be blocked
 	if cvDesiredUpdate != nil {
 		cvDesiredUpdate.(map[string]interface{})["version"] = updateVersion
+		delete(cvDesiredUpdate.(map[string]interface{}), "architecture")
 		cvDesiredUpdate.(map[string]interface{})["force"] = true
 		cvDesiredUpdate.(map[string]interface{})["image"] =
 			"quay.io/openshift-release-dev/ocp-release:" + updateVersion + "-multi"
