@@ -780,6 +780,248 @@ func TestUpgradeCluster(t *testing.T) {
 	assert.Nil(t, UpgradeCluster(client, ClusterName, clustercurator), "Upgrade started successfully")
 }
 
+func TestUpgradeClusterWithArchitectureInAvailableUpdates(t *testing.T) {
+
+	s := scheme.Scheme
+	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
+	s.AddKnownTypes(managedclusterinfov1beta1.SchemeGroupVersion, &managedclusterinfov1beta1.ManagedClusterInfo{})
+	s.AddKnownTypes(managedclusteractionv1beta1.SchemeGroupVersion, &managedclusteractionv1beta1.ManagedClusterAction{})
+	s.AddKnownTypes(managedclusterviewv1beta1.SchemeGroupVersion, &managedclusterviewv1beta1.ManagedClusterView{})
+
+	clustercurator := &clustercuratorv1.ClusterCurator{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      ClusterName,
+			Namespace: ClusterName,
+		},
+		Spec: clustercuratorv1.ClusterCuratorSpec{
+			DesiredCuration: "upgrade",
+			Upgrade: clustercuratorv1.UpgradeHooks{
+				DesiredUpdate: "4.21.1",
+			},
+		},
+	}
+
+	clusterversion := &clusterversionv1.ClusterVersion{
+		TypeMeta: v1.TypeMeta{
+			APIVersion: "config.openshift.io/v1",
+			Kind:       "ClusterVersion",
+		},
+		ObjectMeta: v1.ObjectMeta{
+			Name: "version",
+		},
+		Spec: clusterversionv1.ClusterVersionSpec{
+			Channel:   "stable-4.21",
+			ClusterID: "201ad26c-67d6-416a",
+			Upstream:  "https://api.openshift.com/api",
+		},
+		Status: clusterversionv1.ClusterVersionStatus{
+			AvailableUpdates: []clusterversionv1.Release{
+				{
+					Version:      "4.21.1",
+					Image:        "quay.io/openshift-release-dev/ocp-release@sha256:abc123",
+					Architecture: clusterversionv1.ClusterVersionArchitectureMulti,
+				},
+				{
+					Version:      "4.21.2",
+					Image:        "quay.io/openshift-release-dev/ocp-release@sha256:def456",
+					Architecture: clusterversionv1.ClusterVersionArchitectureMulti,
+				},
+			},
+		},
+	}
+	b, _ := json.Marshal(clusterversion)
+
+	mci := getManagedClusterInfo()
+	mci.Status.DistributionInfo.OCP.AvailableUpdates = []string{"4.21.1", "4.21.2"}
+
+	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(clustercurator, mci).Build()
+
+	go func() {
+		for i := 0; i < 10; i++ {
+			time.Sleep(1 * time.Second)
+			resultmcview := managedclusterviewv1beta1.ManagedClusterView{}
+			err := client.Get(context.TODO(), types.NamespacedName{
+				Namespace: ClusterName,
+				Name:      ClusterName,
+			}, &resultmcview)
+			if err != nil {
+				continue
+			}
+			resultmcview.Status.Result.Raw = b
+			err = client.Update(context.TODO(), &resultmcview)
+			if err != nil {
+				continue
+			}
+			updatedresultmcview := managedclusterviewv1beta1.ManagedClusterView{}
+			err = client.Get(context.TODO(), types.NamespacedName{
+				Namespace: ClusterName,
+				Name:      ClusterName,
+			}, &updatedresultmcview)
+			if err != nil {
+				continue
+			}
+			if updatedresultmcview.Status.Result.Raw != nil {
+				break
+			}
+		}
+	}()
+	go func() {
+		for i := 0; i < 10; i++ {
+			time.Sleep(1 * time.Second)
+			resultmca := managedclusteractionv1beta1.ManagedClusterAction{}
+			err := client.Get(context.TODO(), types.NamespacedName{
+				Namespace: ClusterName,
+				Name:      ClusterName,
+			}, &resultmca)
+
+			if err == nil {
+				mcaPayload := map[string]interface{}{}
+				json.Unmarshal(resultmca.Spec.KubeWork.ObjectTemplate.Raw, &mcaPayload)
+				desiredUpdate := mcaPayload["spec"].(map[string]interface{})["desiredUpdate"].(map[string]interface{})
+				assert.Nil(t, desiredUpdate["architecture"],
+					"architecture must be removed from desiredUpdate to avoid API validation error")
+
+				patch := []byte(`{"status":{"conditions":[
+							{
+								"lastTransitionTime": "2021-04-28T16:19:38Z",
+								"message": " Resource action is done.",
+								"reason": "ActionDone",
+								"status": "True",
+								"type": "Completed"
+							}]}}`)
+				client.Patch(context.Background(), &resultmca, clientv1.RawPatch(types.MergePatchType, patch))
+				break
+			}
+		}
+	}()
+
+	assert.Nil(t, UpgradeCluster(client, ClusterName, clustercurator),
+		"Upgrade with architecture in availableUpdates should succeed")
+}
+
+func TestUpgradeClusterForceWithArchitectureInDesiredUpdate(t *testing.T) {
+
+	s := scheme.Scheme
+	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
+	s.AddKnownTypes(managedclusterinfov1beta1.SchemeGroupVersion, &managedclusterinfov1beta1.ManagedClusterInfo{})
+	s.AddKnownTypes(managedclusteractionv1beta1.SchemeGroupVersion, &managedclusteractionv1beta1.ManagedClusterAction{})
+	s.AddKnownTypes(managedclusterviewv1beta1.SchemeGroupVersion, &managedclusterviewv1beta1.ManagedClusterView{})
+
+	clustercurator := &clustercuratorv1.ClusterCurator{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      ClusterName,
+			Namespace: ClusterName,
+			Annotations: map[string]string{
+				ForceUpgradeAnnotation: "true",
+			},
+		},
+		Spec: clustercuratorv1.ClusterCuratorSpec{
+			DesiredCuration: "upgrade",
+			Upgrade: clustercuratorv1.UpgradeHooks{
+				DesiredUpdate: "4.21.1",
+			},
+		},
+	}
+
+	currentClusterVersion := &clusterversionv1.ClusterVersion{
+		TypeMeta: v1.TypeMeta{
+			APIVersion: "config.openshift.io/v1",
+			Kind:       "ClusterVersion",
+		},
+		ObjectMeta: v1.ObjectMeta{
+			Name: "version",
+		},
+		Spec: clusterversionv1.ClusterVersionSpec{
+			Channel:   "stable-4.21",
+			ClusterID: "201ad26c-67d6-416a",
+			Upstream:  "https://api.openshift.com/api",
+			DesiredUpdate: &clusterversionv1.Update{
+				Image:        "quay.io/openshift-release-dev/ocp-release@sha256:old",
+				Version:      "4.21.0",
+				Architecture: clusterversionv1.ClusterVersionArchitectureMulti,
+			},
+		},
+		Status: clusterversionv1.ClusterVersionStatus{
+			AvailableUpdates: []clusterversionv1.Release{
+				{
+					Version:      "4.21.0",
+					Image:        "quay.io/openshift-release-dev/ocp-release@sha256:old",
+					Architecture: clusterversionv1.ClusterVersionArchitectureMulti,
+				},
+			},
+		},
+	}
+
+	b, _ := json.Marshal(currentClusterVersion)
+
+	client := clientfake.NewClientBuilder().WithRuntimeObjects([]runtime.Object{
+		clustercurator, getManagedClusterInfo(),
+	}...).WithScheme(s).Build()
+
+	go func() {
+		for i := 0; i < 60; i++ {
+			time.Sleep(500 * time.Millisecond)
+			resultmcview := managedclusterviewv1beta1.ManagedClusterView{}
+			err := client.Get(context.TODO(), types.NamespacedName{
+				Namespace: ClusterName,
+				Name:      ClusterName,
+			}, &resultmcview)
+			if err != nil {
+				continue
+			}
+			resultmcview.Status.Result.Raw = b
+			err = client.Update(context.TODO(), &resultmcview)
+			if err != nil {
+				continue
+			}
+			updatedresultmcview := managedclusterviewv1beta1.ManagedClusterView{}
+			err = client.Get(context.TODO(), types.NamespacedName{
+				Namespace: ClusterName,
+				Name:      ClusterName,
+			}, &updatedresultmcview)
+			if err != nil {
+				continue
+			}
+			if updatedresultmcview.Status.Result.Raw != nil {
+				break
+			}
+		}
+	}()
+
+	go func() {
+		for i := 0; i < 60; i++ {
+			time.Sleep(500 * time.Millisecond)
+			resultmca := managedclusteractionv1beta1.ManagedClusterAction{}
+			err := client.Get(context.TODO(), types.NamespacedName{
+				Namespace: ClusterName,
+				Name:      ClusterName,
+			}, &resultmca)
+
+			if err == nil {
+				mcaPayload := map[string]interface{}{}
+				json.Unmarshal(resultmca.Spec.KubeWork.ObjectTemplate.Raw, &mcaPayload)
+				desiredUpdate := mcaPayload["spec"].(map[string]interface{})["desiredUpdate"].(map[string]interface{})
+				assert.Nil(t, desiredUpdate["architecture"],
+					"architecture must be removed from desiredUpdate to avoid API validation error")
+
+				patch := []byte(`{"status":{"conditions":[
+							{
+								"lastTransitionTime": "2021-04-28T16:19:38Z",
+								"message": " Resource action is done.",
+								"reason": "ActionDone",
+								"status": "True",
+								"type": "Completed"
+							}]}}`)
+				client.Patch(context.Background(), &resultmca, clientv1.RawPatch(types.MergePatchType, patch))
+				break
+			}
+		}
+	}()
+
+	assert.Nil(t, UpgradeCluster(client, ClusterName, clustercurator),
+		"Force upgrade with architecture in existing desiredUpdate should succeed")
+}
+
 func TestUpgradeClusterWithChannelUpstream(t *testing.T) {
 
 	s := scheme.Scheme
