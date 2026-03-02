@@ -1,5 +1,19 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "enabledManagers": ["tekton"]
+  "enabledManagers": ["gomod", "tekton"],
+  "forkProcessing": "enabled",
+  "prHourlyLimit": 5,
+  "postUpdateOptions": ["gomodTidy"],
+  "packageRules": [
+    {
+      "description": "Ignore other Go deps except packages below",
+      "matchDatasources": ["go"],
+      "enabled": false
+    },
+    {
+      "description": "Enable Hive APIs updates",
+      "matchPackageNames": ["github.com/openshift/hive/apis"],
+      "enabled": true
+    }
+  ]
 }
-
