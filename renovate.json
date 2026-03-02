@@ -1,19 +1,36 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "enabledManagers": ["gomod", "tekton"],
+  "extends": [
+    "config:recommended",
+    ":gitSignOff",
+    ":disableDependencyDashboard"
+  ],
+  "baseBranches": ["main"],
   "forkProcessing": "enabled",
-  "prHourlyLimit": 5,
-  "postUpdateOptions": ["gomodTidy"],
+  "gomod": {
+    "postUpdateOptions": ["gomodUpdateImportPaths", "gomodTidy"],
+    "packageRules": [
+      {
+        "matchDepTypes": ["indirect"],
+        "enabled": false
+      }
+    ]
+  },
   "packageRules": [
     {
-      "description": "Ignore other Go deps except packages below",
-      "matchDatasources": ["go"],
+      "matchManagers": ["gomod"],
       "enabled": false
     },
     {
-      "description": "Enable Hive APIs updates",
+      "matchManagers": ["gomod"],
       "matchPackageNames": ["github.com/openshift/hive/apis"],
-      "enabled": true
+      "enabled": true,
+      "addLabels": ["hive-apis"],
+      "schedule": ["0 15 * * *"]
     }
-  ]
+  ],
+  "branchConcurrentLimit": 1,
+  "prConcurrentLimit": 1,
+  "timezone": "America/New_York"
 }
