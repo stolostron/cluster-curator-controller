@@ -1,33 +1,53 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "enabledManagers": ["gomod", "tekton"],
+  "enabledManagers": [
+    "gomod",
+    "tekton"
+  ],
   "extends": [
     "config:recommended",
     ":gitSignOff",
     ":disableDependencyDashboard"
   ],
-  "baseBranches": ["main"],
-  "schedule": ["before 6am on Monday"],
+  "baseBranchPatterns": [
+    "main"
+  ],
+  "schedule": [
+    "before 6am on Monday"
+  ],
   "forkProcessing": "enabled",
   "gomod": {
-    "postUpdateOptions": ["gomodUpdateImportPaths", "gomodTidy"],
+    "postUpdateOptions": [
+      "gomodUpdateImportPaths",
+      "gomodTidy"
+    ],
     "packageRules": [
       {
-        "matchDepTypes": ["indirect"],
+        "matchDepTypes": [
+          "indirect"
+        ],
         "enabled": false
       }
     ]
   },
   "packageRules": [
     {
-      "matchManagers": ["gomod"],
+      "matchManagers": [
+        "gomod"
+      ],
       "enabled": false
     },
     {
-      "matchManagers": ["gomod"],
-      "matchPackageNames": ["github.com/openshift/hive/apis"],
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchPackageNames": [
+        "github.com/openshift/hive/apis"
+      ],
       "enabled": true,
-      "addLabels": ["hive-apis"]
+      "addLabels": [
+        "hive-apis"
+      ]
     }
   ],
   "branchConcurrentLimit": 1,
