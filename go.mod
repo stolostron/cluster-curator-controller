@@ -6,7 +6,7 @@ require (
 	github.com/blang/semver/v4 v4.0.0
 	github.com/go-logr/logr v1.4.3
 	github.com/openshift/api v0.0.0-20251120220512-cb382c9eaf42
-	github.com/openshift/hive/apis v0.0.0-20260303192309-a5d0850b13a7
+	github.com/openshift/hive/apis v0.0.0-20260313193320-4f955dc1d49e
 	github.com/stolostron/cluster-lifecycle-api v0.0.0-20220714081119-eae2fe1f05fd
 	github.com/stretchr/testify v1.11.1
 	gopkg.in/yaml.v2 v2.4.0
