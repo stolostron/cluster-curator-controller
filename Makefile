@@ -14,6 +14,7 @@ export VCS_REF     = $(if $(shell git status --porcelain),$(GIT_COMMIT)-$(BUILD_
 
 export CGO_ENABLED  = 1
 export GO111MODULE := on
+export GOPATH       ?= $(shell go env GOPATH)
 export GOPACKAGES   = $(shell go list ./... | grep -v /vendor | grep -v /internal | grep -v /build | grep -v /test | grep -v /controllers)
 
 export PROJECT_DIR            = $(shell 'pwd')
@@ -39,11 +40,11 @@ CRD_OPTIONS ?= "crd:trivialVersions=true"
 
 TEST_TMP := /tmp
 export KUBEBUILDER_ASSETS ?= $(TEST_TMP)/kubebuilder/bin
-K8S_VERSION ?= 1.27.1
-GOHOSTOS ?= $(shell go env GOHOSTOS)
-GOHOSTARCH ?= $(shell go env GOHOSTARCH)
-KB_TOOLS_ARCHIVE_NAME := kubebuilder-tools-$(K8S_VERSION)-$(GOHOSTOS)-$(GOHOSTARCH).tar.gz
-KB_TOOLS_ARCHIVE_PATH := $(TEST_TMP)/$(KB_TOOLS_ARCHIVE_NAME)
+
+# Use setup-envtest to download envtest binaries from the new location (controller-tools releases).
+# See: https://github.com/kubernetes-sigs/kubebuilder/discussions/4082
+ENVTEST_K8S_VERSION ?= 1.30.0
+ENVTEST_VERSION ?= release-0.19
 
 BEFORE_SCRIPT := $(shell build/before-make.sh)
 
@@ -121,9 +122,6 @@ lint:
 ## Runs go unit tests
 unit-tests: ensure-kubebuilder-tools
 	@build/run-unit-tests.sh
-	#GOFLAGS="" go test -timeout 2000s -v ./pkg/...
-	#GOFLAGS="" go test -timeout 60s -v -short ./cmd/...
-	#GOFLAGS="" go test -timeout 60s -v -short ./controllers/...
 
 .PHONY: push-curator
 push-curator: build-curator
@@ -157,13 +155,14 @@ scale-down-test:
 	go test -v -timeout 500s ./cmd/controller/controller_test.go -run TestDeleteManagedClusters
 
 .PHONY: ensure-kubebuilder-tools
-# download the kubebuilder-tools to get kube-apiserver binaries from it
+# Download envtest binaries (kube-apiserver, etcd) via setup-envtest from controller-tools releases.
 ensure-kubebuilder-tools:
-ifeq "" "$(wildcard $(KUBEBUILDER_ASSETS))"
-	$(info Downloading kube-apiserver into '$(KUBEBUILDER_ASSETS)')
-	mkdir -p '$(KUBEBUILDER_ASSETS)'
-	curl -s -f -L https://storage.googleapis.com/kubebuilder-tools/$(KB_TOOLS_ARCHIVE_NAME) -o '$(KB_TOOLS_ARCHIVE_PATH)'
-	tar -C '$(KUBEBUILDER_ASSETS)' --strip-components=2 -zvxf '$(KB_TOOLS_ARCHIVE_PATH)'
+ifeq "" "$(wildcard $(KUBEBUILDER_ASSETS)/kube-apiserver)"
+	$(info Downloading envtest binaries for K8s $(ENVTEST_K8S_VERSION) into $(KUBEBUILDER_ASSETS))
+	@which setup-envtest >/dev/null 2>&1 || GOFLAGS="" go install sigs.k8s.io/controller-runtime/tools/setup-envtest@$(ENVTEST_VERSION)
+	@mkdir -p '$(KUBEBUILDER_ASSETS)'
+	@ENVTEST_BINDIR=$$(setup-envtest use $(ENVTEST_K8S_VERSION) -p path) && \
+		cp -f "$$ENVTEST_BINDIR"/* '$(KUBEBUILDER_ASSETS)/'
 else
-	$(info Using existing kube-apiserver from "$(KUBEBUILDER_ASSETS)")
+	$(info Using existing envtest binaries from $(KUBEBUILDER_ASSETS))
 endif
