@@ -77,4 +77,7 @@ require (
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )
 
-replace k8s.io/client-go => k8s.io/client-go v0.29.1
+replace (
+	github.com/moby/spdystream => github.com/moby/spdystream v0.5.1
+	k8s.io/client-go => k8s.io/client-go v0.29.1
+)
