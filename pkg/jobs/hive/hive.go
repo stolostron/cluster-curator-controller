@@ -61,9 +61,11 @@ func ActivateDeploy(hiveset clientv1.Client, clusterName string) error {
 		}
 
 		// Update the pause annotation
+		originalCluster := cluster.DeepCopy()
 		delete(annotations, HiveReconcilePauseAnnotation)
+		patch := clientv1.MergeFrom(originalCluster)
 		cluster.SetAnnotations(annotations)
-		return hiveset.Update(context.TODO(), cluster)
+		return hiveset.Patch(context.TODO(), cluster, patch)
 	})
 	return err
 }
