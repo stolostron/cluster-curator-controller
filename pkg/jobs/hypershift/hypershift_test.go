@@ -208,6 +208,38 @@ func getHostedClusterNoLabel(hcType string, hcConditions []interface{}) *unstruc
 	}
 }
 
+// getHostedClusterWithOtherLabels returns a HostedCluster that has labels (e.g. the
+// clusterset label added by KubeVirt / ACM) but does NOT carry the
+// "hypershift.openshift.io/auto-created-for-infra" label.  This is the scenario
+// that triggered the panic fixed in hypershift.go:167.
+func getHostedClusterWithOtherLabels(hcType string, hcConditions []interface{}) *unstructured.Unstructured {
+	return &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "hypershift.openshift.io/v1beta1",
+			"kind":       "HostedCluster",
+			"metadata": map[string]interface{}{
+				"name":      ClusterName,
+				"namespace": ClusterNamespace,
+				"labels": map[string]interface{}{
+					"cluster.open-cluster-management.io/clusterset": "default",
+				},
+			},
+			"spec": map[string]interface{}{
+				"pausedUntil": "true",
+				"platform": map[string]interface{}{
+					"type": hcType,
+				},
+				"release": map[string]interface{}{
+					"image": "quay.io/openshift-release-dev/ocp-release:4.13.6-multi",
+				},
+			},
+			"status": map[string]interface{}{
+				"conditions": hcConditions,
+			},
+		},
+	}
+}
+
 func getNodepool(npName string, npNamespace string, npClusterName string) *unstructured.Unstructured {
 	return &unstructured.Unstructured{
 		Object: map[string]interface{}{
@@ -2152,6 +2184,118 @@ func TestUpgradeClusterSpecificNodePools(t *testing.T) {
 	np2Spec := updatedNp2.Object["spec"].(map[string]interface{})
 	np2Release := np2Spec["release"].(map[string]interface{})
 	assert.Equal(t, "quay.io/openshift-release-dev/ocp-release:4.13.6-multi", np2Release["image"], "nodepool-2 should NOT be upgraded")
+}
+
+// TestMonitorClusterStatusInstallCompleteHCOtherLabels verifies that a HostedCluster
+// which has labels OTHER than "hypershift.openshift.io/auto-created-for-infra"
+// (e.g. KubeVirt clusters that only carry the ACM clusterset label) does not panic
+// and falls back to clusterName+"-provision" when the cluster is immediately ready.
+// This is a regression test for the nil-interface panic fixed in hypershift.go.
+func TestMonitorClusterStatusInstallCompleteHCOtherLabels(t *testing.T) {
+	clusterCurator := getClusterCurator(utils.Installing)
+	dynfake := dynfake.NewSimpleDynamicClient(
+		runtime.NewScheme(),
+		getHostedClusterWithOtherLabels("KubeVirt", []interface{}{
+			map[string]interface{}{
+				"type":    "Degraded",
+				"status":  "False",
+				"message": "The hosted cluster is not degraded",
+			},
+			map[string]interface{}{
+				"type":    "ClusterVersionAvailable",
+				"status":  "True",
+				"message": "Done applying 4.13.6",
+			},
+			map[string]interface{}{
+				"type":    "Available",
+				"status":  "True",
+				"message": "The hosted control plane is available",
+			},
+			map[string]interface{}{
+				"type":    "ClusterVersionProgressing",
+				"status":  "False",
+				"message": "Cluster version is 4.13.6",
+			},
+		}),
+	)
+	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
+	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(clusterCurator).Build()
+
+	assert.Nil(
+		t,
+		MonitorClusterStatus(dynfake, client, ClusterName, ClusterNamespace, utils.Installing, testTimeout),
+		"err is nil, when KubeVirt HostedCluster with non-infra labels is immediately ready",
+	)
+}
+
+// TestMonitorClusterStatusWaitForInstallHCOtherLabels verifies that a HostedCluster
+// with labels but WITHOUT the "hypershift.openshift.io/auto-created-for-infra" label
+// (e.g. KubeVirt) does not panic when it must wait in the monitoring loop and then
+// transitions to ready.  This is the exact code path that panicked before the fix.
+func TestMonitorClusterStatusWaitForInstallHCOtherLabels(t *testing.T) {
+	clusterCurator := getClusterCurator(utils.Installing)
+	dynfake := dynfake.NewSimpleDynamicClient(
+		runtime.NewScheme(),
+		getHostedClusterWithOtherLabels("KubeVirt", []interface{}{
+			map[string]interface{}{
+				"type":    "Degraded",
+				"status":  "True",
+				"message": "The hosted cluster is degraded",
+			},
+			map[string]interface{}{
+				"type":    "ClusterVersionAvailable",
+				"status":  "False",
+				"message": "Cluster version not yet available",
+			},
+			map[string]interface{}{
+				"type":    "Available",
+				"status":  "False",
+				"message": "The hosted control plane is not available",
+			},
+			map[string]interface{}{
+				"type":    "ClusterVersionProgressing",
+				"status":  "True",
+				"message": "Cluster version is progressing",
+			},
+		}),
+	)
+	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
+	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(clusterCurator).Build()
+
+	go func() {
+		time.Sleep(utils.PauseTenSeconds)
+
+		readyHC := getHostedClusterWithOtherLabels("KubeVirt", []interface{}{
+			map[string]interface{}{
+				"type":    "Degraded",
+				"status":  "False",
+				"message": "The hosted cluster is not degraded",
+			},
+			map[string]interface{}{
+				"type":    "ClusterVersionAvailable",
+				"status":  "True",
+				"message": "Done applying 4.13.6",
+			},
+			map[string]interface{}{
+				"type":    "Available",
+				"status":  "True",
+				"message": "The hosted control plane is available",
+			},
+			map[string]interface{}{
+				"type":    "ClusterVersionProgressing",
+				"status":  "False",
+				"message": "Cluster version is 4.13.6",
+			},
+		})
+		_, err := dynfake.Resource(utils.HCGVR).Namespace(ClusterNamespace).Update(context.TODO(), readyHC, v1.UpdateOptions{})
+		assert.Nil(t, err, "err is nil, when HostedCluster is updated to ready")
+	}()
+
+	assert.Nil(
+		t,
+		MonitorClusterStatus(dynfake, client, ClusterName, ClusterNamespace, utils.Installing, testTimeout),
+		"err is nil, when KubeVirt HostedCluster with non-infra labels eventually becomes ready",
+	)
 }
 
 // Test getHostedClusterVersion when history exists but version field in history is nil
