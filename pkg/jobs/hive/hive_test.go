@@ -2095,8 +2095,8 @@ func TestUpgradeClusterForceUpgradeWithImageDigestInAvailableList(t *testing.T) 
 	}...).WithScheme(s).Build()
 
 	go func() {
-		for i := 0; i < 10; i++ {
-			time.Sleep(1 * time.Second)
+		for i := 0; i < 60; i++ {
+			time.Sleep(500 * time.Millisecond)
 			resultmcview := managedclusterviewv1beta1.ManagedClusterView{}
 			err := client.Get(context.TODO(), types.NamespacedName{
 				Namespace: ClusterName,
@@ -2128,8 +2128,8 @@ func TestUpgradeClusterForceUpgradeWithImageDigestInAvailableList(t *testing.T) 
 	}()
 
 	go func() {
-		for i := 0; i < 10; i++ {
-			time.Sleep(1 * time.Second)
+		for i := 0; i < 60; i++ {
+			time.Sleep(500 * time.Millisecond)
 			resultmca := managedclusteractionv1beta1.ManagedClusterAction{}
 			err := client.Get(context.TODO(), types.NamespacedName{
 				Namespace: ClusterName,
@@ -2138,13 +2138,13 @@ func TestUpgradeClusterForceUpgradeWithImageDigestInAvailableList(t *testing.T) 
 
 			if err == nil {
 				patch := []byte(`{"status":{"conditions":[
-							{
-								"lastTransitionTime": "2021-04-28T16:19:38Z",
-								"message": " Resource action is done.",
-								"reason": "ActionDone",
-								"status": "True",
-								"type": "Completed"
-							}]}}`)
+						{
+							"lastTransitionTime": "2021-04-28T16:19:38Z",
+							"message": " Resource action is done.",
+							"reason": "ActionDone",
+							"status": "True",
+							"type": "Completed"
+						}]}}`)
 				client.Patch(context.Background(), &resultmca, clientv1.RawPatch(types.MergePatchType, patch))
 				break
 			}
