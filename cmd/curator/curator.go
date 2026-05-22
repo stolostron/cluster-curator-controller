@@ -157,7 +157,7 @@ func curatorRun(config *rest.Config, client clientv1.Client, clusterName string,
 	}
 
 	if providerCredentialPath == "" && strings.Contains(jobChoice, "applycloudprovider-") {
-		klog.Warningf("providerCredentialPath: " + providerCredentialPath)
+		klog.Warningf("providerCredentialPath: %s", providerCredentialPath)
 		utils.CheckError(errors.New("Missing spec.providerCredentialPath in ClusterCurator: " + clusterName))
 	}
 
