@@ -388,7 +388,7 @@ func RunAnsibleJob(
 	}
 
 	if curator.Spec.Inventory != "" {
-		ansibleJob.Object["spec"].(map[string]interface{})["extra_vars"].(map[string]interface{})["inventory"] = curator.Spec.Inventory
+		ansibleJob.Object["spec"].(map[string]interface{})["inventory"] = curator.Spec.Inventory
 	}
 
 	klog.V(0).Info("Creating AnsibleJob " + ansibleJob.GetName() + " in namespace " + namespace)
