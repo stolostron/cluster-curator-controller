@@ -807,13 +807,13 @@ func TestInventory(t *testing.T) {
 			aJob, err := RunAnsibleJob(client, cc, POSTHOOK, cc.Spec.Install.Posthook[0], "toweraccess")
 			assert.Nil(t, err, "err is nil when job is started")
 
-			extraVars := aJob.Object["spec"].(map[string]interface{})["extra_vars"].(map[string]interface{})
-			assert.NotNil(t, extraVars, "not nil, extra_vars")
+			spec := aJob.Object["spec"].(map[string]interface{})
+			assert.NotNil(t, spec, "not nil, spec")
 
-			_, existed := extraVars["inventory"]
+			_, existed := spec["inventory"]
 			assert.Equal(t, existed, test.expectedInventory)
 			if test.expectedInventory {
-				assert.Equal(t, extraVars["inventory"], test.expectedInventoryVar)
+				assert.Equal(t, spec["inventory"], test.expectedInventoryVar)
 			}
 		})
 	}
