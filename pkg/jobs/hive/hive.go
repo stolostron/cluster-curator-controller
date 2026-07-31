@@ -296,6 +296,10 @@ func UpgradeCluster(client clientv1.Client, clusterName string, curator *cluster
 	var err error
 
 	if imageWithDigest, err = validateUpgradeVersion(client, clusterName, curator); err != nil {
+		if errors.Is(err, utils.ErrAlreadyAtVersion) {
+			klog.V(0).Infof("Cluster %s is already at the desired version, no upgrade needed", clusterName)
+			return nil
+		}
 		return err
 	}
 
@@ -718,6 +722,11 @@ func validateUpgradeVersion(client clientv1.Client, clusterName string, curator 
 
 	if desiredUpdate == "" && channel == "" && upstream == "" {
 		return "", errors.New("Provide valid upgrade version or channel or upstream")
+	}
+
+	if desiredUpdate != "" && managedClusterInfo.Status.DistributionInfo.OCP.Version == desiredUpdate {
+		klog.V(0).Infof("Cluster %s is already at desired version %s, skipping upgrade", clusterName, desiredUpdate)
+		return "", utils.ErrAlreadyAtVersion
 	}
 
 	curatorAnnotations := curator.GetAnnotations()

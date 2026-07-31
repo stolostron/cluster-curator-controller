@@ -51,6 +51,8 @@ const DefaultImageURI = "registry.ci.openshift.org/open-cluster-management/clust
 const JobHasFinished = "Job_has_finished"
 const JobFailed = "Job_failed"
 
+var ErrAlreadyAtVersion = errors.New("cluster is already at the desired version")
+
 const Installing = "provision"
 const Destroying = "uninstall"
 
@@ -394,11 +396,26 @@ func GetRetryTimes(timeout, defaultTimeout int, interval time.Duration) int {
 	return int(time.Duration(timeout) * time.Minute / interval)
 }
 
-func NeedToUpgrade(curator clustercuratorv1.ClusterCurator) (bool, error) {
+func NeedToUpgrade(client clientv1.Client, curator clustercuratorv1.ClusterCurator) (bool, error) {
 	jobCondtion := meta.FindStatusCondition(curator.Status.Conditions, "clustercurator-job")
 	if jobCondtion == nil {
-		// no clustercurator-job conditon, a new curation, run the upgrade
 		klog.V(2).Info(fmt.Sprintf("No ClusterCuratorJob for curator %q", curator.Name))
+
+		if client != nil && curator.Spec.Upgrade.DesiredUpdate != "" {
+			managedClusterInfo := managedclusterinfov1beta1.ManagedClusterInfo{}
+			if err := client.Get(context.TODO(), types.NamespacedName{
+				Namespace: curator.Name,
+				Name:      curator.Name,
+			}, &managedClusterInfo); err != nil {
+				klog.V(2).Infof("Could not determine current cluster version for %q, proceeding with upgrade: %v", curator.Name, err)
+				return true, nil
+			}
+			if managedClusterInfo.Status.DistributionInfo.OCP.Version == curator.Spec.Upgrade.DesiredUpdate {
+				klog.V(0).Infof("Cluster %s is already at desired version %s, skipping upgrade", curator.Name, curator.Spec.Upgrade.DesiredUpdate)
+				return false, nil
+			}
+		}
+
 		return true, nil
 	}
 

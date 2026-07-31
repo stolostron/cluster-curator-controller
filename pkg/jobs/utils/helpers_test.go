@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	clustercuratorv1 "github.com/stolostron/cluster-curator-controller/pkg/api/v1beta1"
+	managedclusterinfov1beta1 "github.com/stolostron/cluster-lifecycle-api/clusterinfo/v1beta1"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -760,7 +761,7 @@ func TestNeedToUpgrade(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			actual, err := NeedToUpgrade(c.curator)
+			actual, err := NeedToUpgrade(nil, c.curator)
 			if err != nil && !c.expectedErr {
 				t.Errorf("unexpected error %v", err)
 			}
@@ -769,6 +770,114 @@ func TestNeedToUpgrade(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestNeedToUpgradeAlreadyAtVersion(t *testing.T) {
+	s := scheme.Scheme
+	s.AddKnownTypes(managedclusterinfov1beta1.SchemeGroupVersion, &managedclusterinfov1beta1.ManagedClusterInfo{})
+	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
+
+	managedClusterInfo := &managedclusterinfov1beta1.ManagedClusterInfo{
+		TypeMeta: v1.TypeMeta{
+			APIVersion: managedclusterinfov1beta1.SchemeGroupVersion.String(),
+			Kind:       "ManagedClusterInfo",
+		},
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "my-cluster",
+			Namespace: "my-cluster",
+		},
+		Status: managedclusterinfov1beta1.ClusterInfoStatus{
+			DistributionInfo: managedclusterinfov1beta1.DistributionInfo{
+				OCP: managedclusterinfov1beta1.OCPDistributionInfo{
+					Version: "4.14.5",
+				},
+			},
+		},
+	}
+
+	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(managedClusterInfo).Build()
+
+	curator := clustercuratorv1.ClusterCurator{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "my-cluster",
+			Namespace: "my-cluster",
+		},
+		Spec: clustercuratorv1.ClusterCuratorSpec{
+			Upgrade: clustercuratorv1.UpgradeHooks{
+				DesiredUpdate: "4.14.5",
+			},
+		},
+	}
+
+	needed, err := NeedToUpgrade(client, curator)
+	assert.Nil(t, err)
+	assert.False(t, needed, "should not need upgrade when already at desired version")
+}
+
+func TestNeedToUpgradeVersionDiffers(t *testing.T) {
+	s := scheme.Scheme
+	s.AddKnownTypes(managedclusterinfov1beta1.SchemeGroupVersion, &managedclusterinfov1beta1.ManagedClusterInfo{})
+	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
+
+	managedClusterInfo := &managedclusterinfov1beta1.ManagedClusterInfo{
+		TypeMeta: v1.TypeMeta{
+			APIVersion: managedclusterinfov1beta1.SchemeGroupVersion.String(),
+			Kind:       "ManagedClusterInfo",
+		},
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "my-cluster",
+			Namespace: "my-cluster",
+		},
+		Status: managedclusterinfov1beta1.ClusterInfoStatus{
+			DistributionInfo: managedclusterinfov1beta1.DistributionInfo{
+				OCP: managedclusterinfov1beta1.OCPDistributionInfo{
+					Version: "4.14.3",
+				},
+			},
+		},
+	}
+
+	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(managedClusterInfo).Build()
+
+	curator := clustercuratorv1.ClusterCurator{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "my-cluster",
+			Namespace: "my-cluster",
+		},
+		Spec: clustercuratorv1.ClusterCuratorSpec{
+			Upgrade: clustercuratorv1.UpgradeHooks{
+				DesiredUpdate: "4.14.5",
+			},
+		},
+	}
+
+	needed, err := NeedToUpgrade(client, curator)
+	assert.Nil(t, err)
+	assert.True(t, needed, "should need upgrade when version differs")
+}
+
+func TestNeedToUpgradeManagedClusterInfoNotFound(t *testing.T) {
+	s := scheme.Scheme
+	s.AddKnownTypes(managedclusterinfov1beta1.SchemeGroupVersion, &managedclusterinfov1beta1.ManagedClusterInfo{})
+	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
+
+	client := clientfake.NewClientBuilder().WithScheme(s).Build()
+
+	curator := clustercuratorv1.ClusterCurator{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "my-cluster",
+			Namespace: "my-cluster",
+		},
+		Spec: clustercuratorv1.ClusterCuratorSpec{
+			Upgrade: clustercuratorv1.UpgradeHooks{
+				DesiredUpdate: "4.14.5",
+			},
+		},
+	}
+
+	needed, err := NeedToUpgrade(client, curator)
+	assert.Nil(t, err)
+	assert.True(t, needed, "should proceed with upgrade when ManagedClusterInfo not found")
 }
 
 func TestGetMonitorAttempts(t *testing.T) {
