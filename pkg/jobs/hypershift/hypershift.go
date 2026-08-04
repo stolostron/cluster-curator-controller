@@ -379,6 +379,10 @@ func UpgradeCluster(
 	klog.V(2).Info("Upgrade type: " + string(upgradeType))
 
 	if err := validateUpgradeVersion(client, dc, clusterName, curator, desiredUpdate, channel); err != nil {
+		if errors.Is(err, utils.ErrAlreadyAtVersion) {
+			klog.V(0).Infof("Cluster %s is already at the desired version, no upgrade needed", clusterName)
+			return nil
+		}
 		return err
 	}
 
@@ -809,7 +813,8 @@ func validateUpgradeVersion(
 		return err
 	}
 	if desiredSemver.Equals(currentSemver) {
-		return errors.New("Cannot upgrade to the same version")
+		klog.V(0).Infof("Cluster %s is already at desired version %s, skipping upgrade", clusterName, desiredUpdate)
+		return utils.ErrAlreadyAtVersion
 	}
 
 	return nil

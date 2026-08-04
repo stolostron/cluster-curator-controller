@@ -754,10 +754,10 @@ func TestUpgradeClusterSameVersion(t *testing.T) {
 	s.AddKnownTypes(managedclusterinfov1beta1.SchemeGroupVersion, &managedclusterinfov1beta1.ManagedClusterInfo{})
 	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(clusterCurator, managedClusterInfo).Build()
 
-	assert.NotNil(
+	assert.Nil(
 		t,
 		UpgradeCluster(client, dynfake, ClusterName, clusterCurator),
-		"err is not nil, when HC and NPs are upgrading to the same version",
+		"err should be nil when cluster is already at the desired version",
 	)
 }
 

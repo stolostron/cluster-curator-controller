@@ -70,7 +70,7 @@ func (r *ClusterCuratorReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	// Override upgrade if there's an operation requested
 	if curator.Spec.DesiredCuration == "upgrade" && !isPosthookOnly {
-		needed, err := utils.NeedToUpgrade(curator)
+		needed, err := utils.NeedToUpgrade(r.Client, curator)
 		if err != nil {
 			return ctrl.Result{}, err
 		}

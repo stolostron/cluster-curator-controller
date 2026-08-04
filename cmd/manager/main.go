@@ -18,6 +18,7 @@ import (
 	"github.com/stolostron/cluster-curator-controller/controllers"
 	clusteropenclustermanagementiov1beta1 "github.com/stolostron/cluster-curator-controller/pkg/api/v1beta1"
 	"github.com/stolostron/cluster-curator-controller/pkg/jobs/utils"
+	managedclusterinfov1beta1 "github.com/stolostron/cluster-lifecycle-api/clusterinfo/v1beta1"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	// +kubebuilder:scaffold:imports
 )
@@ -31,6 +32,7 @@ func init() {
 	_ = clientgoscheme.AddToScheme(scheme)
 
 	_ = clusteropenclustermanagementiov1beta1.AddToScheme(scheme)
+	_ = managedclusterinfov1beta1.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
 }
 

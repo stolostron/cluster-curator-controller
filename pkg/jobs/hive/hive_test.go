@@ -589,6 +589,55 @@ func TestUpgradeClusterInValidVersion(t *testing.T) {
 		errors.New("Provided version is not valid"), "Invalid Version")
 }
 
+func TestUpgradeClusterAlreadyAtVersion(t *testing.T) {
+
+	s := scheme.Scheme
+	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
+	s.AddKnownTypes(managedclusterinfov1beta1.SchemeGroupVersion, &managedclusterinfov1beta1.ManagedClusterInfo{})
+
+	clustercurator := &clustercuratorv1.ClusterCurator{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      ClusterName,
+			Namespace: ClusterName,
+		},
+		Spec: clustercuratorv1.ClusterCuratorSpec{
+			DesiredCuration: "upgrade",
+			Upgrade: clustercuratorv1.UpgradeHooks{
+				DesiredUpdate: "4.5.14",
+			},
+		},
+	}
+
+	managedClusterInfo := &managedclusterinfov1beta1.ManagedClusterInfo{
+		TypeMeta: v1.TypeMeta{
+			APIVersion: managedclusterinfov1beta1.SchemeGroupVersion.String(),
+			Kind:       "ManagedClusterInfo",
+		},
+		ObjectMeta: v1.ObjectMeta{
+			Name:      ClusterName,
+			Namespace: ClusterName,
+		},
+		Status: managedclusterinfov1beta1.ClusterInfoStatus{
+			KubeVendor: managedclusterinfov1beta1.KubeVendorOpenShift,
+			DistributionInfo: managedclusterinfov1beta1.DistributionInfo{
+				OCP: managedclusterinfov1beta1.OCPDistributionInfo{
+					Version:          "4.5.14",
+					AvailableUpdates: []string{"4.5.16", "4.5.17"},
+					Desired: managedclusterinfov1beta1.OCPVersionRelease{
+						Version:  "4.5.14",
+						Channels: []string{"stable-4.6", "stable-4.7"},
+					},
+				},
+			},
+		},
+	}
+
+	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(clustercurator, managedClusterInfo).Build()
+
+	assert.Nil(t, UpgradeCluster(client, ClusterName, clustercurator),
+		"err should be nil when cluster is already at the desired version")
+}
+
 func TestUpgradeClusterInValidChannel(t *testing.T) {
 
 	s := scheme.Scheme
