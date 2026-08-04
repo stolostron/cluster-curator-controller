@@ -877,7 +877,7 @@ func TestNeedToUpgradeManagedClusterInfoNotFound(t *testing.T) {
 
 	needed, err := NeedToUpgrade(client, curator)
 	assert.Nil(t, err)
-	assert.True(t, needed, "should proceed with upgrade when ManagedClusterInfo not found")
+	assert.False(t, needed, "should skip upgrade when ManagedClusterInfo not found")
 }
 
 func TestGetMonitorAttempts(t *testing.T) {

@@ -407,8 +407,8 @@ func NeedToUpgrade(client clientv1.Client, curator clustercuratorv1.ClusterCurat
 				Namespace: curator.Name,
 				Name:      curator.Name,
 			}, &managedClusterInfo); err != nil {
-				klog.V(2).Infof("Could not determine current cluster version for %q, proceeding with upgrade: %v", curator.Name, err)
-				return true, nil
+				klog.V(2).Infof("Could not determine current cluster version for %q, skipping upgrade: %v", curator.Name, err)
+				return false, nil
 			}
 			if managedClusterInfo.Status.DistributionInfo.OCP.Version == curator.Spec.Upgrade.DesiredUpdate {
 				klog.V(0).Infof("Cluster %s is already at desired version %s, skipping upgrade", curator.Name, curator.Spec.Upgrade.DesiredUpdate)
