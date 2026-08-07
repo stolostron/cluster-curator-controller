@@ -54,7 +54,7 @@ func getRole(clusterName string) *rbacv1.Role {
 			},
 			rbacv1.PolicyRule{
 				APIGroups: []string{"cluster.open-cluster-management.io"},
-				Resources: []string{"clustercurators", "managedclusters"},
+				Resources: []string{"clustercurators"},
 				Verbs:     []string{"get", "update", "patch", "delete"},
 			},
 			rbacv1.PolicyRule{
@@ -113,9 +113,11 @@ func getClusterRole(clusterName string) *rbacv1.ClusterRole {
 				Resources: []string{"managedclusterinfos"},
 				Verbs:     []string{"get"},
 			},
+			// managedclusters is cluster-scoped and cannot be granted via a RoleBinding;
+			// it is covered exclusively by ClusterRole/curator-cluster-scoped + curator-crb.
 			rbacv1.PolicyRule{
 				APIGroups: []string{"cluster.open-cluster-management.io"},
-				Resources: []string{"clustercurators", "managedclusters"},
+				Resources: []string{"clustercurators"},
 				Verbs:     []string{"get", "update", "patch", "delete"},
 			},
 			rbacv1.PolicyRule{
@@ -128,7 +130,12 @@ func getClusterRole(clusterName string) *rbacv1.ClusterRole {
 				Resources: []string{"managedclusteractions"},
 				Verbs:     []string{"get", "create", "update", "delete"},
 			},
-			// To read the install-config secret
+			// get secrets is intentionally unrestricted here because this ClusterRole is a
+			// singleton and cannot encode per-cluster ResourceNames. It is safe because
+			// this ClusterRole is only bound via namespace-scoped RoleBindings (not via
+			// ClusterRoleBinding), which confines secret reads to the bound namespace.
+			// The ClusterRoleBinding (curator-crb) references curator-cluster-scoped
+			// instead, which carries no secrets rule at all.
 			rbacv1.PolicyRule{
 				APIGroups: []string{""},
 				Resources: []string{"secrets"},
@@ -138,6 +145,23 @@ func getClusterRole(clusterName string) *rbacv1.ClusterRole {
 	}
 
 	return curatorClusterRole
+}
+
+// getClusterScopedRole returns a minimal ClusterRole covering only genuinely
+// cluster-scoped resources. This is used exclusively with the curator-crb
+// ClusterRoleBinding so that the ServiceAccount does not receive cluster-wide
+// authority over namespace-scoped resources (e.g. secrets, hostedclusters).
+func getClusterScopedRole() *rbacv1.ClusterRole {
+	return &rbacv1.ClusterRole{
+		ObjectMeta: v1.ObjectMeta{Name: "curator-cluster-scoped"},
+		Rules: []rbacv1.PolicyRule{
+			{
+				APIGroups: []string{"cluster.open-cluster-management.io"},
+				Resources: []string{"managedclusters"},
+				Verbs:     []string{"get", "update", "patch", "delete"},
+			},
+		},
+	}
 }
 
 func getClusterInstallerRules() []rbacv1.PolicyRule {
@@ -190,11 +214,16 @@ func getRoleBinding(namespace string) *rbacv1.RoleBinding {
 	return clusterRoleBinding
 }
 
-func getClusterRoleBinding(namespace string) *rbacv1.ClusterRoleBinding {
-	crb := &rbacv1.ClusterRoleBinding{
+// getClusterScopedRoleBinding returns a ClusterRoleBinding that binds
+// cluster-installer in curatorNamespace to the minimal curator-cluster-scoped
+// ClusterRole. Using the scoped role instead of the full curator ClusterRole
+// prevents the ServiceAccount from obtaining cluster-wide authority over
+// namespace-scoped resources such as secrets and hostedclusters.
+func getClusterScopedRoleBinding(namespace string) *rbacv1.ClusterRoleBinding {
+	return &rbacv1.ClusterRoleBinding{
 		ObjectMeta: v1.ObjectMeta{Name: "curator-crb"},
 		Subjects: []rbacv1.Subject{
-			rbacv1.Subject{
+			{
 				Kind:      "ServiceAccount",
 				Name:      clusterInstaller,
 				Namespace: namespace,
@@ -202,11 +231,10 @@ func getClusterRoleBinding(namespace string) *rbacv1.ClusterRoleBinding {
 		},
 		RoleRef: rbacv1.RoleRef{
 			Kind:     "ClusterRole",
-			Name:     "curator",
+			Name:     "curator-cluster-scoped",
 			APIGroup: "rbac.authorization.k8s.io",
 		},
 	}
-	return crb
 }
 
 func getServiceAccount() *corev1.ServiceAccount {
@@ -270,18 +298,109 @@ func ApplyRBACHypershift(kubeset kubernetes.Interface, namespace string, curator
 		return err
 	}
 
-	klog.V(2).Info("Check if ClusterRole curator-crb exists")
-	if _, err = kubeset.RbacV1().ClusterRoleBindings().Get(
-		context.TODO(), "curator-crb", v1.GetOptions{}); k8serrors.IsNotFound(err) {
+	klog.V(2).Info("Check if ClusterRole curator-cluster-scoped exists")
+	if _, err = kubeset.RbacV1().ClusterRoles().Get(
+		context.TODO(), "curator-cluster-scoped", v1.GetOptions{}); k8serrors.IsNotFound(err) {
+		klog.V(2).Info(" Creating ClusterRole curator-cluster-scoped")
+		_, err = kubeset.RbacV1().ClusterRoles().Create(
+			context.TODO(), getClusterScopedRole(), v1.CreateOptions{})
+		if err != nil {
+			return err
+		}
+		klog.V(0).Info(" Created ClusterRole curator-cluster-scoped ✓")
+	} else if err != nil {
+		return err
+	}
+
+	// Upsert curator-crb: create if absent, or update the subject namespace when
+	// a subsequent Hypershift cluster from a different namespace triggers this path.
+	// Without the update the CRB would permanently reference the first namespace
+	// that triggered its creation.
+	klog.V(2).Info("Check if ClusterRoleBinding curator-crb exists")
+	existingCRB, err := kubeset.RbacV1().ClusterRoleBindings().Get(
+		context.TODO(), "curator-crb", v1.GetOptions{})
+	if k8serrors.IsNotFound(err) {
 		klog.V(2).Info(" Creating ClusterRoleBinding curator-crb")
 		_, err = kubeset.RbacV1().ClusterRoleBindings().Create(
-			context.TODO(), getClusterRoleBinding(curatorNamespace), v1.CreateOptions{})
+			context.TODO(), getClusterScopedRoleBinding(curatorNamespace), v1.CreateOptions{})
 		if err != nil {
 			return err
 		}
 		klog.V(0).Info(" Created ClusterRoleBinding ✓")
+	} else if err != nil {
+		return err
+	} else if len(existingCRB.Subjects) == 0 || existingCRB.Subjects[0].Namespace != curatorNamespace {
+		klog.V(2).Info(" Updating ClusterRoleBinding curator-crb subject namespace to " + curatorNamespace)
+		existingCRB.Subjects = getClusterScopedRoleBinding(curatorNamespace).Subjects
+		_, err = kubeset.RbacV1().ClusterRoleBindings().Update(
+			context.TODO(), existingCRB, v1.UpdateOptions{})
+		if err != nil {
+			return err
+		}
+		klog.V(0).Info(" Updated ClusterRoleBinding ✓")
 	}
-	return err
+	return nil
+}
+
+// CleanupRBAC removes the cluster-installer ServiceAccount and curator RoleBinding
+// from namespace. It is called after a curation job completes so that the
+// ServiceAccount cannot be used to mint tokens between curations.
+func CleanupRBAC(kubeset kubernetes.Interface, namespace string) error {
+	klog.V(2).Info("Cleaning up RBAC in namespace " + namespace)
+
+	if err := kubeset.CoreV1().ServiceAccounts(namespace).Delete(
+		context.TODO(), clusterInstaller, v1.DeleteOptions{}); err != nil && !k8serrors.IsNotFound(err) {
+		return err
+	}
+	klog.V(0).Info(" Deleted ServiceAccount cluster-installer ✓")
+
+	if err := kubeset.RbacV1().RoleBindings(namespace).Delete(
+		context.TODO(), "curator", v1.DeleteOptions{}); err != nil && !k8serrors.IsNotFound(err) {
+		return err
+	}
+	klog.V(0).Info(" Deleted RoleBinding curator ✓")
+	return nil
+}
+
+// CleanupRBACHypershift removes the curator RoleBinding from the Hypershift cluster
+// namespace, and removes the shared curator-crb ClusterRoleBinding's grant if it
+// still belongs to curatorNamespace.
+//
+// curator-crb is a cluster-wide singleton with a single subject slot that
+// ApplyRBACHypershift upserts to whichever curatorNamespace most recently ran a
+// Hypershift curation. If a different Hypershift curation has since taken over
+// the CRB (its subject namespace no longer matches curatorNamespace), it is left
+// intact so that unrelated, still-active curation's access is not revoked.
+// Deleting curator-crb here (rather than leaving it as a stale reference) closes
+// the escalation path where a tenant could recreate a ServiceAccount named
+// cluster-installer in its own namespace and silently inherit the binding, since
+// RBAC subjects are matched by name/namespace, not object identity.
+func CleanupRBACHypershift(kubeset kubernetes.Interface, clusterNamespace string, curatorNamespace string) error {
+	klog.V(2).Info("Cleaning up Hypershift RBAC in namespace " + clusterNamespace)
+
+	if err := kubeset.RbacV1().RoleBindings(clusterNamespace).Delete(
+		context.TODO(), "curator", v1.DeleteOptions{}); err != nil && !k8serrors.IsNotFound(err) {
+		return err
+	}
+	klog.V(0).Info(" Deleted RoleBinding curator in cluster namespace ✓")
+
+	crb, err := kubeset.RbacV1().ClusterRoleBindings().Get(context.TODO(), "curator-crb", v1.GetOptions{})
+	if k8serrors.IsNotFound(err) {
+		return nil
+	} else if err != nil {
+		return err
+	}
+
+	if len(crb.Subjects) > 0 && crb.Subjects[0].Namespace == curatorNamespace {
+		if err := kubeset.RbacV1().ClusterRoleBindings().Delete(
+			context.TODO(), "curator-crb", v1.DeleteOptions{}); err != nil && !k8serrors.IsNotFound(err) {
+			return err
+		}
+		klog.V(0).Info(" Deleted ClusterRoleBinding curator-crb ✓")
+	} else {
+		klog.V(2).Info(" curator-crb now belongs to another namespace; leaving intact")
+	}
+	return nil
 }
 
 func ExtendClusterInstallerRole(kubeset kubernetes.Interface, namespace string) error {
