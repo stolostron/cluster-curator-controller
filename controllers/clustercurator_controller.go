@@ -65,6 +65,19 @@ func (r *ClusterCuratorReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	// Curating work has already started OR no curation work supplied curator.Spec.CuratingJob != "" ||
 	if (curator.Spec.CuratingJob != "" || curator.Spec.DesiredCuration == "") && !isPosthookOnly {
 		log.V(3).Info("No curation to do for %v", req.NamespacedName)
+		// When both fields are empty the curation cycle has completed. Remove the
+		// cluster-installer ServiceAccount and its RoleBindings so the SA cannot be
+		// used to mint tokens between curations (post-curation RBAC cleanup).
+		if curator.Spec.CuratingJob == "" && curator.Spec.DesiredCuration == "" {
+			if err := rbac.CleanupRBAC(r.Kubeset, req.Namespace); err != nil {
+				return ctrl.Result{}, err
+			}
+			if curator.Name != curator.Namespace {
+				if err := rbac.CleanupRBACHypershift(r.Kubeset, curator.Name, curator.Namespace); err != nil {
+					return ctrl.Result{}, err
+				}
+			}
+		}
 		return ctrl.Result{}, nil
 	}
 
@@ -144,9 +157,10 @@ func newClusterCuratorPredicate() predicate.Predicate {
 				if newClusterCurator.Operation != nil && newClusterCurator.Operation.RetryPosthook != "" {
 					return true
 				}
-				if newClusterCurator.Spec.DesiredCuration != oldClusterCurator.Spec.DesiredCuration && newClusterCurator.Spec.DesiredCuration == "" {
-					return false
-				}
+			if newClusterCurator.Spec.DesiredCuration != oldClusterCurator.Spec.DesiredCuration && newClusterCurator.Spec.DesiredCuration == "" {
+				// Allow through so the reconcile can perform post-curation RBAC cleanup.
+				return true
+			}
 				if newClusterCurator.Spec.CuratingJob != oldClusterCurator.Spec.CuratingJob && newClusterCurator.Spec.CuratingJob == "" {
 					return false
 				}
