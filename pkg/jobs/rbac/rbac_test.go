@@ -295,6 +295,56 @@ func TestCleanupRBACHypershift(t *testing.T) {
 	assert.Nil(t, err, "err nil when CleanupRBACHypershift called on already-cleaned namespace")
 }
 
+func TestCleanupCuratorCRBIfOwned(t *testing.T) {
+	kubeset := fake.NewSimpleClientset()
+
+	_ = ApplyRBAC(kubeset, ClusterNamespace)
+	err := ApplyRBACHypershift(kubeset, ClusterName, ClusterNamespace)
+	assert.Nil(t, err, "err nil when Hypershift RBAC applied")
+
+	// Simulates the upgrade-completion path: only curator-crb cleanup runs,
+	// independent of CleanupRBAC/CleanupRBACHypershift and the SA/RoleBindings
+	// they own, since desiredCuration never clears to "" for upgrade.
+	err = CleanupCuratorCRBIfOwned(kubeset, ClusterNamespace)
+	assert.Nil(t, err, "err nil when CleanupCuratorCRBIfOwned succeeds")
+
+	_, err = kubeset.RbacV1().ClusterRoleBindings().Get(context.TODO(), "curator-crb", v1.GetOptions{})
+	assert.NotNil(t, err, "curator-crb should be deleted when it still belongs to curatorNamespace")
+
+	t.Log("Verify the SA and namespaced RoleBindings are left untouched (accepted residue)")
+	_, err = kubeset.CoreV1().ServiceAccounts(ClusterNamespace).Get(context.TODO(), clusterInstaller, v1.GetOptions{})
+	assert.Nil(t, err, "SA must not be deleted by CleanupCuratorCRBIfOwned")
+	_, err = kubeset.RbacV1().RoleBindings(ClusterNamespace).Get(context.TODO(), "curator", v1.GetOptions{})
+	assert.Nil(t, err, "curatorNamespace RoleBinding must not be deleted by CleanupCuratorCRBIfOwned")
+	_, err = kubeset.RbacV1().RoleBindings(ClusterName).Get(context.TODO(), "curator", v1.GetOptions{})
+	assert.Nil(t, err, "cluster-namespace RoleBinding must not be deleted by CleanupCuratorCRBIfOwned")
+
+	t.Log("Verify CleanupCuratorCRBIfOwned is idempotent")
+	err = CleanupCuratorCRBIfOwned(kubeset, ClusterNamespace)
+	assert.Nil(t, err, "err nil when curator-crb is already gone")
+}
+
+func TestCleanupCuratorCRBIfOwnedPreservesOtherNamespace(t *testing.T) {
+	kubeset := fake.NewSimpleClientset()
+
+	_ = ApplyRBAC(kubeset, ClusterNamespace)
+	err := ApplyRBACHypershift(kubeset, ClusterName, ClusterNamespace)
+	assert.Nil(t, err, "err nil for first Hypershift cluster")
+
+	otherNamespace := "other-clusters"
+	err = ApplyRBACHypershift(kubeset, "another-cluster", otherNamespace)
+	assert.Nil(t, err, "err nil for second Hypershift cluster from different namespace")
+
+	// ClusterNamespace's upgrade completes after otherNamespace has already taken
+	// over curator-crb; must not revoke otherNamespace's still-active grant.
+	err = CleanupCuratorCRBIfOwned(kubeset, ClusterNamespace)
+	assert.Nil(t, err, "err nil when CleanupCuratorCRBIfOwned succeeds")
+
+	crb, err := kubeset.RbacV1().ClusterRoleBindings().Get(context.TODO(), "curator-crb", v1.GetOptions{})
+	assert.Nil(t, err, "curator-crb must be preserved since it belongs to otherNamespace")
+	assert.Equal(t, otherNamespace, crb.Subjects[0].Namespace, "curator-crb subject namespace must remain otherNamespace")
+}
+
 func TestCleanupRBACHypershiftPreservesCRBOwnedByOtherNamespace(t *testing.T) {
 	kubeset := fake.NewSimpleClientset()
 
