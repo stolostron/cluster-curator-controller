@@ -365,6 +365,20 @@ func CleanupRBAC(kubeset kubernetes.Interface, namespace string) error {
 // CleanupRBACHypershift removes the curator RoleBinding from the Hypershift cluster
 // namespace, and removes the shared curator-crb ClusterRoleBinding's grant if it
 // still belongs to curatorNamespace.
+func CleanupRBACHypershift(kubeset kubernetes.Interface, clusterNamespace string, curatorNamespace string) error {
+	klog.V(2).Info("Cleaning up Hypershift RBAC in namespace " + clusterNamespace)
+
+	if err := kubeset.RbacV1().RoleBindings(clusterNamespace).Delete(
+		context.TODO(), "curator", v1.DeleteOptions{}); err != nil && !k8serrors.IsNotFound(err) {
+		return err
+	}
+	klog.V(0).Info(" Deleted RoleBinding curator in cluster namespace ✓")
+
+	return CleanupCuratorCRBIfOwned(kubeset, curatorNamespace)
+}
+
+// CleanupCuratorCRBIfOwned removes the shared, cluster-wide curator-crb
+// ClusterRoleBinding's grant if it still belongs to curatorNamespace.
 //
 // curator-crb is a cluster-wide singleton with a single subject slot that
 // ApplyRBACHypershift upserts to whichever curatorNamespace most recently ran a
@@ -375,15 +389,12 @@ func CleanupRBAC(kubeset kubernetes.Interface, namespace string) error {
 // the escalation path where a tenant could recreate a ServiceAccount named
 // cluster-installer in its own namespace and silently inherit the binding, since
 // RBAC subjects are matched by name/namespace, not object identity.
-func CleanupRBACHypershift(kubeset kubernetes.Interface, clusterNamespace string, curatorNamespace string) error {
-	klog.V(2).Info("Cleaning up Hypershift RBAC in namespace " + clusterNamespace)
-
-	if err := kubeset.RbacV1().RoleBindings(clusterNamespace).Delete(
-		context.TODO(), "curator", v1.DeleteOptions{}); err != nil && !k8serrors.IsNotFound(err) {
-		return err
-	}
-	klog.V(0).Info(" Deleted RoleBinding curator in cluster namespace ✓")
-
+//
+// This is safe to call even when a new curation for curatorNamespace is about to
+// launch a job immediately after: ApplyRBACHypershift unconditionally re-upserts
+// curator-crb back to curatorNamespace on its next run, so at worst this causes a
+// harmless delete-then-recreate rather than any window of missing access.
+func CleanupCuratorCRBIfOwned(kubeset kubernetes.Interface, curatorNamespace string) error {
 	crb, err := kubeset.RbacV1().ClusterRoleBindings().Get(context.TODO(), "curator-crb", v1.GetOptions{})
 	if k8serrors.IsNotFound(err) {
 		return nil
