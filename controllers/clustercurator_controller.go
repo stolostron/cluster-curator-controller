@@ -62,6 +62,21 @@ func (r *ClusterCuratorReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	isPosthookOnly := curator.Operation != nil && curator.Operation.RetryPosthook != ""
 
+	// Independent of desiredCuration/curatingJob state below: for Hypershift curators,
+	// make sure the shared cluster-wide curator-crb ClusterRoleBinding isn't left
+	// granting this namespace's cluster-installer SA cluster-wide managedclusters
+	// access once no job is actively running. This specifically covers upgrade
+	// curations, where desiredCuration intentionally never clears back to "" (see
+	// utils.NeedToUpgrade), so the CuratingJob/DesiredCuration-gated cleanup block
+	// below never triggers CleanupRBACHypershift for that path. Safe to call even
+	// when a new curation job is about to launch immediately after - see
+	// CleanupCuratorCRBIfOwned's doc comment.
+	if curator.Name != curator.Namespace && curator.Spec.CuratingJob == "" {
+		if err := rbac.CleanupCuratorCRBIfOwned(r.Kubeset, curator.Namespace); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
+
 	// Curating work has already started OR no curation work supplied curator.Spec.CuratingJob != "" ||
 	if (curator.Spec.CuratingJob != "" || curator.Spec.DesiredCuration == "") && !isPosthookOnly {
 		log.V(3).Info("No curation to do for %v", req.NamespacedName)
@@ -157,12 +172,15 @@ func newClusterCuratorPredicate() predicate.Predicate {
 				if newClusterCurator.Operation != nil && newClusterCurator.Operation.RetryPosthook != "" {
 					return true
 				}
-			if newClusterCurator.Spec.DesiredCuration != oldClusterCurator.Spec.DesiredCuration && newClusterCurator.Spec.DesiredCuration == "" {
-				// Allow through so the reconcile can perform post-curation RBAC cleanup.
-				return true
-			}
+				if newClusterCurator.Spec.DesiredCuration != oldClusterCurator.Spec.DesiredCuration && newClusterCurator.Spec.DesiredCuration == "" {
+					// Allow through so the reconcile can perform post-curation RBAC cleanup.
+					return true
+				}
 				if newClusterCurator.Spec.CuratingJob != oldClusterCurator.Spec.CuratingJob && newClusterCurator.Spec.CuratingJob == "" {
-					return false
+					// Allow through so Reconcile can clean up curator-crb for the
+					// upgrade path, where DesiredCuration doesn't change (unlike
+					// install/destroy, which are already allowed through above).
+					return true
 				}
 				if oldClusterCurator.Spec.Upgrade.IntermediateUpdate != "" {
 					return false
