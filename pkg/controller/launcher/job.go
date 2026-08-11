@@ -380,6 +380,56 @@ func getBatchJob(
 
 }
 
+// sanitizeOverrideJob hardens a CR-author-supplied overrideJob so the
+// controller cannot be used as a confused deputy to run an arbitrary image
+// or bind an arbitrary ServiceAccount on the CR author's behalf. The override
+// is intended only to reorder/select curator subcommands (see
+// deploy/samples/sample-overridejob.yaml), so every container is pinned to
+// the trusted curator image and must invoke the curator binary.
+func sanitizeOverrideJob(job *batchv1.Job, imageURI string) error {
+	podSpec := &job.Spec.Template.Spec
+
+	// The controller provisions exactly this SA for the curation Job; do not
+	// allow the override to bind any other token.
+	podSpec.ServiceAccountName = "cluster-installer"
+
+	// Strip host-namespace and node-filesystem escapes.
+	podSpec.HostNetwork = false
+	podSpec.HostPID = false
+	podSpec.HostIPC = false
+	filtered := podSpec.Volumes[:0]
+	for _, vol := range podSpec.Volumes {
+		if vol.HostPath != nil {
+			klog.Warningf(" Dropping hostPath volume %q from overrideJob", vol.Name)
+			continue
+		}
+		filtered = append(filtered, vol)
+	}
+	podSpec.Volumes = filtered
+
+	sanitizeContainer := func(c *corev1.Container) error {
+		c.Image = imageURI
+		if c.SecurityContext != nil {
+			c.SecurityContext.Privileged = nil
+		}
+		if len(c.Command) == 0 || c.Command[0] != CurCmd {
+			return errors.New("overrideJob container " + c.Name + " must invoke " + CurCmd)
+		}
+		return nil
+	}
+	for i := range podSpec.InitContainers {
+		if err := sanitizeContainer(&podSpec.InitContainers[i]); err != nil {
+			return err
+		}
+	}
+	for i := range podSpec.Containers {
+		if err := sanitizeContainer(&podSpec.Containers[i]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (I *Launcher) CreateJob() error {
 	kubeset := I.kubeset
 	clusterName := I.clusterCurator.Name
@@ -406,6 +456,11 @@ func (I *Launcher) CreateJob() error {
 
 			klog.Warning(newJob)
 			return errors.New("Did not find any InitContainers or Containers defined")
+		}
+
+		if err := sanitizeOverrideJob(newJob, I.imageURI); err != nil {
+			klog.Warningf(" Rejected overrideJob from %v ClusterCurator: %v", clusterName, err)
+			return err
 		}
 	}
 	if err == nil {
