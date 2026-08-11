@@ -21,6 +21,8 @@ import (
 	"github.com/stolostron/cluster-curator-controller/pkg/jobs/utils"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 const DeleteNamespace = "delete-cluster-namespace"
@@ -114,8 +116,12 @@ func (r *ClusterCuratorReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, err
 	}
 
-	// Hypershift clusters need additional RBAC
-	if curator.Name != curator.Namespace {
+	// Hypershift clusters need additional RBAC. The previous
+	// `curator.Name != curator.Namespace` heuristic was tenant-controllable
+	// (a CR author could pick any metadata.name and trigger a cross-namespace
+	// RoleBinding + cluster-wide ClusterRoleBinding for their cluster-installer
+	// SA), so gate on the actual presence of a HostedCluster instead.
+	if r.isHostedCluster(ctx, curator) {
 		log.V(2).Info("Check if cluster namespace " + curator.Name + " exists")
 		if _, err := r.Kubeset.CoreV1().Namespaces().Get(
 			context.TODO(), curator.Name, v1.GetOptions{}); k8serrors.IsNotFound(err) {
@@ -145,6 +151,28 @@ func (r *ClusterCuratorReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	return ctrl.Result{}, nil
+}
+
+// isHostedCluster reports whether a hypershift.openshift.io HostedCluster
+// named curator.Name exists in curator.Namespace. This is the authoritative
+// signal that the curator targets a Hypershift cluster and therefore needs
+// the cross-namespace RBAC applied by ApplyRBACHypershift; metadata.name
+// alone is CR-author-controlled and must not gate that escalation.
+func (r *ClusterCuratorReconciler) isHostedCluster(ctx context.Context, curator clustercuratorv1.ClusterCurator) bool {
+	hc := &unstructured.Unstructured{}
+	hc.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   utils.HCGVR.Group,
+		Version: utils.HCGVR.Version,
+		Kind:    "HostedCluster",
+	})
+	err := r.Get(ctx, client.ObjectKey{Namespace: curator.Namespace, Name: curator.Name}, hc)
+	if err != nil {
+		if !k8serrors.IsNotFound(err) {
+			r.Log.V(2).Info("HostedCluster lookup failed, treating as non-Hypershift: " + err.Error())
+		}
+		return false
+	}
+	return true
 }
 
 func (r *ClusterCuratorReconciler) SetupWithManager(mgr ctrl.Manager) error {
