@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"gopkg.in/yaml.v3"
 	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
@@ -396,6 +397,60 @@ func TestCreateLauncherOverrideJob(t *testing.T) {
 
 	t.Log("SKIP: Test is failing")
 	assert.NotNil(t, err, "test is currently failing with fake client")
+}
+
+// overrideJob must not let a CR author run an arbitrary image or bind an
+// arbitrary ServiceAccount via the controller's privileged jobs:create.
+func TestCreateLauncherOverrideJobSanitized(t *testing.T) {
+	priv := true
+	hostile := &batchv1.Job{
+		ObjectMeta: v1.ObjectMeta{GenerateName: "curator-job-", Namespace: clusterName},
+		Spec: batchv1.JobSpec{Template: corev1.PodTemplateSpec{Spec: corev1.PodSpec{
+			ServiceAccountName: "system-admin",
+			HostNetwork:        true,
+			HostPID:            true,
+			Volumes: []corev1.Volume{
+				{Name: "root", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/"}}},
+			},
+			Containers: []corev1.Container{{
+				Name:            DoneDoneDone,
+				Image:           "evil.example.com/exfil:latest",
+				Command:         []string{CurCmd, DoneDoneDone},
+				SecurityContext: &corev1.SecurityContext{Privileged: &priv},
+			}},
+		}}},
+	}
+	raw, _ := json.Marshal(hostile)
+	clusterCurator := &clustercuratorv1.ClusterCurator{
+		ObjectMeta: v1.ObjectMeta{Name: clusterName, Namespace: clusterName},
+		Spec: clustercuratorv1.ClusterCuratorSpec{
+			Install: clustercuratorv1.Hooks{OverrideJob: &runtime.RawExtension{Raw: raw}},
+		},
+	}
+
+	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
+	client := clientfake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(clusterCurator).Build()
+	kubeset := fake.NewSimpleClientset()
+
+	assert.Nil(t, NewLauncher(client, kubeset, imageURI, *clusterCurator).CreateJob(),
+		"sanitized overrideJob is created")
+
+	jobs, _ := kubeset.BatchV1().Jobs(clusterName).List(context.TODO(), v1.ListOptions{})
+	assert.Equal(t, 1, len(jobs.Items), "exactly one Job created")
+	got := jobs.Items[0].Spec.Template.Spec
+	assert.Equal(t, "cluster-installer", got.ServiceAccountName, "SA pinned to cluster-installer")
+	assert.Equal(t, imageURI, got.Containers[0].Image, "container image pinned to controller imageURI")
+	assert.False(t, got.HostNetwork, "hostNetwork cleared")
+	assert.False(t, got.HostPID, "hostPID cleared")
+	assert.Empty(t, got.Volumes, "hostPath volume dropped")
+	assert.Nil(t, got.Containers[0].SecurityContext.Privileged, "privileged cleared")
+
+	// A container that does not invoke the curator binary is rejected outright.
+	hostile.Spec.Template.Spec.Containers[0].Command = []string{"/bin/sh", "-c", "id"}
+	raw, _ = json.Marshal(hostile)
+	clusterCurator.Spec.Install.OverrideJob.Raw = raw
+	assert.NotNil(t, NewLauncher(client, kubeset, imageURI, *clusterCurator).CreateJob(),
+		"non-curator command rejected")
 }
 
 // Test launcher with an Invalid overrideJob
