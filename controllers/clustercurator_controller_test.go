@@ -63,11 +63,13 @@ func newTestReconciler(t *testing.T, objs ...client.Object) (*ClusterCuratorReco
 	}
 
 	kubeset := fake.NewSimpleClientset()
+	fakeClient := builder.Build()
 
 	return &ClusterCuratorReconciler{
-		Client:  builder.Build(),
-		Kubeset: kubeset,
-		Log:     logr.Discard(),
+		Client:    fakeClient,
+		APIReader: fakeClient,
+		Kubeset:   kubeset,
+		Log:       logr.Discard(),
 	}, kubeset
 }
 
