@@ -178,3 +178,38 @@ func TestClusterCuratorPredicateStatusOnlyChangeIsDropped(t *testing.T) {
 	allowed := pred.Update(event.UpdateEvent{ObjectOld: oldCurator, ObjectNew: newCurator})
 	assert.False(t, allowed, "status-only changes must still be dropped")
 }
+
+// TestClusterCuratorPredicateDesiredCurationClearedWithStatusIsAllowedThrough
+// reproduces the real completion event, not the artificial spec-only case
+// covered above: ClusterCurator has no status subresource, so
+// updateDoneClusterCurator's merge patch clears spec.desiredCuration,
+// spec.curatorJob, AND status in the very same API call. That must still be
+// allowed through so post-curation RBAC cleanup can run; a naive
+// status-equality check placed ahead of the DesiredCuration/CuratingJob
+// checks would always drop this event, since Status always differs here.
+func TestClusterCuratorPredicateDesiredCurationClearedWithStatusIsAllowedThrough(t *testing.T) {
+	pred := newClusterCuratorPredicate()
+
+	oldCurator := &clustercuratorv1.ClusterCurator{
+		Spec: clustercuratorv1.ClusterCuratorSpec{DesiredCuration: "install", CuratingJob: "curator-job-abc"},
+		Status: clustercuratorv1.ClusterCuratorStatus{
+			Conditions: []metav1.Condition{
+				{
+					Type:               "clustercurator-job",
+					Status:             metav1.ConditionTrue,
+					Reason:             "Job_has_finished",
+					Message:            "curator-job-abc DesiredCuration: install",
+					LastTransitionTime: metav1.Now(),
+				},
+			},
+		},
+	}
+	newCurator := oldCurator.DeepCopy()
+	newCurator.Spec.DesiredCuration = ""
+	newCurator.Spec.CuratingJob = ""
+	newCurator.Status = clustercuratorv1.ClusterCuratorStatus{}
+
+	allowed := pred.Update(event.UpdateEvent{ObjectOld: oldCurator, ObjectNew: newCurator})
+	assert.True(t, allowed,
+		"reconcile should run when DesiredCuration/CuratingJob clear even though Status changed in the same patch")
+}
