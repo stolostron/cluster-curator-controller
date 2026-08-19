@@ -30,10 +30,16 @@ const DeleteNamespace = "delete-cluster-namespace"
 // ClusterCuratorReconciler reconciles a ClusterCurator object
 type ClusterCuratorReconciler struct {
 	client.Client
-	Kubeset  kubernetes.Interface
-	Log      logr.Logger
-	Scheme   *runtime.Scheme
-	ImageURI string
+	// APIReader is an uncached client (mgr.GetAPIReader()) used for ad hoc reads of types
+	// this controller doesn't otherwise watch (e.g. HostedCluster, ManagedClusterInfo).
+	// Reading those through the cached Client above would lazily start a cluster-scoped
+	// List/Watch informer for the GVK on first use; since RBAC only grants "get" for them,
+	// the informer's initial sync fails and the background reflector spams errors forever.
+	APIReader client.Reader
+	Kubeset   kubernetes.Interface
+	Log       logr.Logger
+	Scheme    *runtime.Scheme
+	ImageURI  string
 }
 
 // +kubebuilder:rbac:groups=cluster.open-cluster-management.io.cluster.open-cluster-management.io,resources=clustercurators,verbs=get;list;watch;create;update;patch;delete
@@ -100,7 +106,7 @@ func (r *ClusterCuratorReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	// Override upgrade if there's an operation requested
 	if curator.Spec.DesiredCuration == "upgrade" && !isPosthookOnly {
-		needed, err := utils.NeedToUpgrade(curator)
+		needed, err := utils.NeedToUpgrade(r.APIReader, curator)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
@@ -165,7 +171,7 @@ func (r *ClusterCuratorReconciler) isHostedCluster(ctx context.Context, curator 
 		Version: utils.HCGVR.Version,
 		Kind:    "HostedCluster",
 	})
-	err := r.Get(ctx, client.ObjectKey{Namespace: curator.Namespace, Name: curator.Name}, hc)
+	err := r.APIReader.Get(ctx, client.ObjectKey{Namespace: curator.Namespace, Name: curator.Name}, hc)
 	if err != nil {
 		if !k8serrors.IsNotFound(err) {
 			r.Log.V(2).Info("HostedCluster lookup failed, treating as non-Hypershift: " + err.Error())
