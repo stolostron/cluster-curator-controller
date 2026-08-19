@@ -143,6 +143,27 @@ compile-curator-konflux:
 build-curator:
 	docker build -f Dockerfile.prow . -t ${REPO_URL}/cluster-curator-controller:${VERSION}
 
+.PHONY: build-curator-amd64
+## Cross-build the amd64 image from an arm64 (e.g. Apple Silicon) host
+build-curator-amd64:
+	@if docker buildx ls | grep -q "local-builder"; then \
+		echo "Removing existing local-builder..."; \
+		docker buildx rm local-builder; \
+	fi
+	docker buildx create --name local-builder --use
+	docker buildx inspect local-builder --bootstrap
+	docker buildx build --platform linux/amd64 \
+		-f Dockerfile.prow \
+		-t ${REPO_URL}/cluster-curator-controller:${VERSION} \
+		--load .
+	docker buildx rm local-builder
+
+.PHONY: push-curator-amd64
+push-curator-amd64: build-curator-amd64
+	docker push ${REPO_URL}/cluster-curator-controller:${VERSION}
+	docker tag ${REPO_URL}/cluster-curator-controller:${VERSION} ${REPO_URL}/cluster-curator-controller:latest
+	docker push ${REPO_URL}/cluster-curator-controller:latest
+
 .PHONY: scale-up-test
 scale-up-test:
 	go test -v -timeout 500s ./cmd/controller/controller_test.go -run TestCreateControllerScale
