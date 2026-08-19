@@ -109,11 +109,12 @@ func main() {
 	}
 
 	if err = (&controllers.ClusterCuratorReconciler{
-		Client:   mgr.GetClient(),
-		Kubeset:  kubeset,
-		Log:      ctrl.Log.WithName("controllers").WithName("ClusterCurator"),
-		Scheme:   mgr.GetScheme(),
-		ImageURI: imageURI,
+		Client:    mgr.GetClient(),
+		APIReader: mgr.GetAPIReader(),
+		Kubeset:   kubeset,
+		Log:       ctrl.Log.WithName("controllers").WithName("ClusterCurator"),
+		Scheme:    mgr.GetScheme(),
+		ImageURI:  imageURI,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ClusterCurator")
 		os.Exit(1)
