@@ -394,11 +394,33 @@ func GetRetryTimes(timeout, defaultTimeout int, interval time.Duration) int {
 	return int(time.Duration(timeout) * time.Minute / interval)
 }
 
-func NeedToUpgrade(curator clustercuratorv1.ClusterCurator) (bool, error) {
+// NeedToUpgrade takes a client.Reader (rather than the full client.Client) so callers can
+// pass an uncached reader (e.g. mgr.GetAPIReader()) for the ManagedClusterInfo lookup below.
+// Reading ManagedClusterInfo through a manager's cached client would lazily start a
+// cluster-scoped List/Watch informer for that GVK the first time it's called; since the
+// controller's RBAC only grants "get" on managedclusterinfos (not "list"/"watch"), that
+// informer's initial sync fails and the background reflector retries (and logs) forever.
+func NeedToUpgrade(reader clientv1.Reader, curator clustercuratorv1.ClusterCurator) (bool, error) {
 	jobCondtion := meta.FindStatusCondition(curator.Status.Conditions, "clustercurator-job")
 	if jobCondtion == nil {
 		// no clustercurator-job conditon, a new curation, run the upgrade
 		klog.V(2).Info(fmt.Sprintf("No ClusterCuratorJob for curator %q", curator.Name))
+
+		if reader != nil && curator.Spec.Upgrade.DesiredUpdate != "" {
+			managedClusterInfo := managedclusterinfov1beta1.ManagedClusterInfo{}
+			if err := reader.Get(context.TODO(), types.NamespacedName{
+				Namespace: curator.Name,
+				Name:      curator.Name,
+			}, &managedClusterInfo); err != nil {
+				klog.V(2).Infof("Could not determine current cluster version for %q, skipping upgrade: %v", curator.Name, err)
+				return false, nil
+			}
+			if managedClusterInfo.Status.DistributionInfo.OCP.Version == curator.Spec.Upgrade.DesiredUpdate {
+				klog.V(0).Infof("Cluster %s is already at desired version %s, skipping upgrade", curator.Name, curator.Spec.Upgrade.DesiredUpdate)
+				return false, nil
+			}
+		}
+
 		return true, nil
 	}
 
