@@ -188,9 +188,13 @@ func newClusterCuratorPredicate() predicate.Predicate {
 			newClusterCurator, okNew := e.ObjectNew.(*clustercuratorv1.ClusterCurator)
 			oldClusterCurator, okOld := e.ObjectOld.(*clustercuratorv1.ClusterCurator)
 			if okNew && okOld {
-				if !reflect.DeepEqual(newClusterCurator.Status, oldClusterCurator.Status) {
-					return false
-				}
+				// These "allow through" checks must run before the status-equality
+				// check below: ClusterCurator has no status subresource, so the
+				// curator job's completion patch clears spec.desiredCuration/
+				// spec.curatorJob and status in the very same API call. That
+				// produces a single UpdateEvent where Status always differs, so
+				// checking status equality first would always drop the one event
+				// meant to trigger post-curation RBAC cleanup.
 				if newClusterCurator.Spec.DesiredCuration == DeleteNamespace {
 					return true
 				}
@@ -209,6 +213,9 @@ func newClusterCuratorPredicate() predicate.Predicate {
 					// upgrade path, where DesiredCuration doesn't change (unlike
 					// install/destroy, which are already allowed through above).
 					return true
+				}
+				if !reflect.DeepEqual(newClusterCurator.Status, oldClusterCurator.Status) {
+					return false
 				}
 				if oldClusterCurator.Spec.Upgrade.IntermediateUpdate != "" {
 					return false
