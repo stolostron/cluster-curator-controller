@@ -21,6 +21,8 @@ import (
 	"github.com/stolostron/cluster-curator-controller/pkg/jobs/utils"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 const DeleteNamespace = "delete-cluster-namespace"
@@ -28,10 +30,16 @@ const DeleteNamespace = "delete-cluster-namespace"
 // ClusterCuratorReconciler reconciles a ClusterCurator object
 type ClusterCuratorReconciler struct {
 	client.Client
-	Kubeset  kubernetes.Interface
-	Log      logr.Logger
-	Scheme   *runtime.Scheme
-	ImageURI string
+	// APIReader is an uncached client (mgr.GetAPIReader()) used for ad hoc reads of types
+	// this controller doesn't otherwise watch (e.g. HostedCluster, ManagedClusterInfo).
+	// Reading those through the cached Client above would lazily start a cluster-scoped
+	// List/Watch informer for the GVK on first use; since RBAC only grants "get" for them,
+	// the informer's initial sync fails and the background reflector spams errors forever.
+	APIReader client.Reader
+	Kubeset   kubernetes.Interface
+	Log       logr.Logger
+	Scheme    *runtime.Scheme
+	ImageURI  string
 }
 
 // +kubebuilder:rbac:groups=cluster.open-cluster-management.io.cluster.open-cluster-management.io,resources=clustercurators,verbs=get;list;watch;create;update;patch;delete
@@ -62,15 +70,43 @@ func (r *ClusterCuratorReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	isPosthookOnly := curator.Operation != nil && curator.Operation.RetryPosthook != ""
 
+	// Independent of desiredCuration/curatingJob state below: for Hypershift curators,
+	// make sure the shared cluster-wide curator-crb ClusterRoleBinding isn't left
+	// granting this namespace's cluster-installer SA cluster-wide managedclusters
+	// access once no job is actively running. This specifically covers upgrade
+	// curations, where desiredCuration intentionally never clears back to "" (see
+	// utils.NeedToUpgrade), so the CuratingJob/DesiredCuration-gated cleanup block
+	// below never triggers CleanupRBACHypershift for that path. Safe to call even
+	// when a new curation job is about to launch immediately after - see
+	// CleanupCuratorCRBIfOwned's doc comment.
+	if curator.Name != curator.Namespace && curator.Spec.CuratingJob == "" {
+		if err := rbac.CleanupCuratorCRBIfOwned(r.Kubeset, curator.Namespace); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
+
 	// Curating work has already started OR no curation work supplied curator.Spec.CuratingJob != "" ||
 	if (curator.Spec.CuratingJob != "" || curator.Spec.DesiredCuration == "") && !isPosthookOnly {
 		log.V(3).Info("No curation to do for %v", req.NamespacedName)
+		// When both fields are empty the curation cycle has completed. Remove the
+		// cluster-installer ServiceAccount and its RoleBindings so the SA cannot be
+		// used to mint tokens between curations (post-curation RBAC cleanup).
+		if curator.Spec.CuratingJob == "" && curator.Spec.DesiredCuration == "" {
+			if err := rbac.CleanupRBAC(r.Kubeset, req.Namespace); err != nil {
+				return ctrl.Result{}, err
+			}
+			if curator.Name != curator.Namespace {
+				if err := rbac.CleanupRBACHypershift(r.Kubeset, curator.Name, curator.Namespace); err != nil {
+					return ctrl.Result{}, err
+				}
+			}
+		}
 		return ctrl.Result{}, nil
 	}
 
 	// Override upgrade if there's an operation requested
 	if curator.Spec.DesiredCuration == "upgrade" && !isPosthookOnly {
-		needed, err := utils.NeedToUpgrade(curator)
+		needed, err := utils.NeedToUpgrade(r.APIReader, curator)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
@@ -86,8 +122,12 @@ func (r *ClusterCuratorReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, err
 	}
 
-	// Hypershift clusters need additional RBAC
-	if curator.Name != curator.Namespace {
+	// Hypershift clusters need additional RBAC. The previous
+	// `curator.Name != curator.Namespace` heuristic was tenant-controllable
+	// (a CR author could pick any metadata.name and trigger a cross-namespace
+	// RoleBinding + cluster-wide ClusterRoleBinding for their cluster-installer
+	// SA), so gate on the actual presence of a HostedCluster instead.
+	if r.isHostedCluster(ctx, curator) {
 		log.V(2).Info("Check if cluster namespace " + curator.Name + " exists")
 		if _, err := r.Kubeset.CoreV1().Namespaces().Get(
 			context.TODO(), curator.Name, v1.GetOptions{}); k8serrors.IsNotFound(err) {
@@ -119,6 +159,28 @@ func (r *ClusterCuratorReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	return ctrl.Result{}, nil
 }
 
+// isHostedCluster reports whether a hypershift.openshift.io HostedCluster
+// named curator.Name exists in curator.Namespace. This is the authoritative
+// signal that the curator targets a Hypershift cluster and therefore needs
+// the cross-namespace RBAC applied by ApplyRBACHypershift; metadata.name
+// alone is CR-author-controlled and must not gate that escalation.
+func (r *ClusterCuratorReconciler) isHostedCluster(ctx context.Context, curator clustercuratorv1.ClusterCurator) bool {
+	hc := &unstructured.Unstructured{}
+	hc.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   utils.HCGVR.Group,
+		Version: utils.HCGVR.Version,
+		Kind:    "HostedCluster",
+	})
+	err := r.APIReader.Get(ctx, client.ObjectKey{Namespace: curator.Namespace, Name: curator.Name}, hc)
+	if err != nil {
+		if !k8serrors.IsNotFound(err) {
+			r.Log.V(2).Info("HostedCluster lookup failed, treating as non-Hypershift: " + err.Error())
+		}
+		return false
+	}
+	return true
+}
+
 func (r *ClusterCuratorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&clustercuratorv1.ClusterCurator{}).
@@ -132,9 +194,13 @@ func newClusterCuratorPredicate() predicate.Predicate {
 			newClusterCurator, okNew := e.ObjectNew.(*clustercuratorv1.ClusterCurator)
 			oldClusterCurator, okOld := e.ObjectOld.(*clustercuratorv1.ClusterCurator)
 			if okNew && okOld {
-				if !reflect.DeepEqual(newClusterCurator.Status, oldClusterCurator.Status) {
-					return false
-				}
+				// These "allow through" checks must run before the status-equality
+				// check below: ClusterCurator has no status subresource, so the
+				// curator job's completion patch clears spec.desiredCuration/
+				// spec.curatorJob and status in the very same API call. That
+				// produces a single UpdateEvent where Status always differs, so
+				// checking status equality first would always drop the one event
+				// meant to trigger post-curation RBAC cleanup.
 				if newClusterCurator.Spec.DesiredCuration == DeleteNamespace {
 					return true
 				}
@@ -145,9 +211,16 @@ func newClusterCuratorPredicate() predicate.Predicate {
 					return true
 				}
 				if newClusterCurator.Spec.DesiredCuration != oldClusterCurator.Spec.DesiredCuration && newClusterCurator.Spec.DesiredCuration == "" {
-					return false
+					// Allow through so the reconcile can perform post-curation RBAC cleanup.
+					return true
 				}
 				if newClusterCurator.Spec.CuratingJob != oldClusterCurator.Spec.CuratingJob && newClusterCurator.Spec.CuratingJob == "" {
+					// Allow through so Reconcile can clean up curator-crb for the
+					// upgrade path, where DesiredCuration doesn't change (unlike
+					// install/destroy, which are already allowed through above).
+					return true
+				}
+				if !reflect.DeepEqual(newClusterCurator.Status, oldClusterCurator.Status) {
 					return false
 				}
 				if oldClusterCurator.Spec.Upgrade.IntermediateUpdate != "" {
