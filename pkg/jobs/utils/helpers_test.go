@@ -760,7 +760,7 @@ func TestNeedToUpgrade(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			actual, err := NeedToUpgrade(c.curator)
+			actual, err := NeedToUpgrade(nil, c.curator)
 			if err != nil && !c.expectedErr {
 				t.Errorf("unexpected error %v", err)
 			}
