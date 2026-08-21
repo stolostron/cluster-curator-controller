@@ -8,7 +8,7 @@ RUN make compile-curator-konflux
 #RUN go build -o build/_output/curator ./pkg/jobs/curator.go
 #RUN go build -o build/_output/cluster-curator-controller ./pkg/controller/controller.go
 
-FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
+FROM registry.redhat.io/ubi9/ubi-minimal-pqc:latest
 
 ENV USER_UID=1001
 
