@@ -2307,10 +2307,7 @@ func TestFindImageDigestNilAndMissingUpdates(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.NotPanics(t, func() {
-				got := findImageDigest(tt.clusterVersion, tt.desired)
-				assert.Equal(t, tt.want, got)
-			})
+			assert.Equal(t, tt.want, findImageDigest(tt.clusterVersion, tt.desired))
 		})
 	}
 }
@@ -2328,28 +2325,7 @@ func TestFindImageDigestFromDisconnectedClusterVersionJSON(t *testing.T) {
 	}`)
 	clusterVersion := map[string]interface{}{}
 	assert.NoError(t, json.Unmarshal(raw, &clusterVersion))
-
-	assert.NotPanics(t, func() {
-		assert.Equal(t, "", findImageDigest(clusterVersion, "4.20.28"))
-	})
-}
-
-func TestNilAvailableUpdatesBareAssertionPanics(t *testing.T) {
-	// Documents the ACM-44685 failure mode: comma-ok on map lookup is true
-	// for a JSON-null value, then a bare []interface{} assertion panics.
-	cv := map[string]interface{}{
-		"status": map[string]interface{}{
-			"availableUpdates": nil,
-		},
-	}
-	clusterAvailableUpdates, ok := cv["status"].(map[string]interface{})["availableUpdates"]
-	assert.True(t, ok, "JSON null is a present map key")
-	assert.Panics(t, func() {
-		_ = clusterAvailableUpdates.([]interface{})
-	})
-	assert.NotPanics(t, func() {
-		_ = findImageDigest(cv, "4.20.28")
-	})
+	assert.Equal(t, "", findImageDigest(clusterVersion, "4.20.28"))
 }
 
 func TestUpgradeClusterForceUpgradeNilAvailableUpdates(t *testing.T) {
@@ -2458,8 +2434,6 @@ func TestUpgradeClusterForceUpgradeNilAvailableUpdates(t *testing.T) {
 		}
 	}()
 
-	assert.NotPanics(t, func() {
-		assert.Nil(t, UpgradeCluster(client, ClusterName, clustercurator),
-			"Force upgrade should succeed when availableUpdates is null")
-	})
+	assert.Nil(t, UpgradeCluster(client, ClusterName, clustercurator),
+		"Force upgrade should succeed when availableUpdates is null")
 }

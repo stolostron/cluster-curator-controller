@@ -699,10 +699,8 @@ func MonitorUpgradeStatus(client clientv1.Client, clusterName string, curator *c
 	return timeoutErr
 }
 
-// findImageDigest looks up a release image for desiredUpdate in ClusterVersion
-// status. availableUpdates and conditionalUpdates are often JSON null in
-// disconnected/air-gapped environments; this must not panic on nil or missing
-// fields (ACM-44685).
+// findImageDigest returns the release image for desiredUpdate from ClusterVersion
+// status. availableUpdates and conditionalUpdates may be JSON null.
 func findImageDigest(clusterVersion map[string]interface{}, desiredUpdate string) string {
 	status, ok := clusterVersion["status"].(map[string]interface{})
 	if !ok {
@@ -831,9 +829,6 @@ func validateUpgradeVersion(client clientv1.Client, clusterName string, curator 
 		err := json.Unmarshal(resultClusterVersion.Raw, &clusterVersion)
 		utils.CheckError(err)
 
-		// availableUpdates/conditionalUpdates are often null in disconnected
-		// environments. Key presence is not enough; a nil value panics on a
-		// bare []interface{} assertion (ACM-44685).
 		klog.V(2).Info("Check for image digest in conditional and available updates")
 		imageWithDigest = findImageDigest(clusterVersion, desiredUpdate)
 		if imageWithDigest == "" {
