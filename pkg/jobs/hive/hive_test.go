@@ -2203,3 +2203,263 @@ func TestUpgradeClusterForceUpgradeWithImageDigestInAvailableList(t *testing.T) 
 	assert.Nil(t, UpgradeCluster(client, ClusterName, clustercurator),
 		"Upgrade started successfully to non-recommended version with image digest in available list")
 }
+
+func TestFindImageDigestNilAndMissingUpdates(t *testing.T) {
+	const digest = "quay.io/openshift-release-dev/ocp-release@sha256:abc123"
+
+	tests := []struct {
+		name           string
+		clusterVersion map[string]interface{}
+		desired        string
+		want           string
+	}{
+		{
+			name: "JSON null availableUpdates and conditionalUpdates",
+			clusterVersion: map[string]interface{}{
+				"status": map[string]interface{}{
+					"availableUpdates":   nil,
+					"conditionalUpdates": nil,
+				},
+			},
+			desired: "4.20.28",
+			want:    "",
+		},
+		{
+			name: "missing availableUpdates key",
+			clusterVersion: map[string]interface{}{
+				"status": map[string]interface{}{},
+			},
+			desired: "4.20.28",
+			want:    "",
+		},
+		{
+			name:           "missing status",
+			clusterVersion: map[string]interface{}{},
+			desired:        "4.20.28",
+			want:           "",
+		},
+		{
+			name: "nil status",
+			clusterVersion: map[string]interface{}{
+				"status": nil,
+			},
+			desired: "4.20.28",
+			want:    "",
+		},
+		{
+			name: "empty availableUpdates list",
+			clusterVersion: map[string]interface{}{
+				"status": map[string]interface{}{
+					"availableUpdates": []interface{}{},
+				},
+			},
+			desired: "4.20.28",
+			want:    "",
+		},
+		{
+			name: "match in availableUpdates",
+			clusterVersion: map[string]interface{}{
+				"status": map[string]interface{}{
+					"availableUpdates": []interface{}{
+						map[string]interface{}{
+							"version": "4.20.28",
+							"image":   digest,
+						},
+					},
+				},
+			},
+			desired: "4.20.28",
+			want:    digest,
+		},
+		{
+			name: "match in conditionalUpdates",
+			clusterVersion: map[string]interface{}{
+				"status": map[string]interface{}{
+					"availableUpdates": nil,
+					"conditionalUpdates": []interface{}{
+						map[string]interface{}{
+							"release": map[string]interface{}{
+								"version": "4.20.28",
+								"image":   digest,
+							},
+						},
+					},
+				},
+			},
+			desired: "4.20.28",
+			want:    digest,
+		},
+		{
+			name: "malformed conditionalUpdates entries are skipped",
+			clusterVersion: map[string]interface{}{
+				"status": map[string]interface{}{
+					"conditionalUpdates": []interface{}{
+						nil,
+						"not-a-map",
+						map[string]interface{}{"release": nil},
+					},
+				},
+			},
+			desired: "4.20.28",
+			want:    "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.NotPanics(t, func() {
+				got := findImageDigest(tt.clusterVersion, tt.desired)
+				assert.Equal(t, tt.want, got)
+			})
+		})
+	}
+}
+
+func TestFindImageDigestFromDisconnectedClusterVersionJSON(t *testing.T) {
+	// Exact JSON shape returned by CVO when the update graph is unreachable.
+	raw := []byte(`{
+		"apiVersion": "config.openshift.io/v1",
+		"kind": "ClusterVersion",
+		"spec": {"channel": "stable-4.20"},
+		"status": {
+			"availableUpdates": null,
+			"desired": {"version": "4.20.0"}
+		}
+	}`)
+	clusterVersion := map[string]interface{}{}
+	assert.NoError(t, json.Unmarshal(raw, &clusterVersion))
+
+	assert.NotPanics(t, func() {
+		assert.Equal(t, "", findImageDigest(clusterVersion, "4.20.28"))
+	})
+}
+
+func TestNilAvailableUpdatesBareAssertionPanics(t *testing.T) {
+	// Documents the ACM-44685 failure mode: comma-ok on map lookup is true
+	// for a JSON-null value, then a bare []interface{} assertion panics.
+	cv := map[string]interface{}{
+		"status": map[string]interface{}{
+			"availableUpdates": nil,
+		},
+	}
+	clusterAvailableUpdates, ok := cv["status"].(map[string]interface{})["availableUpdates"]
+	assert.True(t, ok, "JSON null is a present map key")
+	assert.Panics(t, func() {
+		_ = clusterAvailableUpdates.([]interface{})
+	})
+	assert.NotPanics(t, func() {
+		_ = findImageDigest(cv, "4.20.28")
+	})
+}
+
+func TestUpgradeClusterForceUpgradeNilAvailableUpdates(t *testing.T) {
+	s := scheme.Scheme
+	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
+	s.AddKnownTypes(managedclusterinfov1beta1.SchemeGroupVersion, &managedclusterinfov1beta1.ManagedClusterInfo{})
+	s.AddKnownTypes(managedclusteractionv1beta1.SchemeGroupVersion, &managedclusteractionv1beta1.ManagedClusterAction{})
+	s.AddKnownTypes(managedclusterviewv1beta1.SchemeGroupVersion, &managedclusterviewv1beta1.ManagedClusterView{})
+
+	clustercurator := &clustercuratorv1.ClusterCurator{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      ClusterName,
+			Namespace: ClusterName,
+			Annotations: map[string]string{
+				"cluster.open-cluster-management.io/upgrade-allow-not-recommended-versions": "true",
+			},
+		},
+		Spec: clustercuratorv1.ClusterCuratorSpec{
+			DesiredCuration: "upgrade",
+			Upgrade: clustercuratorv1.UpgradeHooks{
+				DesiredUpdate: "4.20.28",
+			},
+		},
+	}
+
+	disconnectedMCI := getManagedClusterInfo()
+	disconnectedMCI.Status.DistributionInfo.OCP.AvailableUpdates = nil
+	disconnectedMCI.Status.DistributionInfo.OCP.VersionAvailableUpdates = nil
+	disconnectedMCI.Status.DistributionInfo.OCP.Version = "4.20.0"
+
+	// Use raw JSON so availableUpdates is encoded as null, matching CVO output
+	// in air-gapped clusters. json.Marshal of a nil slice may omit the field
+	// depending on omitempty, which would not reproduce the panic.
+	b := []byte(`{
+		"apiVersion": "config.openshift.io/v1",
+		"kind": "ClusterVersion",
+		"metadata": {"name": "version"},
+		"spec": {
+			"channel": "stable-4.20",
+			"clusterID": "201ad26c-67d6-416a"
+		},
+		"status": {
+			"availableUpdates": null,
+			"desired": {"version": "4.20.0"}
+		}
+	}`)
+
+	client := clientfake.NewClientBuilder().WithRuntimeObjects([]runtime.Object{
+		clustercurator, disconnectedMCI,
+	}...).WithScheme(s).Build()
+
+	go func() {
+		for i := 0; i < 60; i++ {
+			time.Sleep(500 * time.Millisecond)
+			resultmcview := managedclusterviewv1beta1.ManagedClusterView{}
+			err := client.Get(context.TODO(), types.NamespacedName{
+				Namespace: ClusterName,
+				Name:      ClusterName,
+			}, &resultmcview)
+			if err != nil {
+				klog.Error("failed to get managedClusterview.", err)
+				continue
+			}
+			resultmcview.Status.Result.Raw = b
+			err = client.Update(context.TODO(), &resultmcview)
+			if err != nil {
+				klog.Error("failed to update managedClusterview.", err)
+				continue
+			}
+			updatedresultmcview := managedclusterviewv1beta1.ManagedClusterView{}
+			err = client.Get(context.TODO(), types.NamespacedName{
+				Namespace: ClusterName,
+				Name:      ClusterName,
+			}, &updatedresultmcview)
+			if err != nil {
+				klog.Error("failed to get managedClusterview.", err)
+				continue
+			}
+			if updatedresultmcview.Status.Result.Raw != nil {
+				break
+			}
+		}
+	}()
+
+	go func() {
+		for i := 0; i < 60; i++ {
+			time.Sleep(500 * time.Millisecond)
+			resultmca := managedclusteractionv1beta1.ManagedClusterAction{}
+			err := client.Get(context.TODO(), types.NamespacedName{
+				Namespace: ClusterName,
+				Name:      ClusterName,
+			}, &resultmca)
+
+			if err == nil {
+				patch := []byte(`{"status":{"conditions":[
+							{
+								"lastTransitionTime": "2021-04-28T16:19:38Z",
+								"message": " Resource action is done.",
+								"reason": "ActionDone",
+								"status": "True",
+								"type": "Completed"
+							}]}}`)
+				client.Patch(context.Background(), &resultmca, clientv1.RawPatch(types.MergePatchType, patch))
+				break
+			}
+		}
+	}()
+
+	assert.NotPanics(t, func() {
+		assert.Nil(t, UpgradeCluster(client, ClusterName, clustercurator),
+			"Force upgrade should succeed when availableUpdates is null")
+	})
+}
