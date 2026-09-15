@@ -699,6 +699,51 @@ func MonitorUpgradeStatus(client clientv1.Client, clusterName string, curator *c
 	return timeoutErr
 }
 
+// findImageDigest returns the release image for desiredUpdate from ClusterVersion
+// status. availableUpdates and conditionalUpdates may be JSON null.
+func findImageDigest(clusterVersion map[string]interface{}, desiredUpdate string) string {
+	status, ok := clusterVersion["status"].(map[string]interface{})
+	if !ok {
+		return ""
+	}
+
+	if image := findReleaseImage(status["conditionalUpdates"], desiredUpdate, true); image != "" {
+		klog.V(2).Info("Found conditional update image digest")
+		return image
+	}
+	if image := findReleaseImage(status["availableUpdates"], desiredUpdate, false); image != "" {
+		klog.V(2).Info("Found available update image digest")
+		return image
+	}
+	return ""
+}
+
+func findReleaseImage(updates interface{}, desiredUpdate string, nestedRelease bool) string {
+	list, ok := updates.([]interface{})
+	if !ok {
+		return ""
+	}
+	for _, item := range list {
+		entry, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		source := entry
+		if nestedRelease {
+			source, ok = entry["release"].(map[string]interface{})
+			if !ok {
+				continue
+			}
+		}
+		version, _ := source["version"].(string)
+		if version == desiredUpdate {
+			image, _ := source["image"].(string)
+			return image
+		}
+	}
+	return ""
+}
+
 func validateUpgradeVersion(client clientv1.Client, clusterName string, curator *clustercuratorv1.ClusterCurator) (string, error) {
 
 	desiredUpdate := curator.Spec.Upgrade.DesiredUpdate
@@ -784,33 +829,8 @@ func validateUpgradeVersion(client clientv1.Client, clusterName string, curator 
 		err := json.Unmarshal(resultClusterVersion.Raw, &clusterVersion)
 		utils.CheckError(err)
 
-		klog.V(2).Info("Check for image digest in conditional updates")
-		if clusterConditionalUpdates, ok := clusterVersion["status"].(map[string]interface{})["conditionalUpdates"]; ok {
-			for _, conditionalUpdate := range clusterConditionalUpdates.([]interface{}) {
-				updateVersion := conditionalUpdate.(map[string]interface{})["release"].(map[string]interface{})["version"].(string)
-				if updateVersion == desiredUpdate {
-					klog.V(2).Info("Found conditional update image digest")
-					imageWithDigest = conditionalUpdate.(map[string]interface{})["release"].(map[string]interface{})["image"].(string)
-					break
-				}
-			}
-		}
-
-		if imageWithDigest == "" {
-			klog.V(2).Info("Check for image digest in available updates just in case")
-
-			if clusterAvailableUpdates, ok := clusterVersion["status"].(map[string]interface{})["availableUpdates"]; ok {
-				for _, availableUpdate := range clusterAvailableUpdates.([]interface{}) {
-					updateVersion := availableUpdate.(map[string]interface{})["version"].(string)
-					if updateVersion == desiredUpdate {
-						klog.V(2).Info("Found available update image digest")
-						imageWithDigest = availableUpdate.(map[string]interface{})["image"].(string)
-						break
-					}
-				}
-			}
-		}
-
+		klog.V(2).Info("Check for image digest in conditional and available updates")
+		imageWithDigest = findImageDigest(clusterVersion, desiredUpdate)
 		if imageWithDigest == "" {
 			klog.V(2).Info("Image digest not found, fallback to image tag")
 		}
@@ -1041,13 +1061,19 @@ func retreiveAndUpdateClusterVersion(
 			}
 		}
 	} else {
-		if cvAvailableUpdates, ok := clusterVersion["status"].(map[string]interface{})["availableUpdates"].([]interface{}); ok {
-			for _, version := range cvAvailableUpdates {
-				if version.(map[string]interface{})["version"] == desiredUpdate {
-					versionMap := version.(map[string]interface{})
-					delete(versionMap, "architecture")
-					clusterVersion["spec"].(map[string]interface{})["desiredUpdate"] = versionMap
-					break
+		status, ok := clusterVersion["status"].(map[string]interface{})
+		if ok {
+			if cvAvailableUpdates, ok := status["availableUpdates"].([]interface{}); ok {
+				for _, version := range cvAvailableUpdates {
+					versionMap, ok := version.(map[string]interface{})
+					if !ok {
+						continue
+					}
+					if versionMap["version"] == desiredUpdate {
+						delete(versionMap, "architecture")
+						clusterVersion["spec"].(map[string]interface{})["desiredUpdate"] = versionMap
+						break
+					}
 				}
 			}
 		}
