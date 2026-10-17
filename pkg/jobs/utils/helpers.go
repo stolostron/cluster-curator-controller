@@ -327,7 +327,7 @@ func DeleteClusterNamespace(client kubernetes.Interface, clusterName string) err
 	}
 
 	for _, pod := range pods.Items {
-		if pod.Status.Phase != "" && pod.Status.Phase == "Running" {
+		if pod.Status.Phase == "Running" {
 			if !strings.Contains(pod.Name, clusterName+"-uninstall") {
 				return errors.New("There was a running pod: " + pod.Name + ", in the cluster namespace " + clusterName)
 			}
@@ -610,7 +610,7 @@ func GetClusterType(
 		context.TODO(), clusterName, v1.GetOptions{})
 	if hcErr == nil && hostedCluster != nil {
 		return HypershiftClusterType, nil
-	} else if !strings.Contains(hcErr.Error(), "not found") &&
+	} else if hcErr != nil && !strings.Contains(hcErr.Error(), "not found") &&
 		!strings.Contains(hcErr.Error(), "could not find") &&
 		!strings.Contains(hcErr.Error(), "is forbidden") {
 		return "", hcErr
