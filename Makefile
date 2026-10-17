@@ -14,7 +14,7 @@ export VCS_REF     = $(if $(shell git status --porcelain),$(GIT_COMMIT)-$(BUILD_
 
 export CGO_ENABLED  = 1
 export GO111MODULE := on
-export GOPACKAGES   = $(shell go list ./... | grep -v /vendor | grep -v /internal | grep -v /build | grep -v /test | grep -v /controllers)
+export GOPACKAGES   = $(shell go list ./... | grep -v /vendor | grep -v /internal | grep -v /build | grep -v /test)
 
 export PROJECT_DIR            = $(shell 'pwd')
 export BUILD_DIR              = $(PROJECT_DIR)/build
@@ -168,11 +168,11 @@ push-curator-amd64: build-curator-amd64
 
 .PHONY: scale-up-test
 scale-up-test:
-	go test -v -timeout 500s ./cmd/controller/controller_test.go -run TestCreateControllerScale
+	go test -tags scale -v -timeout 500s ./controllers -run TestCreateControllerScale
 
 .PHONY: scale-down-test
 scale-down-test:
-	go test -v -timeout 500s ./cmd/controller/controller_test.go -run TestDeleteManagedClusters
+	go test -tags scale -v -timeout 500s ./controllers -run TestDeleteManagedClusters
 
 
 # Install setup-envtest (used to download envtest binaries from controller-tools GitHub releases).
