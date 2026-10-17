@@ -40,7 +40,7 @@ CRD_OPTIONS ?= "crd:trivialVersions=true"
 # Use setup-envtest to download envtest binaries from the new location (controller-tools releases).
 # See: https://github.com/kubernetes-sigs/kubebuilder/discussions/4082
 ENVTEST_K8S_VERSION ?= 1.30.0
-ENVTEST_VERSION ?= v0.20.4
+ENVTEST_VERSION ?= v0.24.1
 
 
 BEFORE_SCRIPT := $(shell build/before-make.sh)
