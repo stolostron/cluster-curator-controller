@@ -21,6 +21,7 @@ import (
 	"github.com/stolostron/cluster-curator-controller/pkg/jobs/utils"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
@@ -106,12 +107,25 @@ func (r *ClusterCuratorReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	// Override upgrade if there's an operation requested
 	if curator.Spec.DesiredCuration == "upgrade" && !isPosthookOnly {
-		needed, err := utils.NeedToUpgrade(r.APIReader, curator)
+		needed, skipCondition, err := utils.NeedToUpgradeWithSkipCondition(r.APIReader, curator)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
+		// Status-only updates are dropped by newClusterCuratorPredicate, so recording
+		// or clearing the skip condition does not trigger another reconcile.
+		if skipCondition != nil {
+			if meta.SetStatusCondition(&curator.Status.Conditions, *skipCondition) {
+				return ctrl.Result{}, r.Update(ctx, &curator)
+			}
+			return ctrl.Result{}, nil
+		}
 		if !needed {
 			return ctrl.Result{}, nil
+		}
+		if meta.RemoveStatusCondition(&curator.Status.Conditions, utils.UpgradeSkippedCondition) {
+			if err := r.Update(ctx, &curator); err != nil {
+				return ctrl.Result{}, err
+			}
 		}
 	}
 
