@@ -1,5 +1,4 @@
-//go:build !skip
-// +build !skip
+//go:build scale
 
 // Copyright Contributors to the Open Cluster Management project.
 

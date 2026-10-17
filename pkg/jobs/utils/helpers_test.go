@@ -10,12 +10,16 @@ import (
 	managedclusterinfov1beta1 "github.com/stolostron/cluster-lifecycle-api/clusterinfo/v1beta1"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	dynfake "k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/kubernetes/scheme"
+	clientv1 "sigs.k8s.io/controller-runtime/pkg/client"
 	clientfake "sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 )
 
 func TestCheckErrorNil(t *testing.T) {
@@ -878,6 +882,145 @@ func TestNeedToUpgradeManagedClusterInfoNotFound(t *testing.T) {
 	needed, err := NeedToUpgrade(client, curator)
 	assert.Nil(t, err)
 	assert.False(t, needed, "should skip upgrade when ManagedClusterInfo not found")
+}
+
+func newManagedClusterInfo(name, version string) *managedclusterinfov1beta1.ManagedClusterInfo {
+	return &managedclusterinfov1beta1.ManagedClusterInfo{
+		TypeMeta: v1.TypeMeta{
+			APIVersion: managedclusterinfov1beta1.SchemeGroupVersion.String(),
+			Kind:       "ManagedClusterInfo",
+		},
+		ObjectMeta: v1.ObjectMeta{Name: name, Namespace: name},
+		Status: managedclusterinfov1beta1.ClusterInfoStatus{
+			DistributionInfo: managedclusterinfov1beta1.DistributionInfo{
+				OCP: managedclusterinfov1beta1.OCPDistributionInfo{Version: version},
+			},
+		},
+	}
+}
+
+func newUpgradeCurator(desiredUpdate string, upgradeType clustercuratorv1.UpgradeType) clustercuratorv1.ClusterCurator {
+	return clustercuratorv1.ClusterCurator{
+		ObjectMeta: v1.ObjectMeta{Name: "my-cluster", Namespace: "my-cluster"},
+		Spec: clustercuratorv1.ClusterCuratorSpec{
+			Upgrade: clustercuratorv1.UpgradeHooks{
+				DesiredUpdate: desiredUpdate,
+				UpgradeType:   upgradeType,
+			},
+		},
+	}
+}
+
+// A ManagedClusterInfo lookup failure other than NotFound must not silently drop the
+// upgrade: it has to come back as an error so controller-runtime requeues with backoff.
+func TestNeedToUpgradeManagedClusterInfoGetErrorIsReturned(t *testing.T) {
+	s := scheme.Scheme
+	s.AddKnownTypes(managedclusterinfov1beta1.SchemeGroupVersion, &managedclusterinfov1beta1.ManagedClusterInfo{})
+
+	cases := []struct {
+		name    string
+		getErr  error
+		checkFn func(error) bool
+	}{
+		{
+			name:    "transient error",
+			getErr:  k8serrors.NewTimeoutError("etcd timeout", 1),
+			checkFn: k8serrors.IsTimeout,
+		},
+		{
+			name: "forbidden",
+			getErr: k8serrors.NewForbidden(
+				schema.GroupResource{Group: "internal.open-cluster-management.io", Resource: "managedclusterinfos"},
+				"my-cluster", errors.New("RBAC denied")),
+			checkFn: k8serrors.IsForbidden,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			reader := clientfake.NewClientBuilder().WithScheme(s).WithInterceptorFuncs(interceptor.Funcs{
+				Get: func(context.Context, clientv1.WithWatch, clientv1.ObjectKey, clientv1.Object, ...clientv1.GetOption) error {
+					return c.getErr
+				},
+			}).Build()
+
+			needed, skipCondition, err := NeedToUpgradeWithSkipCondition(reader, newUpgradeCurator("4.14.5", ""))
+			assert.False(t, needed, "must not launch a job when the current version is unknown")
+			assert.Nil(t, skipCondition, "a retryable error is not a recorded skip")
+			assert.NotNil(t, err)
+			assert.True(t, c.checkFn(err), "original API error must be preserved for callers: %v", err)
+		})
+	}
+}
+
+// Each pre-job skip returns a condition whose reason tells the user why no job was created.
+func TestNeedToUpgradeWithSkipConditionReasons(t *testing.T) {
+	s := scheme.Scheme
+	s.AddKnownTypes(managedclusterinfov1beta1.SchemeGroupVersion, &managedclusterinfov1beta1.ManagedClusterInfo{})
+
+	t.Run("already at desired version", func(t *testing.T) {
+		reader := clientfake.NewClientBuilder().WithScheme(s).
+			WithRuntimeObjects(newManagedClusterInfo("my-cluster", "4.14.5")).Build()
+
+		needed, skipCondition, err := NeedToUpgradeWithSkipCondition(reader, newUpgradeCurator("4.14.5", ""))
+		assert.Nil(t, err)
+		assert.False(t, needed)
+		if assert.NotNil(t, skipCondition) {
+			assert.Equal(t, UpgradeSkippedCondition, skipCondition.Type)
+			assert.Equal(t, v1.ConditionTrue, skipCondition.Status)
+			assert.Equal(t, "AlreadyAtDesiredVersion", skipCondition.Reason)
+			assert.Contains(t, skipCondition.Message, "4.14.5")
+		}
+	})
+
+	t.Run("ManagedClusterInfo not found", func(t *testing.T) {
+		reader := clientfake.NewClientBuilder().WithScheme(s).Build()
+
+		needed, skipCondition, err := NeedToUpgradeWithSkipCondition(reader, newUpgradeCurator("4.14.5", ""))
+		assert.Nil(t, err)
+		assert.False(t, needed)
+		if assert.NotNil(t, skipCondition) {
+			assert.Equal(t, "ManagedClusterInfoNotFound", skipCondition.Reason)
+		}
+	})
+
+	t.Run("version differs", func(t *testing.T) {
+		reader := clientfake.NewClientBuilder().WithScheme(s).
+			WithRuntimeObjects(newManagedClusterInfo("my-cluster", "4.14.3")).Build()
+
+		needed, skipCondition, err := NeedToUpgradeWithSkipCondition(reader, newUpgradeCurator("4.14.5", ""))
+		assert.Nil(t, err)
+		assert.True(t, needed)
+		assert.Nil(t, skipCondition, "no skip condition when the upgrade proceeds")
+	})
+}
+
+// ManagedClusterInfo reports the control plane version. When the control plane is already at
+// desiredUpdate, a NodePools-only upgrade still has work to do and must not be skipped.
+func TestNeedToUpgradeNodePoolsBypassesVersionCheck(t *testing.T) {
+	s := scheme.Scheme
+	s.AddKnownTypes(managedclusterinfov1beta1.SchemeGroupVersion, &managedclusterinfov1beta1.ManagedClusterInfo{})
+
+	t.Run("control plane already at desired version", func(t *testing.T) {
+		reader := clientfake.NewClientBuilder().WithScheme(s).
+			WithRuntimeObjects(newManagedClusterInfo("my-cluster", "4.14.5")).Build()
+
+		needed, skipCondition, err := NeedToUpgradeWithSkipCondition(
+			reader, newUpgradeCurator("4.14.5", clustercuratorv1.UpgradeTypeNodePools))
+		assert.Nil(t, err)
+		assert.True(t, needed, "NodePools upgrade must run even when the control plane is at desiredUpdate")
+		assert.Nil(t, skipCondition)
+	})
+
+	t.Run("ControlPlane upgrade at desired version is still skipped", func(t *testing.T) {
+		reader := clientfake.NewClientBuilder().WithScheme(s).
+			WithRuntimeObjects(newManagedClusterInfo("my-cluster", "4.14.5")).Build()
+
+		needed, _, err := NeedToUpgradeWithSkipCondition(
+			reader, newUpgradeCurator("4.14.5", clustercuratorv1.UpgradeTypeControlPlane))
+		assert.Nil(t, err)
+		assert.False(t, needed)
+	})
 }
 
 func TestGetMonitorAttempts(t *testing.T) {

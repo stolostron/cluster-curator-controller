@@ -327,7 +327,7 @@ func DeleteClusterNamespace(client kubernetes.Interface, clusterName string) err
 	}
 
 	for _, pod := range pods.Items {
-		if pod.Status.Phase != "" && pod.Status.Phase == "Running" {
+		if pod.Status.Phase == "Running" {
 			if !strings.Contains(pod.Name, clusterName+"-uninstall") {
 				return errors.New("There was a running pod: " + pod.Name + ", in the cluster namespace " + clusterName)
 			}
@@ -396,6 +396,11 @@ func GetRetryTimes(timeout, defaultTimeout int, interval time.Duration) int {
 	return int(time.Duration(timeout) * time.Minute / interval)
 }
 
+// UpgradeSkippedCondition is the ClusterCurator condition type the controller sets when
+// NeedToUpgradeWithSkipCondition decides not to launch an upgrade job, so the reason is
+// visible on the resource and not only in controller logs.
+const UpgradeSkippedCondition = "upgrade-skipped"
+
 // NeedToUpgrade takes a client.Reader (rather than the full client.Client) so callers can
 // pass an uncached reader (e.g. mgr.GetAPIReader()) for the ManagedClusterInfo lookup below.
 // Reading ManagedClusterInfo through a manager's cached client would lazily start a
@@ -403,38 +408,74 @@ func GetRetryTimes(timeout, defaultTimeout int, interval time.Duration) int {
 // controller's RBAC only grants "get" on managedclusterinfos (not "list"/"watch"), that
 // informer's initial sync fails and the background reflector retries (and logs) forever.
 func NeedToUpgrade(reader clientv1.Reader, curator clustercuratorv1.ClusterCurator) (bool, error) {
+	needed, _, err := NeedToUpgradeWithSkipCondition(reader, curator)
+	return needed, err
+}
+
+// NeedToUpgradeWithSkipCondition behaves like NeedToUpgrade, and additionally returns an
+// UpgradeSkippedCondition when the pre-job ManagedClusterInfo check skips the upgrade, so
+// the caller can record why on the ClusterCurator.
+func NeedToUpgradeWithSkipCondition(
+	reader clientv1.Reader, curator clustercuratorv1.ClusterCurator) (bool, *metav1.Condition, error) {
 	jobCondtion := meta.FindStatusCondition(curator.Status.Conditions, "clustercurator-job")
 	if jobCondtion == nil {
 		klog.V(2).Info(fmt.Sprintf("No ClusterCuratorJob for curator %q", curator.Name))
 
-		if reader != nil && curator.Spec.Upgrade.DesiredUpdate != "" {
+		// ManagedClusterInfo reports the control plane version, not NodePool versions, so it
+		// can't tell whether a NodePools-only upgrade is needed. The job skips the same check
+		// for NodePools (see hypershift.validateUpgradeVersion).
+		if reader != nil && curator.Spec.Upgrade.DesiredUpdate != "" &&
+			curator.Spec.Upgrade.UpgradeType != clustercuratorv1.UpgradeTypeNodePools {
 			managedClusterInfo := managedclusterinfov1beta1.ManagedClusterInfo{}
 			if err := reader.Get(context.TODO(), types.NamespacedName{
 				Namespace: curator.Name,
 				Name:      curator.Name,
 			}, &managedClusterInfo); err != nil {
-				klog.V(2).Infof("Could not determine current cluster version for %q, skipping upgrade: %v", curator.Name, err)
-				return false, nil
+				if !k8serrors.IsNotFound(err) {
+					// Transient or configuration errors (timeouts, Forbidden, ...): return the
+					// error so the reconcile is retried with backoff instead of the upgrade
+					// being dropped until something else changes the curator.
+					return false, nil, fmt.Errorf("failed to get ManagedClusterInfo %s/%s for curator %q: %w",
+						curator.Name, curator.Name, curator.Name, err)
+				}
+				// Skip rather than launch: the job would fail the same lookup in
+				// validateUpgradeVersion, after already running the prehook.
+				message := fmt.Sprintf("ManagedClusterInfo %s/%s not found, cannot determine current cluster version, skipping upgrade to %s",
+					curator.Name, curator.Name, curator.Spec.Upgrade.DesiredUpdate)
+				klog.Warning(message)
+				return false, &metav1.Condition{
+					Type:    UpgradeSkippedCondition,
+					Status:  metav1.ConditionTrue,
+					Reason:  "ManagedClusterInfoNotFound",
+					Message: message,
+				}, nil
 			}
 			if managedClusterInfo.Status.DistributionInfo.OCP.Version == curator.Spec.Upgrade.DesiredUpdate {
-				klog.V(0).Infof("Cluster %s is already at desired version %s, skipping upgrade", curator.Name, curator.Spec.Upgrade.DesiredUpdate)
-				return false, nil
+				message := fmt.Sprintf("Cluster %s is already at desired version %s, skipping upgrade",
+					curator.Name, curator.Spec.Upgrade.DesiredUpdate)
+				klog.V(0).Info(message)
+				return false, &metav1.Condition{
+					Type:    UpgradeSkippedCondition,
+					Status:  metav1.ConditionTrue,
+					Reason:  "AlreadyAtDesiredVersion",
+					Message: message,
+				}, nil
 			}
 		}
 
-		return true, nil
+		return true, nil, nil
 	}
 
 	if jobCondtion.Status == metav1.ConditionFalse {
 		// job is not done, do nothing
 		klog.V(2).Info(fmt.Sprintf("The ClusterCuratorJob of the curator %q is not done, do nothing", curator.Name))
-		return false, nil
+		return false, nil, nil
 	}
 
 	if !strings.Contains(jobCondtion.Message, "upgrade") {
 		klog.V(2).Info(fmt.Sprintf("Previous curator %q is not for upgrade, %q)", curator.Name, jobCondtion.Message))
 		// last job is not for upgrade, run the upgrade
-		return true, nil
+		return true, nil, nil
 	}
 
 	if strings.Contains(jobCondtion.Message, "Failed") {
@@ -450,21 +491,21 @@ func NeedToUpgrade(reader clientv1.Reader, curator clustercuratorv1.ClusterCurat
 			if string(curator.Spec.Upgrade.UpgradeType) == currentUpgradeType && desiredNodePoolNames == currentNodePoolNames {
 				// last job failed and all upgrade params are unchanged, do nothing
 				klog.V(2).Info(fmt.Sprintf("last job failed and desired version is unchanged, do not need to upgrade"))
-				return false, nil
+				return false, nil, nil
 			}
 			// upgradeType or nodePoolNames changed, need to upgrade
 			klog.V(2).Info(fmt.Sprintf("last job failed but upgradeType or nodePoolNames changed, need to upgrade"))
-			return true, nil
+			return true, nil, nil
 		}
 
 		// To be compatible with 2.2.0 version
 		if strings.Contains(jobCondtion.Message, fmt.Sprintf("Version (%s)", curator.Spec.Upgrade.DesiredUpdate)) {
 			klog.V(2).Info(fmt.Sprintf("last job failed and desired version is unchanged, do not need to upgrade"))
-			return false, nil
+			return false, nil, nil
 		}
 
 		// last job failed and desired version is changed, upgrade
-		return true, nil
+		return true, nil, nil
 	}
 
 	specDesiredUpdate := curator.Spec.Upgrade.DesiredUpdate
@@ -474,13 +515,13 @@ func NeedToUpgrade(reader clientv1.Reader, curator clustercuratorv1.ClusterCurat
 
 	desiredVersion, err := semver.Make(specDesiredUpdate)
 	if err != nil {
-		return false, err
+		return false, nil, err
 	}
 
 	currentChannel, currentUpstream, currentVersion, err := parseVersionInfo(jobCondtion.Message)
 	if err != nil {
 		klog.V(2).Info(fmt.Sprintf("Previous curator has a wrong clustercurator-job condition message, %v", err))
-		return true, nil
+		return true, nil, nil
 	}
 
 	klog.V(2).Info(fmt.Sprintf("Curator %q channel, current=%v desired=%v", curator.Name, currentChannel, curator.Spec.Upgrade.Channel))
@@ -489,15 +530,15 @@ func NeedToUpgrade(reader clientv1.Reader, curator clustercuratorv1.ClusterCurat
 
 	if desiredVersion.Compare(currentVersion) == 1 {
 		// desired version is greater than current version, need upgrade
-		return true, nil
+		return true, nil, nil
 	}
 
 	if curator.Spec.Upgrade.Channel != "" && curator.Spec.Upgrade.Channel != currentChannel {
-		return true, nil
+		return true, nil, nil
 	}
 
 	if curator.Spec.Upgrade.Upstream != "" && curator.Spec.Upgrade.Upstream != currentUpstream {
-		return true, nil
+		return true, nil, nil
 	}
 
 	// Check if upgradeType or nodePoolNames changed (for hosted cluster upgrades)
@@ -506,17 +547,17 @@ func NeedToUpgrade(reader clientv1.Reader, curator clustercuratorv1.ClusterCurat
 
 	if string(curator.Spec.Upgrade.UpgradeType) != currentUpgradeType {
 		klog.V(2).Info(fmt.Sprintf("Curator %q upgradeType changed, current=%v desired=%v", curator.Name, currentUpgradeType, curator.Spec.Upgrade.UpgradeType))
-		return true, nil
+		return true, nil, nil
 	}
 
 	desiredNodePoolNames := strings.Join(curator.Spec.Upgrade.NodePoolNames, ",")
 	if desiredNodePoolNames != currentNodePoolNames {
 		klog.V(2).Info(fmt.Sprintf("Curator %q nodePoolNames changed, current=%v desired=%v", curator.Name, currentNodePoolNames, desiredNodePoolNames))
-		return true, nil
+		return true, nil, nil
 	}
 
 	// desired version is less than or equal to current version, or channel or upstream is not changed, do nothing
-	return false, nil
+	return false, nil, nil
 }
 
 func GetCurrentVersionInfo(curator *clustercuratorv1.ClusterCurator) string {
@@ -610,7 +651,7 @@ func GetClusterType(
 		context.TODO(), clusterName, v1.GetOptions{})
 	if hcErr == nil && hostedCluster != nil {
 		return HypershiftClusterType, nil
-	} else if !strings.Contains(hcErr.Error(), "not found") &&
+	} else if hcErr != nil && !strings.Contains(hcErr.Error(), "not found") &&
 		!strings.Contains(hcErr.Error(), "could not find") &&
 		!strings.Contains(hcErr.Error(), "is forbidden") {
 		return "", hcErr
