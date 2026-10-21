@@ -399,14 +399,14 @@ func UpgradeCluster(
 		image := "quay.io/openshift-release-dev/ocp-release:" + desiredUpdate + "-multi"
 
 		// Upgrade control plane (HostedCluster) if upgradeType is ControlPlane or empty (default)
-		if upgradeType == clustercuratorv1.UpgradeTypeControlPlane || upgradeType == "" {
+		if upgradeType.IncludesControlPlane() {
 			klog.V(2).Info("Upgrading HostedCluster control plane to " + desiredUpdate)
 			err := patchUpgradeVersion(dc, clusterName, curator.Namespace, utils.HCGVR, image)
 			utils.CheckError(err)
 		}
 
 		// Upgrade NodePools if upgradeType is NodePools or empty (default)
-		if upgradeType == clustercuratorv1.UpgradeTypeNodePools || upgradeType == "" {
+		if upgradeType.IncludesNodePools() {
 			nodePoolNames := curator.Spec.Upgrade.NodePoolNames
 			if len(nodePoolNames) > 0 {
 				klog.V(2).Infof("Upgrading specific NodePools %v to %s", nodePoolNames, desiredUpdate)

@@ -292,8 +292,17 @@ func UpgradeCluster(client clientv1.Client, clusterName string, curator *cluster
 	klog.V(0).Info("Retries set to: " + strconv.Itoa(retries))
 
 	desiredUpdate := curator.Spec.Upgrade.DesiredUpdate
+	upgradeType := curator.Spec.Upgrade.UpgradeType
 	imageWithDigest := ""
 	var err error
+
+	// NodePools only: the control plane is already upgraded, just release the workers
+	if !upgradeType.IncludesControlPlane() {
+		if err := validateNodePoolsVersion(client, clusterName, curator); err != nil {
+			return err
+		}
+		return setWorkerPoolsPaused(client, clusterName, curator.Spec.Upgrade.NodePoolNames, false)
+	}
 
 	if imageWithDigest, err = validateUpgradeVersion(client, clusterName, curator); err != nil {
 		if errors.Is(err, utils.ErrAlreadyAtVersion) {
@@ -301,6 +310,13 @@ func UpgradeCluster(client clientv1.Client, clusterName string, curator *cluster
 			return nil
 		}
 		return err
+	}
+
+	// ControlPlane only: hold the workers back before the control plane starts upgrading
+	if !upgradeType.IncludesNodePools() {
+		if err := setWorkerPoolsPaused(client, clusterName, curator.Spec.Upgrade.NodePoolNames, true); err != nil {
+			return err
+		}
 	}
 
 	klog.V(2).Info("Check if managedclusterview exists " + clusterName)
@@ -343,6 +359,211 @@ func UpgradeCluster(client clientv1.Client, clusterName string, curator *cluster
 	return nil
 }
 
+// validateNodePoolsVersion makes sure the workers are not asked to run ahead of the control plane.
+func validateNodePoolsVersion(client clientv1.Client, clusterName string, curator *clustercuratorv1.ClusterCurator) error {
+	desiredUpdate := curator.Spec.Upgrade.DesiredUpdate
+	if desiredUpdate == "" {
+		return nil
+	}
+
+	desiredVersion, err := semver.Make(desiredUpdate)
+	if err != nil {
+		return err
+	}
+
+	managedClusterInfo := managedclusterinfov1beta1.ManagedClusterInfo{}
+	if err := client.Get(context.TODO(), types.NamespacedName{
+		Namespace: clusterName,
+		Name:      clusterName,
+	}, &managedClusterInfo); err != nil {
+		return err
+	}
+
+	currentVersion, err := semver.Make(managedClusterInfo.Status.DistributionInfo.OCP.Version)
+	if err != nil {
+		return err
+	}
+
+	if desiredVersion.GT(currentVersion) {
+		return fmt.Errorf("NodePools cannot be upgraded to version %s which is higher than the control plane version %s. Upgrade the control plane first",
+			desiredUpdate, currentVersion)
+	}
+	return nil
+}
+
+// setWorkerPoolsPaused sets spec.paused on the MachineConfigPools of the managed cluster,
+// "worker" when no names are given. Standalone clusters have no NodePool, so this is how
+// the workers are held back from, or released into, an upgrade.
+func setWorkerPoolsPaused(client clientv1.Client, clusterName string, poolNames []string, paused bool) error {
+	if len(poolNames) == 0 {
+		poolNames = []string{"worker"}
+	}
+	for _, poolName := range poolNames {
+		klog.V(2).Infof("Setting MachineConfigPool %s paused=%t", poolName, paused)
+		if err := setMachineConfigPoolPaused(client, clusterName, poolName, paused); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func machineConfigPoolView(clusterName, poolName string) *managedclusterviewv1beta1.ManagedClusterView {
+	return &managedclusterviewv1beta1.ManagedClusterView{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      clusterName + "-mcp-" + poolName,
+			Namespace: clusterName,
+			Labels:    map[string]string{MCVUpgradeLabel: clusterName},
+		},
+		Spec: managedclusterviewv1beta1.ViewSpec{
+			Scope: managedclusterviewv1beta1.ViewScope{
+				Group:   "machineconfiguration.openshift.io",
+				Kind:    "MachineConfigPool",
+				Name:    poolName,
+				Version: "v1",
+			},
+		},
+	}
+}
+
+// monitorWorkerPools waits for the MachineConfigPools to finish rolling out after being unpaused.
+func monitorWorkerPools(client clientv1.Client, clusterName string, curator *clustercuratorv1.ClusterCurator) error {
+	poolNames := curator.Spec.Upgrade.NodePoolNames
+	if len(poolNames) == 0 {
+		poolNames = []string{"worker"}
+	}
+	upgradeAttempts := utils.GetRetryTimes(curator.Spec.Upgrade.MonitorTimeout, 120, utils.PauseSixtySeconds)
+
+	for _, poolName := range poolNames {
+		mcview := machineConfigPoolView(clusterName, poolName)
+		if err := client.Create(context.TODO(), mcview); err != nil && !k8serrors.IsAlreadyExists(err) {
+			return err
+		}
+
+		updated := false
+		for i := 0; i < upgradeAttempts && !updated; i++ {
+			if i > 0 {
+				time.Sleep(utils.PauseSixtySeconds)
+			}
+			result := managedclusterviewv1beta1.ManagedClusterView{}
+			if err := client.Get(context.TODO(), types.NamespacedName{
+				Namespace: clusterName,
+				Name:      mcview.Name,
+			}, &result); err != nil || result.Status.Result.Raw == nil {
+				continue
+			}
+			updated = machineConfigPoolUpdated(result.Status.Result.Raw)
+		}
+
+		if err := client.Delete(context.TODO(), mcview); err != nil && !k8serrors.IsNotFound(err) {
+			klog.Warning(err)
+		}
+		if !updated {
+			return fmt.Errorf("timed out waiting for MachineConfigPool %s to update", poolName)
+		}
+		klog.V(2).Infof("MachineConfigPool %s updated ✓", poolName)
+	}
+	return nil
+}
+
+// machineConfigPoolUpdated is true for an unpaused pool reporting Updated=True.
+func machineConfigPoolUpdated(raw []byte) bool {
+	pool := struct {
+		Spec struct {
+			Paused bool `json:"paused"`
+		} `json:"spec"`
+		Status struct {
+			Conditions []struct {
+				Type   string `json:"type"`
+				Status string `json:"status"`
+			} `json:"conditions"`
+		} `json:"status"`
+	}{}
+	if err := json.Unmarshal(raw, &pool); err != nil || pool.Spec.Paused {
+		return false
+	}
+	for _, c := range pool.Status.Conditions {
+		if c.Type == "Updated" && c.Status == "True" {
+			return true
+		}
+	}
+	return false
+}
+
+func setMachineConfigPoolPaused(client clientv1.Client, clusterName, poolName string, paused bool) error {
+	name := clusterName + "-mcp-" + poolName
+	mcview := machineConfigPoolView(clusterName, poolName)
+	if err := client.Create(context.TODO(), mcview); err != nil && !k8serrors.IsAlreadyExists(err) {
+		return err
+	}
+	defer func() {
+		if err := client.Delete(context.TODO(), mcview); err != nil && !k8serrors.IsNotFound(err) {
+			klog.Warning(err)
+		}
+	}()
+
+	pool := map[string]interface{}{}
+	for i := 1; i <= 5; i++ {
+		time.Sleep(utils.PauseFiveSeconds)
+		result := managedclusterviewv1beta1.ManagedClusterView{}
+		if err := client.Get(context.TODO(), types.NamespacedName{Namespace: clusterName, Name: name}, &result); err != nil {
+			klog.Warning(err)
+			continue
+		}
+		if result.Status.Result.Raw != nil {
+			if err := json.Unmarshal(result.Status.Result.Raw, &pool); err != nil {
+				return err
+			}
+			break
+		}
+	}
+	spec, ok := pool["spec"].(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("failed to get remote MachineConfigPool %s", poolName)
+	}
+	spec["paused"] = paused
+
+	raw, err := json.Marshal(pool)
+	if err != nil {
+		return err
+	}
+	mca := &managedclusteractionv1beta1.ManagedClusterAction{
+		ObjectMeta: v1.ObjectMeta{Name: name, Namespace: clusterName},
+		Spec: managedclusteractionv1beta1.ActionSpec{
+			ActionType: managedclusteractionv1beta1.UpdateActionType,
+			KubeWork: &managedclusteractionv1beta1.KubeWorkSpec{
+				Resource:       "machineconfigpools",
+				Name:           poolName,
+				ObjectTemplate: runtime.RawExtension{Raw: raw},
+			},
+		},
+	}
+	if err := client.Create(context.TODO(), mca); err != nil {
+		return err
+	}
+	defer func() {
+		if err := client.Delete(context.TODO(), mca); err != nil && !k8serrors.IsNotFound(err) {
+			klog.Warning(err)
+		}
+	}()
+
+	for i := 1; i <= 5; i++ {
+		time.Sleep(utils.PauseFiveSeconds)
+		if err := client.Get(context.TODO(), types.NamespacedName{Namespace: clusterName, Name: name}, mca); err != nil {
+			klog.Warning(err)
+			continue
+		}
+		condition := meta.FindStatusCondition(mca.Status.Conditions, managedclusteractionv1beta1.ConditionActionCompleted)
+		if condition == nil {
+			continue
+		}
+		if condition.Status == v1.ConditionTrue {
+			return nil
+		}
+		return fmt.Errorf("remote MachineConfigPool %s update failed: %s", poolName, condition.Message)
+	}
+	return fmt.Errorf("timed out updating remote MachineConfigPool %s", poolName)
+}
+
 func EUSUpgradeCluster(client clientv1.Client, clusterName string, curator *clustercuratorv1.ClusterCurator, isInterVersion bool) error {
 	updateVersion := curator.Spec.Upgrade.IntermediateUpdate
 	if !isInterVersion {
@@ -357,6 +578,19 @@ func EUSUpgradeCluster(client clientv1.Client, clusterName string, curator *clus
 
 	if err := validateEUSUpgradeVersion(client, clusterName, curator, isInterVersion); err != nil {
 		return err
+	}
+
+	// An EUS upgrade moves the control plane through two hops, there is no NodePools-only variant
+	upgradeType := curator.Spec.Upgrade.UpgradeType
+	if !upgradeType.IncludesControlPlane() {
+		return errors.New("upgradeType NodePools is not supported for EUS to EUS upgrades")
+	}
+
+	// ControlPlane only: keep the workers paused through both hops so they reboot once
+	if !upgradeType.IncludesNodePools() {
+		if err := setWorkerPoolsPaused(client, clusterName, curator.Spec.Upgrade.NodePoolNames, true); err != nil {
+			return err
+		}
 	}
 
 	klog.V(2).Info("Check if managedclusterview exists " + clusterName)
@@ -603,6 +837,11 @@ func EUSUpgradeCluster(client clientv1.Client, clusterName string, curator *clus
 }
 
 func MonitorUpgradeStatus(client clientv1.Client, clusterName string, curator *clustercuratorv1.ClusterCurator, isInterUpdate bool) error {
+	// NodePools only: the control plane is already done, wait for the workers to roll out
+	if !curator.Spec.Upgrade.UpgradeType.IncludesControlPlane() {
+		return monitorWorkerPools(client, clusterName, curator)
+	}
+
 	desiredUpdate := curator.Spec.Upgrade.DesiredUpdate
 	if isInterUpdate {
 		desiredUpdate = curator.Spec.Upgrade.IntermediateUpdate
