@@ -364,11 +364,12 @@ spec:
                       an EUS to EUS upgrade.
                     type: string
                   upgradeType:
-                    description: UpgradeType specifies which components to upgrade
-                      for HostedCluster deployments. For standalone clusters, this
-                      field is ignored. Supported values are ControlPlane (upgrade
-                      only the HostedCluster control plane), NodePools (upgrade only
-                      the NodePools/worker nodes), or empty string (default, upgrade
+                    description: UpgradeType specifies which components to upgrade.
+                      For standalone clusters, the worker MachineConfigPools stand
+                      in for NodePools. Supported values are ControlPlane (upgrade
+                      only the control plane; standalone, pause the worker MachineConfigPools
+                      first), NodePools (upgrade only the NodePools; standalone, unpause
+                      the worker MachineConfigPools), or empty string (default, upgrade
                       both control plane and node pools).
                     type: string
                     enum:
@@ -377,7 +378,8 @@ spec:
                     - ""
                   nodePoolNames:
                     description: NodePoolNames specifies which NodePools to upgrade
-                      when upgradeType is NodePools or empty (default). If not specified
+                      when upgradeType is NodePools or empty (default). For standalone
+                      clusters these are MachineConfigPool names, worker when empty. If not specified
                       or empty, all NodePools associated with the HostedCluster will
                       be upgraded. This field is ignored when upgradeType is ControlPlane.
                     type: array
