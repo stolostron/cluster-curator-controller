@@ -102,6 +102,45 @@ func TestMonitorMCInfoConditionMissingManagedClusterInfos(t *testing.T) {
 	dynfake := dynfake.NewSimpleDynamicClient(runtime.NewScheme())
 	assert.NotNil(t, MonitorMCInfoImport(dynfake, ClusterName, &clustercuratorv1.ClusterCurator{}), "err not nil, when ManagedClusterInfo resource is not present")
 }
+
+// getManagedClusterInfoNoStatus returns a ManagedClusterInfo that has not yet had its
+// status subresource populated, reproducing the create-to-first-status-update window.
+func getManagedClusterInfoNoStatus() *unstructured.Unstructured {
+	return &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "internal.open-cluster-management.io/v1beta1",
+			"kind":       "ManagedClusterInfo",
+			"metadata": map[string]interface{}{
+				"name":      ClusterName,
+				"namespace": ClusterName,
+			},
+		},
+	}
+}
+
+// TestMonitorMCInfoConditionNoStatus guards against the panic reported for ACM/MCE 5.0,
+// where a ManagedClusterInfo observed before its status is populated (status key absent
+// entirely, not just missing conditions) caused an unchecked type assertion to panic with
+// "interface conversion: interface {} is nil, not map[string]interface {}". The monitor
+// must treat this as "not ready yet" and keep retrying until it times out or converges.
+func TestMonitorMCInfoConditionNoStatus(t *testing.T) {
+
+	mci := getManagedClusterInfoNoStatus()
+	dynfake := dynfake.NewSimpleDynamicClient(runtime.NewScheme(), mci)
+
+	go func() {
+		time.Sleep(utils.PauseFiveSeconds)
+		_, err := dynfake.Resource(mciGVR).Namespace(ClusterName).Update(
+			context.TODO(), getManagedClusterInfos(managedclusterv1.ManagedClusterConditionAvailable, "connected"), v1.UpdateOptions{})
+		assert.Nil(t, err, "err is nil, when ManagedClusterConditionAvailable condition is populated")
+	}()
+
+	assert.NotPanics(t, func() {
+		assert.Nil(t, MonitorMCInfoImport(dynfake, ClusterName, &clustercuratorv1.ClusterCurator{}),
+			"err nil, once ManagedClusterInfo status eventually becomes available")
+	})
+}
+
 func TestMonitorMCInfoConditionAvailable(t *testing.T) {
 
 	dynfake := dynfake.NewSimpleDynamicClient(runtime.NewScheme(), getManagedClusterInfos(managedclusterv1.ManagedClusterConditionAvailable, "All good"))

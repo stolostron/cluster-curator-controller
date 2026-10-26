@@ -47,10 +47,10 @@ func MonitorImport(mcset managedclusterclient.Interface, clusterName string) err
 					return nil
 
 				case managedclusterv1.ManagedClusterConditionJoined:
-					klog.V(2).Info("ManagedCluster joined but not avaialble")
+					klog.Info("ManagedCluster joined but not avaialble")
 
 				default:
-					klog.V(2).Infof("Waiting for ManagedCluster to join %v", condition.Message)
+					klog.Infof("Waiting for ManagedCluster to join %v", condition.Message)
 				}
 			}
 		}
@@ -79,27 +79,48 @@ func MonitorMCInfoImport(mcset dynamic.Interface, clusterName string, curator *c
 		if err != nil {
 			return err
 		}
-		if managedCluster.Object["status"].(map[string]interface{})["conditions"] != nil {
-			for _, condition := range managedCluster.Object["status"].(map[string]interface{})["conditions"].([]interface{}) {
-				switch condition.(map[string]interface{})["type"] {
 
-				case managedclusterv1.ManagedClusterConditionHubDenied:
-					return errors.New("ManagedCluster join denied")
+		// The status subresource (and its nested conditions) is populated by a separate
+		// reconcile loop. A freshly created ManagedClusterInfo can therefore legitimately
+		// exist without a status, or with a status that does not yet contain conditions,
+		// or with conditions that are not fully-formed maps. Treat all of these as "not
+		// ready yet" instead of panicking via an unchecked type assertion.
+		status, ok := managedCluster.Object["status"].(map[string]interface{})
+		if !ok {
+			klog.Infof("Waiting for %v ManagedClusterInfo to report status (%v/%v)", clusterName, i, retryCount)
+			time.Sleep(utils.PauseTwoSeconds)
+			continue
+		}
 
-				case managedclusterv1.ManagedClusterConditionAvailable:
-					klog.V(2).Info("ManagedCluster available")
-					return nil
+		conditions, ok := status["conditions"].([]interface{})
+		if !ok || conditions == nil {
+			klog.Infof("Waiting for %v ManagedCluster to report conditions (%v/%v)", clusterName, i, retryCount)
+			time.Sleep(utils.PauseTwoSeconds)
+			continue
+		}
 
-				case managedclusterv1.ManagedClusterConditionJoined:
-					klog.V(2).Infof("ManagedCluster joined but not avaialble (%v/%v)", i, retryCount)
-
-				default:
-					klog.V(2).Infof("Waiting for ManagedCluster to join %v (%v/%v)",
-						condition.(map[string]interface{})["message"], i, retryCount)
-				}
+		for _, condition := range conditions {
+			conditionMap, ok := condition.(map[string]interface{})
+			if !ok {
+				continue
 			}
-		} else {
-			klog.V(2).Infof("Waiting for %v ManagedCluster to report conditions (%v/%v)", clusterName, i, retryCount)
+
+			switch conditionMap["type"] {
+
+			case managedclusterv1.ManagedClusterConditionHubDenied:
+				return errors.New("ManagedCluster join denied")
+
+			case managedclusterv1.ManagedClusterConditionAvailable:
+				klog.Info("ManagedCluster available")
+				return nil
+
+			case managedclusterv1.ManagedClusterConditionJoined:
+				klog.Infof("ManagedCluster joined but not avaialble (%v/%v)", i, retryCount)
+
+			default:
+				klog.Infof("Waiting for ManagedCluster to join %v (%v/%v)",
+					conditionMap["message"], i, retryCount)
+			}
 		}
 		time.Sleep(utils.PauseTwoSeconds)
 	}
