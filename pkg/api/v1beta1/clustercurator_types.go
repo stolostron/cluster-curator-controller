@@ -130,19 +130,21 @@ type UpgradeHooks struct {
 	// +optional
 	Upstream string `json:"upstream,omitempty"`
 
-	// UpgradeType specifies which components to upgrade for HostedCluster deployments.
-	// For standalone clusters, this field is ignored.
+	// UpgradeType specifies which components to upgrade.
+	// For standalone clusters, the worker MachineConfigPools stand in for NodePools.
 	// Supported values are:
-	// - "ControlPlane" - upgrade only the HostedCluster control plane
-	// - "NodePools" - upgrade only the NodePools (worker nodes)
+	// - "ControlPlane" - upgrade only the control plane (standalone: pause the worker MachineConfigPools first)
+	// - "NodePools" - upgrade only the NodePools (standalone: unpause the worker MachineConfigPools)
 	// - "" (empty, default) - upgrade both control plane and node pools
 	// +optional
 	// +kubebuilder:validation:Enum=ControlPlane;NodePools;""
 	UpgradeType UpgradeType `json:"upgradeType,omitempty"`
 
 	// NodePoolNames specifies which NodePools to upgrade when upgradeType is "NodePools" or empty (default).
+	// For standalone clusters these are MachineConfigPool names, "worker" when empty, and they are also
+	// the pools paused when upgradeType is "ControlPlane". The master pool can not be listed.
 	// If not specified or empty, all NodePools associated with the HostedCluster will be upgraded.
-	// This field is ignored when upgradeType is "ControlPlane".
+	// For HostedClusters this field is ignored when upgradeType is "ControlPlane".
 	// +optional
 	NodePoolNames []string `json:"nodePoolNames,omitempty"`
 
@@ -183,7 +185,8 @@ const (
 	HookTypeWorkflow HookType = "Workflow"
 )
 
-// UpgradeType indicates which components to upgrade for HostedCluster deployments.
+// UpgradeType indicates which components to upgrade. For standalone clusters, the worker
+// MachineConfigPools are paused for ControlPlane and unpaused for NodePools.
 // +kubebuilder:validation:Enum=ControlPlane;NodePools;""
 type UpgradeType string
 
@@ -194,6 +197,16 @@ const (
 	// UpgradeTypeNodePools upgrades only the NodePools (worker nodes)
 	UpgradeTypeNodePools UpgradeType = "NodePools"
 )
+
+// IncludesControlPlane is true when the control plane is part of the upgrade (ControlPlane or default).
+func (u UpgradeType) IncludesControlPlane() bool {
+	return u != UpgradeTypeNodePools
+}
+
+// IncludesNodePools is true when the worker nodes are part of the upgrade (NodePools or default).
+func (u UpgradeType) IncludesNodePools() bool {
+	return u != UpgradeTypeControlPlane
+}
 
 // +kubebuilder:object:root=true
 
