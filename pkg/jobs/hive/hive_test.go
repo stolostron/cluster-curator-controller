@@ -2706,6 +2706,9 @@ func TestUpgradeClusterControlPlaneRejectsMasterPool(t *testing.T) {
 
 	assert.ErrorContains(t, UpgradeCluster(client, ClusterName, curator), "master")
 	assert.Empty(t, remote.recorded(), "worker was not paused either")
+	mcas := managedclusteractionv1beta1.ManagedClusterActionList{}
+	assert.Nil(t, client.List(context.TODO(), &mcas, clientv1.InNamespace(ClusterName)))
+	assert.Empty(t, mcas.Items, "no remote update action was created")
 }
 
 // Default (empty) upgradeType keeps today's behavior: no MCP changes.
@@ -2777,15 +2780,26 @@ func TestEUSUpgradeClusterNodePoolsNotSupportedAfterEUS(t *testing.T) {
 	assert.ErrorContains(t, EUSUpgradeCluster(client, ClusterName, curator, true), "not supported")
 }
 
-func workerPoolView(pool string, paused bool, updated string) *managedclusterviewv1beta1.ManagedClusterView {
+// workerPoolView is a pool at generation 2 targeting rendered-worker-new. update can override
+// status fields such as observedGeneration or configuration so the status lags behind the spec.
+func workerPoolView(pool string, paused bool, updated string, update ...func(status map[string]interface{})) *managedclusterviewv1beta1.ManagedClusterView {
+	status := map[string]interface{}{
+		"observedGeneration": 2,
+		"configuration":      map[string]interface{}{"name": "rendered-worker-new"},
+		"conditions":         []interface{}{map[string]interface{}{"type": "Updated", "status": updated}},
+	}
+	for _, u := range update {
+		u(status)
+	}
 	raw, _ := json.Marshal(map[string]interface{}{
 		"apiVersion": "machineconfiguration.openshift.io/v1",
 		"kind":       "MachineConfigPool",
-		"metadata":   map[string]interface{}{"name": pool},
-		"spec":       map[string]interface{}{"paused": paused},
-		"status": map[string]interface{}{
-			"conditions": []interface{}{map[string]interface{}{"type": "Updated", "status": updated}},
+		"metadata":   map[string]interface{}{"name": pool, "generation": 2},
+		"spec": map[string]interface{}{
+			"paused":        paused,
+			"configuration": map[string]interface{}{"name": "rendered-worker-new"},
 		},
+		"status": status,
 	})
 	return &managedclusterviewv1beta1.ManagedClusterView{
 		ObjectMeta: v1.ObjectMeta{Name: ClusterName + "-mcp-" + pool, Namespace: ClusterName},
@@ -2821,6 +2835,35 @@ func TestMonitorUpgradeStatusNodePoolsPausedPoolIsNotDone(t *testing.T) {
 	curator.Spec.Upgrade.MonitorTimeout = 1
 	client := hiveUpgradeTypeClient(curator)
 	assert.Nil(t, client.Create(context.TODO(), workerPoolView("worker", true, "True")))
+
+	assert.ErrorContains(t, MonitorUpgradeStatus(client, ClusterName, curator, false),
+		"timed out waiting for MachineConfigPool worker")
+}
+
+// Right after the unpause the controller has not observed the new generation yet, Updated=True
+// still describes the paused spec and must not end the job before the workers roll.
+func TestMonitorUpgradeStatusNodePoolsStaleGenerationIsNotDone(t *testing.T) {
+	t.Parallel()
+	curator := hiveUpgradeTypeCurator(clustercuratorv1.UpgradeTypeNodePools, "4.5.14")
+	curator.Spec.Upgrade.MonitorTimeout = 1
+	client := hiveUpgradeTypeClient(curator)
+	assert.Nil(t, client.Create(context.TODO(), workerPoolView("worker", false, "True",
+		func(status map[string]interface{}) { status["observedGeneration"] = 1 })))
+
+	assert.ErrorContains(t, MonitorUpgradeStatus(client, ClusterName, curator, false),
+		"timed out waiting for MachineConfigPool worker")
+}
+
+// Updated=True for an older rendered configuration means the workers have not converged yet.
+func TestMonitorUpgradeStatusNodePoolsOldConfigurationIsNotDone(t *testing.T) {
+	t.Parallel()
+	curator := hiveUpgradeTypeCurator(clustercuratorv1.UpgradeTypeNodePools, "4.5.14")
+	curator.Spec.Upgrade.MonitorTimeout = 1
+	client := hiveUpgradeTypeClient(curator)
+	assert.Nil(t, client.Create(context.TODO(), workerPoolView("worker", false, "True",
+		func(status map[string]interface{}) {
+			status["configuration"] = map[string]interface{}{"name": "rendered-worker-old"}
+		})))
 
 	assert.ErrorContains(t, MonitorUpgradeStatus(client, ClusterName, curator, false),
 		"timed out waiting for MachineConfigPool worker")

@@ -475,20 +475,35 @@ func monitorWorkerPools(client clientv1.Client, clusterName string, curator *clu
 	return nil
 }
 
-// machineConfigPoolUpdated is true for an unpaused pool reporting Updated=True.
+// machineConfigPoolUpdated is true for an unpaused pool reporting Updated=True for its current
+// generation, with every machine on the rendered configuration the spec asks for.
 func machineConfigPoolUpdated(raw []byte) bool {
+	type configuration struct {
+		Name string `json:"name"`
+	}
 	pool := struct {
+		Metadata struct {
+			Generation int64 `json:"generation"`
+		} `json:"metadata"`
 		Spec struct {
-			Paused bool `json:"paused"`
+			Paused        bool          `json:"paused"`
+			Configuration configuration `json:"configuration"`
 		} `json:"spec"`
 		Status struct {
-			Conditions []struct {
+			ObservedGeneration int64         `json:"observedGeneration"`
+			Configuration      configuration `json:"configuration"`
+			Conditions         []struct {
 				Type   string `json:"type"`
 				Status string `json:"status"`
 			} `json:"conditions"`
 		} `json:"status"`
 	}{}
 	if err := json.Unmarshal(raw, &pool); err != nil || pool.Spec.Paused {
+		return false
+	}
+	// Status from an older generation (e.g. still the paused spec) says nothing about this rollout
+	if pool.Status.ObservedGeneration < pool.Metadata.Generation ||
+		pool.Status.Configuration.Name != pool.Spec.Configuration.Name {
 		return false
 	}
 	for _, c := range pool.Status.Conditions {
