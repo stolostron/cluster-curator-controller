@@ -312,8 +312,9 @@ func UpgradeCluster(client clientv1.Client, clusterName string, curator *cluster
 		return err
 	}
 
-	// ControlPlane only: hold the workers back before the control plane starts upgrading
-	if !upgradeType.IncludesNodePools() {
+	// ControlPlane only: hold the workers back before the control plane starts upgrading.
+	// A channel or upstream change alone upgrades nothing, so the workers are left alone.
+	if !upgradeType.IncludesNodePools() && desiredUpdate != "" {
 		if err := setWorkerPoolsPaused(client, clusterName, curator.Spec.Upgrade.NodePoolNames, true); err != nil {
 			return err
 		}
@@ -395,8 +396,12 @@ func validateNodePoolsVersion(client clientv1.Client, clusterName string, curato
 // "worker" when no names are given. Standalone clusters have no NodePool, so this is how
 // the workers are held back from, or released into, an upgrade.
 func setWorkerPoolsPaused(client clientv1.Client, clusterName string, poolNames []string, paused bool) error {
-	if len(poolNames) == 0 {
-		poolNames = []string{"worker"}
+	poolNames = workerPoolNames(poolNames)
+	// Checked up front so no pool is touched: a paused master pool stalls the control plane upgrade
+	for _, poolName := range poolNames {
+		if poolName == "master" {
+			return errors.New("MachineConfigPool master can not be listed in nodePoolNames, the control plane upgrade depends on it")
+		}
 	}
 	for _, poolName := range poolNames {
 		klog.V(2).Infof("Setting MachineConfigPool %s paused=%t", poolName, paused)
@@ -405,6 +410,14 @@ func setWorkerPoolsPaused(client clientv1.Client, clusterName string, poolNames 
 		}
 	}
 	return nil
+}
+
+// workerPoolNames returns the MachineConfigPools standing in for NodePools, "worker" when none are given.
+func workerPoolNames(poolNames []string) []string {
+	if len(poolNames) == 0 {
+		return []string{"worker"}
+	}
+	return poolNames
 }
 
 func machineConfigPoolView(clusterName, poolName string) *managedclusterviewv1beta1.ManagedClusterView {
@@ -427,10 +440,7 @@ func machineConfigPoolView(clusterName, poolName string) *managedclusterviewv1be
 
 // monitorWorkerPools waits for the MachineConfigPools to finish rolling out after being unpaused.
 func monitorWorkerPools(client clientv1.Client, clusterName string, curator *clustercuratorv1.ClusterCurator) error {
-	poolNames := curator.Spec.Upgrade.NodePoolNames
-	if len(poolNames) == 0 {
-		poolNames = []string{"worker"}
-	}
+	poolNames := workerPoolNames(curator.Spec.Upgrade.NodePoolNames)
 	upgradeAttempts := utils.GetRetryTimes(curator.Spec.Upgrade.MonitorTimeout, 120, utils.PauseSixtySeconds)
 
 	for _, poolName := range poolNames {
@@ -490,8 +500,8 @@ func machineConfigPoolUpdated(raw []byte) bool {
 }
 
 func setMachineConfigPoolPaused(client clientv1.Client, clusterName, poolName string, paused bool) error {
-	name := clusterName + "-mcp-" + poolName
 	mcview := machineConfigPoolView(clusterName, poolName)
+	name := mcview.Name
 	if err := client.Create(context.TODO(), mcview); err != nil && !k8serrors.IsAlreadyExists(err) {
 		return err
 	}
@@ -501,24 +511,25 @@ func setMachineConfigPoolPaused(client clientv1.Client, clusterName, poolName st
 		}
 	}()
 
+	getErr := fmt.Errorf("failed to get remote MachineConfigPool %s", poolName)
+	result := managedclusterviewv1beta1.ManagedClusterView{}
+	if err := waitForMCV(client, name, clusterName, &result, getErr); err != nil {
+		return err
+	}
+	if result.Status.Result.Raw == nil {
+		return getErr
+	}
 	pool := map[string]interface{}{}
-	for i := 1; i <= 5; i++ {
-		time.Sleep(utils.PauseFiveSeconds)
-		result := managedclusterviewv1beta1.ManagedClusterView{}
-		if err := client.Get(context.TODO(), types.NamespacedName{Namespace: clusterName, Name: name}, &result); err != nil {
-			klog.Warning(err)
-			continue
-		}
-		if result.Status.Result.Raw != nil {
-			if err := json.Unmarshal(result.Status.Result.Raw, &pool); err != nil {
-				return err
-			}
-			break
-		}
+	if err := json.Unmarshal(result.Status.Result.Raw, &pool); err != nil {
+		return err
 	}
 	spec, ok := pool["spec"].(map[string]interface{})
 	if !ok {
-		return fmt.Errorf("failed to get remote MachineConfigPool %s", poolName)
+		return getErr
+	}
+	if current, _ := spec["paused"].(bool); current == paused {
+		klog.V(2).Infof("MachineConfigPool %s already paused=%t", poolName, paused)
+		return nil
 	}
 	spec["paused"] = paused
 
@@ -537,7 +548,16 @@ func setMachineConfigPoolPaused(client clientv1.Client, clusterName, poolName st
 			},
 		},
 	}
-	if err := client.Create(context.TODO(), mca); err != nil {
+	err = client.Create(context.TODO(), mca)
+	if k8serrors.IsAlreadyExists(err) {
+		// Left behind by a job killed before its cleanup ran, its status belongs to that old request
+		klog.V(2).Info("Replacing leftover managedclusteraction " + name)
+		if err := client.Delete(context.TODO(), mca); err != nil && !k8serrors.IsNotFound(err) {
+			return err
+		}
+		err = client.Create(context.TODO(), mca)
+	}
+	if err != nil {
 		return err
 	}
 	defer func() {
@@ -576,14 +596,16 @@ func EUSUpgradeCluster(client clientv1.Client, clusterName string, curator *clus
 		klog.V(0).Info("* Initiate EUS to EUS Final Upgrade to " + updateVersion)
 	}
 
-	if err := validateEUSUpgradeVersion(client, clusterName, curator, isInterVersion); err != nil {
-		return err
-	}
-
-	// An EUS upgrade moves the control plane through two hops, there is no NodePools-only variant
+	// An EUS upgrade moves the control plane through two hops, there is no NodePools-only variant.
+	// Checked before the version validation, which fails with a misleading error once the EUS upgrade is done.
 	upgradeType := curator.Spec.Upgrade.UpgradeType
 	if !upgradeType.IncludesControlPlane() {
-		return errors.New("upgradeType NodePools is not supported for EUS to EUS upgrades")
+		return errors.New("upgradeType NodePools is not supported for EUS to EUS upgrades, " +
+			"remove intermediateUpdate to release the worker MachineConfigPools")
+	}
+
+	if err := validateEUSUpgradeVersion(client, clusterName, curator, isInterVersion); err != nil {
+		return err
 	}
 
 	// ControlPlane only: keep the workers paused through both hops so they reboot once

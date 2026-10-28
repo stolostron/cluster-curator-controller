@@ -141,9 +141,10 @@ type UpgradeHooks struct {
 	UpgradeType UpgradeType `json:"upgradeType,omitempty"`
 
 	// NodePoolNames specifies which NodePools to upgrade when upgradeType is "NodePools" or empty (default).
-	// For standalone clusters these are MachineConfigPool names, "worker" when empty.
+	// For standalone clusters these are MachineConfigPool names, "worker" when empty, and they are also
+	// the pools paused when upgradeType is "ControlPlane". The master pool can not be listed.
 	// If not specified or empty, all NodePools associated with the HostedCluster will be upgraded.
-	// This field is ignored when upgradeType is "ControlPlane".
+	// For HostedClusters this field is ignored when upgradeType is "ControlPlane".
 	// +optional
 	NodePoolNames []string `json:"nodePoolNames,omitempty"`
 

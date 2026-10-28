@@ -2447,10 +2447,12 @@ type remoteAction struct {
 }
 
 // fakeManagedCluster answers ManagedClusterViews and ManagedClusterActions like the
-// work agent would. Resources listed in failResources get a failed action.
+// work agent would. Resources passed to run as failResources get a failed action.
+// poolPaused is the spec.paused every MachineConfigPool view reports.
 type fakeManagedCluster struct {
-	mu      sync.Mutex
-	actions []remoteAction
+	mu         sync.Mutex
+	actions    []remoteAction
+	poolPaused bool
 }
 
 func (f *fakeManagedCluster) recorded() []remoteAction {
@@ -2490,7 +2492,7 @@ func (f *fakeManagedCluster) run(client clientv1.Client, failResources ...string
 							"apiVersion": "machineconfiguration.openshift.io/v1",
 							"kind":       "MachineConfigPool",
 							"metadata":   map[string]interface{}{"name": view.Spec.Scope.Name},
-							"spec":       map[string]interface{}{"paused": true},
+							"spec":       map[string]interface{}{"paused": f.poolPaused},
 						})
 					}
 					_ = client.Update(context.TODO(), &view)
@@ -2543,8 +2545,11 @@ func hiveUpgradeTypeCurator(upgradeType clustercuratorv1.UpgradeType, desired st
 	}
 }
 
+// hiveUpgradeTypeClient builds its own scheme so the upgradeType tests can run in parallel:
+// they sleep on fixed MCV/MCA pauses and in sequence push the package past go test's 10m default.
 func hiveUpgradeTypeClient(curator *clustercuratorv1.ClusterCurator) clientv1.Client {
-	s := scheme.Scheme
+	s := runtime.NewScheme()
+	_ = scheme.AddToScheme(s)
 	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
 	s.AddKnownTypes(managedclusterinfov1beta1.SchemeGroupVersion, &managedclusterinfov1beta1.ManagedClusterInfo{})
 	s.AddKnownTypes(managedclusteractionv1beta1.SchemeGroupVersion,
@@ -2566,6 +2571,7 @@ func pausedOf(t *testing.T, a remoteAction) bool {
 
 // ControlPlane only: workers must be held back, otherwise they roll with the control plane.
 func TestUpgradeClusterControlPlanePausesWorkerPool(t *testing.T) {
+	t.Parallel()
 	curator := hiveUpgradeTypeCurator(clustercuratorv1.UpgradeTypeControlPlane, "4.5.16")
 	client := hiveUpgradeTypeClient(curator)
 	remote := &fakeManagedCluster{}
@@ -2583,9 +2589,10 @@ func TestUpgradeClusterControlPlanePausesWorkerPool(t *testing.T) {
 
 // NodePools only: control plane is already upgraded, so only release the workers.
 func TestUpgradeClusterNodePoolsUnpausesWorkerPoolOnly(t *testing.T) {
+	t.Parallel()
 	curator := hiveUpgradeTypeCurator(clustercuratorv1.UpgradeTypeNodePools, "4.5.14")
 	client := hiveUpgradeTypeClient(curator)
-	remote := &fakeManagedCluster{}
+	remote := &fakeManagedCluster{poolPaused: true}
 	defer remote.run(client)()
 
 	assert.Nil(t, UpgradeCluster(client, ClusterName, curator))
@@ -2598,9 +2605,10 @@ func TestUpgradeClusterNodePoolsUnpausesWorkerPoolOnly(t *testing.T) {
 }
 
 func TestUpgradeClusterNodePoolsHonorsNodePoolNames(t *testing.T) {
+	t.Parallel()
 	curator := hiveUpgradeTypeCurator(clustercuratorv1.UpgradeTypeNodePools, "4.5.14", "infra", "gpu")
 	client := hiveUpgradeTypeClient(curator)
-	remote := &fakeManagedCluster{}
+	remote := &fakeManagedCluster{poolPaused: true}
 	defer remote.run(client)()
 
 	assert.Nil(t, UpgradeCluster(client, ClusterName, curator))
@@ -2613,27 +2621,96 @@ func TestUpgradeClusterNodePoolsHonorsNodePoolNames(t *testing.T) {
 
 // Workers must never run ahead of the control plane.
 func TestUpgradeClusterNodePoolsRejectsVersionAboveControlPlane(t *testing.T) {
+	t.Parallel()
 	curator := hiveUpgradeTypeCurator(clustercuratorv1.UpgradeTypeNodePools, "4.5.16")
 	client := hiveUpgradeTypeClient(curator)
-	remote := &fakeManagedCluster{}
+	remote := &fakeManagedCluster{poolPaused: true}
 	defer remote.run(client)()
 
-	assert.NotNil(t, UpgradeCluster(client, ClusterName, curator))
+	assert.ErrorContains(t, UpgradeCluster(client, ClusterName, curator), "higher than the control plane version")
 	assert.Empty(t, remote.recorded(), "nothing changed on the managed cluster")
 }
 
 // Same as hypershift: a failed worker-side change fails the job instead of being swallowed.
 func TestUpgradeClusterNodePoolsFailedUnpauseFailsJob(t *testing.T) {
+	t.Parallel()
 	curator := hiveUpgradeTypeCurator(clustercuratorv1.UpgradeTypeNodePools, "4.5.14")
 	client := hiveUpgradeTypeClient(curator)
-	remote := &fakeManagedCluster{}
+	remote := &fakeManagedCluster{poolPaused: true}
 	defer remote.run(client, "machineconfigpools")()
 
-	assert.NotNil(t, UpgradeCluster(client, ClusterName, curator))
+	assert.ErrorContains(t, UpgradeCluster(client, ClusterName, curator), "remote MachineConfigPool worker update failed")
+	assert.Equal(t, 1, len(remote.recorded()), "the unpause was attempted")
+}
+
+// A pool already in the requested state needs no remote write.
+func TestUpgradeClusterNodePoolsSkipsUnpausedPool(t *testing.T) {
+	t.Parallel()
+	curator := hiveUpgradeTypeCurator(clustercuratorv1.UpgradeTypeNodePools, "4.5.14")
+	client := hiveUpgradeTypeClient(curator)
+	remote := &fakeManagedCluster{poolPaused: false}
+	defer remote.run(client)()
+
+	assert.Nil(t, UpgradeCluster(client, ClusterName, curator))
+	assert.Empty(t, remote.recorded(), "pool was already unpaused")
+}
+
+// An action left behind by a killed job must not wedge every later curation.
+func TestUpgradeClusterNodePoolsReplacesLeftoverAction(t *testing.T) {
+	t.Parallel()
+	curator := hiveUpgradeTypeCurator(clustercuratorv1.UpgradeTypeNodePools, "4.5.14")
+	client := hiveUpgradeTypeClient(curator)
+	leftover := &managedclusteractionv1beta1.ManagedClusterAction{
+		ObjectMeta: v1.ObjectMeta{Name: ClusterName + "-mcp-worker", Namespace: ClusterName},
+		Status: managedclusteractionv1beta1.ActionStatus{Conditions: []v1.Condition{{
+			Type:               managedclusteractionv1beta1.ConditionActionCompleted,
+			Status:             v1.ConditionFalse,
+			Reason:             managedclusteractionv1beta1.ReasonUpdateResourceFailed,
+			LastTransitionTime: v1.Now(),
+		}}},
+	}
+	assert.Nil(t, client.Create(context.TODO(), leftover))
+	remote := &fakeManagedCluster{poolPaused: true}
+	defer remote.run(client)()
+
+	assert.Nil(t, UpgradeCluster(client, ClusterName, curator), "stale failed status must not be read back")
+
+	actions := remote.recorded()
+	assert.Equal(t, 1, len(actions))
+	assert.False(t, pausedOf(t, actions[0]))
+}
+
+// A channel change alone upgrades nothing, pausing the workers would strand them.
+func TestUpgradeClusterControlPlaneChannelOnlyLeavesPoolsAlone(t *testing.T) {
+	t.Parallel()
+	curator := hiveUpgradeTypeCurator(clustercuratorv1.UpgradeTypeControlPlane, "")
+	curator.Spec.Upgrade.Channel = "stable-4.6"
+	client := hiveUpgradeTypeClient(curator)
+	remote := &fakeManagedCluster{}
+	defer remote.run(client)()
+
+	assert.Nil(t, UpgradeCluster(client, ClusterName, curator))
+
+	actions := remote.recorded()
+	assert.Equal(t, 1, len(actions))
+	assert.Equal(t, "clusterversions", actions[0].resource)
+}
+
+// Pausing master stalls the control plane upgrade, so it is rejected before any pool is touched.
+func TestUpgradeClusterControlPlaneRejectsMasterPool(t *testing.T) {
+	t.Parallel()
+	curator := hiveUpgradeTypeCurator(clustercuratorv1.UpgradeTypeControlPlane, "4.5.16", "worker", "master")
+	client := hiveUpgradeTypeClient(curator)
+	remote := &fakeManagedCluster{}
+	defer remote.run(client)()
+
+	assert.ErrorContains(t, UpgradeCluster(client, ClusterName, curator), "master")
+	assert.Empty(t, remote.recorded(), "worker was not paused either")
 }
 
 // Default (empty) upgradeType keeps today's behavior: no MCP changes.
 func TestUpgradeClusterDefaultTypeLeavesPoolsAlone(t *testing.T) {
+	t.Parallel()
 	curator := hiveUpgradeTypeCurator("", "4.5.16")
 	client := hiveUpgradeTypeClient(curator)
 	remote := &fakeManagedCluster{}
@@ -2661,6 +2738,7 @@ func hiveEUSUpgradeTypeClient(t *testing.T, upgradeType clustercuratorv1.Upgrade
 // EUS hops with ControlPlane must pause the workers first. A failed pause stops the job
 // before anything on the control plane is touched, which also keeps this test fast.
 func TestEUSUpgradeClusterControlPlanePausesWorkerPoolFirst(t *testing.T) {
+	t.Parallel()
 	client, curator := hiveEUSUpgradeTypeClient(t, clustercuratorv1.UpgradeTypeControlPlane)
 	remote := &fakeManagedCluster{}
 	defer remote.run(client, "machineconfigpools")()
@@ -2676,6 +2754,7 @@ func TestEUSUpgradeClusterControlPlanePausesWorkerPoolFirst(t *testing.T) {
 
 // An EUS upgrade moves the control plane through two hops, so there is nothing for NodePools-only to do.
 func TestEUSUpgradeClusterNodePoolsNotSupported(t *testing.T) {
+	t.Parallel()
 	client, curator := hiveEUSUpgradeTypeClient(t, clustercuratorv1.UpgradeTypeNodePools)
 	remote := &fakeManagedCluster{}
 	defer remote.run(client)()
@@ -2684,6 +2763,18 @@ func TestEUSUpgradeClusterNodePoolsNotSupported(t *testing.T) {
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "not supported")
 	assert.Empty(t, remote.recorded(), "nothing changed on the managed cluster")
+}
+
+// After the EUS upgrade finished the version checks fail too, the real cause must still be reported.
+func TestEUSUpgradeClusterNodePoolsNotSupportedAfterEUS(t *testing.T) {
+	t.Parallel()
+	client, curator := hiveEUSUpgradeTypeClient(t, clustercuratorv1.UpgradeTypeNodePools)
+	mci := managedclusterinfov1beta1.ManagedClusterInfo{}
+	assert.Nil(t, client.Get(context.TODO(), types.NamespacedName{Namespace: ClusterName, Name: ClusterName}, &mci))
+	mci.Status.DistributionInfo.OCP.Version = "4.14.16"
+	assert.Nil(t, client.Update(context.TODO(), &mci))
+
+	assert.ErrorContains(t, EUSUpgradeCluster(client, ClusterName, curator, true), "not supported")
 }
 
 func workerPoolView(pool string, paused bool, updated string) *managedclusterviewv1beta1.ManagedClusterView {
@@ -2704,15 +2795,18 @@ func workerPoolView(pool string, paused bool, updated string) *managedclustervie
 
 // NodePools only: the job must not report success while workers are still rolling.
 func TestMonitorUpgradeStatusNodePoolsWaitsForPoolUpdated(t *testing.T) {
+	t.Parallel()
 	curator := hiveUpgradeTypeCurator(clustercuratorv1.UpgradeTypeNodePools, "4.5.14")
 	curator.Spec.Upgrade.MonitorTimeout = 1
 	client := hiveUpgradeTypeClient(curator)
 	assert.Nil(t, client.Create(context.TODO(), workerPoolView("worker", false, "False")))
 
-	assert.NotNil(t, MonitorUpgradeStatus(client, ClusterName, curator, false), "pool still updating")
+	assert.ErrorContains(t, MonitorUpgradeStatus(client, ClusterName, curator, false),
+		"timed out waiting for MachineConfigPool worker", "pool still updating")
 }
 
 func TestMonitorUpgradeStatusNodePoolsPoolUpdated(t *testing.T) {
+	t.Parallel()
 	curator := hiveUpgradeTypeCurator(clustercuratorv1.UpgradeTypeNodePools, "4.5.14", "worker")
 	client := hiveUpgradeTypeClient(curator)
 	assert.Nil(t, client.Create(context.TODO(), workerPoolView("worker", false, "True")))
@@ -2722,10 +2816,12 @@ func TestMonitorUpgradeStatusNodePoolsPoolUpdated(t *testing.T) {
 
 // A pool that is still paused has not started rolling, Updated=True would be stale.
 func TestMonitorUpgradeStatusNodePoolsPausedPoolIsNotDone(t *testing.T) {
+	t.Parallel()
 	curator := hiveUpgradeTypeCurator(clustercuratorv1.UpgradeTypeNodePools, "4.5.14")
 	curator.Spec.Upgrade.MonitorTimeout = 1
 	client := hiveUpgradeTypeClient(curator)
 	assert.Nil(t, client.Create(context.TODO(), workerPoolView("worker", true, "True")))
 
-	assert.NotNil(t, MonitorUpgradeStatus(client, ClusterName, curator, false))
+	assert.ErrorContains(t, MonitorUpgradeStatus(client, ClusterName, curator, false),
+		"timed out waiting for MachineConfigPool worker")
 }
