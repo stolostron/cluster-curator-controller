@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/assert"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -19,6 +20,8 @@ import (
 
 	clustercuratorv1 "github.com/stolostron/cluster-curator-controller/pkg/api/v1beta1"
 	"github.com/stolostron/cluster-curator-controller/pkg/jobs/rbac"
+	"github.com/stolostron/cluster-curator-controller/pkg/jobs/utils"
+	managedclusterinfov1beta1 "github.com/stolostron/cluster-lifecycle-api/clusterinfo/v1beta1"
 )
 
 const testClusterName = "hosted-cluster-1"
@@ -214,4 +217,91 @@ func TestClusterCuratorPredicateDesiredCurationClearedWithStatusIsAllowedThrough
 	allowed := pred.Update(event.UpdateEvent{ObjectOld: oldCurator, ObjectNew: newCurator})
 	assert.True(t, allowed,
 		"reconcile should run when DesiredCuration/CuratingJob clear even though Status changed in the same patch")
+}
+
+func newUpgradeTestReconciler(t *testing.T, objs ...client.Object) (*ClusterCuratorReconciler, *fake.Clientset) {
+	s := runtime.NewScheme()
+	assert.Nil(t, clustercuratorv1.AddToScheme(s))
+	assert.Nil(t, managedclusterinfov1beta1.AddToScheme(s))
+
+	fakeClient := clientfake.NewClientBuilder().WithScheme(s).WithObjects(objs...).Build()
+	kubeset := fake.NewSimpleClientset()
+
+	return &ClusterCuratorReconciler{
+		Client:    fakeClient,
+		APIReader: fakeClient,
+		Kubeset:   kubeset,
+		Log:       logr.Discard(),
+	}, kubeset
+}
+
+func getFirstUpgradeCurator(name string) *clustercuratorv1.ClusterCurator {
+	return &clustercuratorv1.ClusterCurator{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: name},
+		Spec: clustercuratorv1.ClusterCuratorSpec{
+			DesiredCuration: "upgrade",
+			Upgrade:         clustercuratorv1.UpgradeHooks{DesiredUpdate: "4.14.5"},
+		},
+	}
+}
+
+// A skipped upgrade used to leave no trace on the ClusterCurator: no job, no condition, and the
+// reason only in controller logs at -v=2. The skip reason must now be recorded on the resource.
+func TestReconcileRecordsUpgradeSkippedCondition(t *testing.T) {
+	const name = "managed-1"
+	r, kubeset := newUpgradeTestReconciler(t, getFirstUpgradeCurator(name))
+
+	_, err := r.Reconcile(context.TODO(), ctrl.Request{
+		NamespacedName: types.NamespacedName{Name: name, Namespace: name},
+	})
+	assert.Nil(t, err)
+
+	stored := &clustercuratorv1.ClusterCurator{}
+	assert.Nil(t, r.Get(context.TODO(), types.NamespacedName{Name: name, Namespace: name}, stored))
+	cond := meta.FindStatusCondition(stored.Status.Conditions, utils.UpgradeSkippedCondition)
+	if assert.NotNil(t, cond, "skip reason must be visible on the ClusterCurator") {
+		assert.Equal(t, metav1.ConditionTrue, cond.Status)
+		assert.Equal(t, "ManagedClusterInfoNotFound", cond.Reason)
+	}
+
+	jobs, err := kubeset.BatchV1().Jobs(name).List(context.TODO(), metav1.ListOptions{})
+	assert.Nil(t, err)
+	assert.Empty(t, jobs.Items, "no curator job may be launched for a skipped upgrade")
+}
+
+// Once the upgrade can proceed, a stale skip condition must be cleared so the resource no longer
+// claims the upgrade was skipped while a job is running.
+func TestReconcileClearsUpgradeSkippedConditionWhenUpgradeProceeds(t *testing.T) {
+	const name = "managed-1"
+	curator := getFirstUpgradeCurator(name)
+	curator.Status.Conditions = []metav1.Condition{{
+		Type:               utils.UpgradeSkippedCondition,
+		Status:             metav1.ConditionTrue,
+		Reason:             "AlreadyAtDesiredVersion",
+		Message:            "Cluster managed-1 is already at desired version 4.14.3, skipping upgrade",
+		LastTransitionTime: metav1.Now(),
+	}}
+	mci := &managedclusterinfov1beta1.ManagedClusterInfo{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: name},
+		Status: managedclusterinfov1beta1.ClusterInfoStatus{
+			DistributionInfo: managedclusterinfov1beta1.DistributionInfo{
+				OCP: managedclusterinfov1beta1.OCPDistributionInfo{Version: "4.14.3"},
+			},
+		},
+	}
+	r, kubeset := newUpgradeTestReconciler(t, curator, mci)
+
+	_, err := r.Reconcile(context.TODO(), ctrl.Request{
+		NamespacedName: types.NamespacedName{Name: name, Namespace: name},
+	})
+	assert.Nil(t, err)
+
+	stored := &clustercuratorv1.ClusterCurator{}
+	assert.Nil(t, r.Get(context.TODO(), types.NamespacedName{Name: name, Namespace: name}, stored))
+	assert.Nil(t, meta.FindStatusCondition(stored.Status.Conditions, utils.UpgradeSkippedCondition),
+		"stale skip condition must be removed once the upgrade proceeds")
+
+	jobs, err := kubeset.BatchV1().Jobs(name).List(context.TODO(), metav1.ListOptions{})
+	assert.Nil(t, err)
+	assert.Len(t, jobs.Items, 1, "the upgrade job must be launched")
 }
