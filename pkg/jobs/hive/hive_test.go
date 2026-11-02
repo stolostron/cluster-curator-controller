@@ -1184,7 +1184,17 @@ func TestUpgradeClusterWithChannelUpstream(t *testing.T) {
 	assert.Nil(t, UpgradeCluster(client, ClusterName, clustercurator), "Upgrade started successfully")
 }
 
+// useFastMonitorUpgradePause shortens MonitorUpgradeStatus polling so the
+// hive package stays under CI's default go test timeout.
+func useFastMonitorUpgradePause(t *testing.T) {
+	t.Helper()
+	original := monitorUpgradePause
+	monitorUpgradePause = time.Millisecond
+	t.Cleanup(func() { monitorUpgradePause = original })
+}
+
 func TestMonitorUpgradeStatusJobComplete(t *testing.T) {
+	useFastMonitorUpgradePause(t)
 
 	cc := getUpgradeClusterCurator()
 
@@ -1292,6 +1302,153 @@ func TestMonitorUpgradeStatusJobComplete(t *testing.T) {
 	}()
 
 	assert.Nil(t, MonitorUpgradeStatus(client, ClusterName, cc, false), "err is nil, when cluster upgrade is successful")
+}
+
+// TestMonitorUpgradeStatusEmptyResultNoPanic ensures that an async
+// ManagedClusterView whose Status.Result has not been populated yet
+// (Raw is nil/empty) does not crash the monitor with a type-assertion
+// panic. It should instead return a controlled timeout error.
+func TestMonitorUpgradeStatusEmptyResultNoPanic(t *testing.T) {
+	useFastMonitorUpgradePause(t)
+
+	cc := getUpgradeClusterCurator()
+	// Keep the test fast: one 1-minute "timeout" with a 60s poll interval
+	// results in exactly one attempt.
+	cc.Spec.Upgrade.MonitorTimeout = 1
+
+	managedclusterview := &managedclusterviewv1beta1.ManagedClusterView{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      ClusterName,
+			Namespace: ClusterName,
+			Labels: map[string]string{
+				MCVUpgradeLabel: ClusterName,
+			},
+		},
+		Spec: managedclusterviewv1beta1.ViewSpec{
+			Scope: managedclusterviewv1beta1.ViewScope{
+				Group:     "config.openshift.io",
+				Kind:      "ClusterVersion",
+				Name:      "version",
+				Namespace: "",
+				Version:   "v1",
+			},
+		},
+		// Status.Result is intentionally left empty/unpopulated.
+	}
+
+	s := scheme.Scheme
+	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
+	s.AddKnownTypes(managedclusterviewv1beta1.SchemeGroupVersion, &managedclusterviewv1beta1.ManagedClusterView{})
+	client := clientfake.NewClientBuilder().WithRuntimeObjects([]runtime.Object{cc, managedclusterview}...).WithScheme(s).Build()
+
+	var err error
+	assert.NotPanics(t, func() {
+		err = MonitorUpgradeStatus(client, ClusterName, cc, false)
+	}, "monitor must not panic on an empty/unpopulated ManagedClusterView result")
+	assert.NotNil(t, err, "a controlled timeout error is returned instead of a false success")
+}
+
+// TestMonitorUpgradeStatusMissingConditionsNoPanic ensures that a raw
+// ClusterVersion payload that has a "status" field but no
+// "status.conditions" does not crash the monitor with a type-assertion
+// panic (interface conversion: interface {} is nil, not map[string]interface {}).
+func TestMonitorUpgradeStatusMissingConditionsNoPanic(t *testing.T) {
+	useFastMonitorUpgradePause(t)
+
+	cc := getUpgradeClusterCurator()
+	cc.Spec.Upgrade.MonitorTimeout = 1
+
+	managedclusterview := &managedclusterviewv1beta1.ManagedClusterView{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      ClusterName,
+			Namespace: ClusterName,
+			Labels: map[string]string{
+				MCVUpgradeLabel: ClusterName,
+			},
+		},
+		Spec: managedclusterviewv1beta1.ViewSpec{
+			Scope: managedclusterviewv1beta1.ViewScope{
+				Group:     "config.openshift.io",
+				Kind:      "ClusterVersion",
+				Name:      "version",
+				Namespace: "",
+				Version:   "v1",
+			},
+		},
+		Status: managedclusterviewv1beta1.ViewStatus{
+			Result: runtime.RawExtension{
+				// Valid JSON, but status.conditions is absent.
+				Raw: []byte(`{"status":{"desired":{"version":"4.5.12"}}}`),
+			},
+		},
+	}
+
+	s := scheme.Scheme
+	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
+	s.AddKnownTypes(managedclusterviewv1beta1.SchemeGroupVersion, &managedclusterviewv1beta1.ManagedClusterView{})
+	client := clientfake.NewClientBuilder().WithRuntimeObjects([]runtime.Object{cc, managedclusterview}...).WithScheme(s).Build()
+
+	var err error
+	assert.NotPanics(t, func() {
+		err = MonitorUpgradeStatus(client, ClusterName, cc, false)
+	}, "monitor must not panic when status.conditions is missing")
+	assert.NotNil(t, err, "a controlled timeout error is returned instead of a false success")
+}
+
+// TestMonitorUpgradeStatusConditionMissingMessageNoPanic ensures that a
+// Progressing=True condition without a "message" field does not crash the
+// monitor with a type-assertion panic (interface conversion: interface {}
+// is nil, not string). Success with a complete Available message is covered
+// by TestMonitorUpgradeStatusJobComplete.
+func TestMonitorUpgradeStatusConditionMissingMessageNoPanic(t *testing.T) {
+	useFastMonitorUpgradePause(t)
+
+	cc := getUpgradeClusterCurator()
+	// Two attempts so the first poll is not the final timeout short-circuit
+	// and still walks the Progressing branch that reads condition["message"].
+	cc.Spec.Upgrade.MonitorTimeout = 2
+
+	managedclusterview := &managedclusterviewv1beta1.ManagedClusterView{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      ClusterName,
+			Namespace: ClusterName,
+			Labels: map[string]string{
+				MCVUpgradeLabel: ClusterName,
+			},
+		},
+		Spec: managedclusterviewv1beta1.ViewSpec{
+			Scope: managedclusterviewv1beta1.ViewScope{
+				Group:     "config.openshift.io",
+				Kind:      "ClusterVersion",
+				Name:      "version",
+				Namespace: "",
+				Version:   "v1",
+			},
+		},
+		Status: managedclusterviewv1beta1.ViewStatus{
+			Result: runtime.RawExtension{
+				// Progressing=True condition with no "message" key at all.
+				Raw: []byte(`{
+					"status": {
+						"conditions": [
+							{"lastTransitionTime":"2021-04-28T16:19:38Z","status":"True","type":"Progressing"}
+						]
+					}
+				}`),
+			},
+		},
+	}
+
+	s := scheme.Scheme
+	s.AddKnownTypes(clustercuratorv1.SchemeBuilder.GroupVersion, &clustercuratorv1.ClusterCurator{})
+	s.AddKnownTypes(managedclusterviewv1beta1.SchemeGroupVersion, &managedclusterviewv1beta1.ManagedClusterView{})
+	client := clientfake.NewClientBuilder().WithRuntimeObjects([]runtime.Object{cc, managedclusterview}...).WithScheme(s).Build()
+
+	var err error
+	assert.NotPanics(t, func() {
+		err = MonitorUpgradeStatus(client, ClusterName, cc, false)
+	}, "monitor must not panic when a condition is missing its message field")
+	assert.NotNil(t, err, "a controlled timeout error is returned when Available never reports the desired version")
 }
 
 func TestUpgradeClusterForceUpgradeCSVHasDesiredUpdate(t *testing.T) {

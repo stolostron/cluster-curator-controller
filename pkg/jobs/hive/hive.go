@@ -873,6 +873,10 @@ func EUSUpgradeCluster(client clientv1.Client, clusterName string, curator *clus
 	return nil
 }
 
+// monitorUpgradePause is the poll interval for MonitorUpgradeStatus.
+// Tests override it to keep the hive package under CI's default timeout.
+var monitorUpgradePause = utils.PauseSixtySeconds
+
 func MonitorUpgradeStatus(client clientv1.Client, clusterName string, curator *clustercuratorv1.ClusterCurator, isInterUpdate bool) error {
 	// NodePools only: the control plane is already done, wait for the workers to roll out
 	if !curator.Spec.Upgrade.UpgradeType.IncludesControlPlane() {
@@ -898,7 +902,7 @@ func MonitorUpgradeStatus(client clientv1.Client, clusterName string, curator *c
 			Name:      clusterName,
 		}, &resultmcview); getErr != nil {
 			// sleep and keep on retrying
-			time.Sleep(utils.PauseSixtySeconds)
+			time.Sleep(monitorUpgradePause)
 			continue
 		}
 
@@ -913,28 +917,48 @@ func MonitorUpgradeStatus(client clientv1.Client, clusterName string, curator *c
 
 		clusterVersion := map[string]interface{}{}
 
-		if resultClusterVersion.Raw != nil {
-			err := json.Unmarshal(resultClusterVersion.Raw, &clusterVersion)
-			utils.CheckError(err)
+		if len(resultClusterVersion.Raw) > 0 {
+			if err := json.Unmarshal(resultClusterVersion.Raw, &clusterVersion); err != nil {
+				// The ManagedClusterView result is not valid JSON yet (async
+				// propagation still in progress). Treat it like an empty/missing
+				// result below rather than panicking.
+				klog.Infof("ManagedClusterView result for %s is not ready yet: %v", clusterName, err)
+				clusterVersion = map[string]interface{}{}
+			}
 		}
 		if desiredUpdate != "" {
-			if cvConditions, ok := clusterVersion["status"].(map[string]interface{})["conditions"].([]interface{}); ok {
-				for _, condition := range cvConditions {
-					if condition.(map[string]interface{})["type"] == "Available" && condition.(map[string]interface{})["status"] == "True" {
-						if strings.Contains(condition.(map[string]interface{})["message"].(string), desiredUpdate) {
-							klog.V(2).Info("Upgrade succeeded ✓")
+			// clusterVersion["status"] and its "conditions" field may be absent
+			// while the ManagedClusterView result is still being populated, so
+			// use comma-ok assertions instead of assuming they are always
+			// present (avoids a panic: interface conversion: interface {} is
+			// nil, not map[string]interface {}).
+			cvStatus, _ := clusterVersion["status"].(map[string]interface{})
+			if cvConditions, ok := cvStatus["conditions"].([]interface{}); ok {
+				for _, c := range cvConditions {
+					condition, ok := c.(map[string]interface{})
+					if !ok {
+						continue
+					}
+					// "message" is optional on some conditions (e.g. a bare
+					// Available=True/Progressing=True condition), so fall back
+					// to an empty string instead of panicking on a nil value.
+					message, _ := condition["message"].(string)
+
+					if condition["type"] == "Available" && condition["status"] == "True" {
+						if strings.Contains(message, desiredUpdate) {
+							klog.Info("Upgrade succeeded ✓")
 							i = upgradeAttempts
 							break
 						}
 					} else if i == (upgradeAttempts - 1) {
 						klog.Warning(cvConditions)
-						klog.V(2).Info("Timed out waiting for monitor upgrade job")
+						klog.Info("Timed out waiting for monitor upgrade job")
 						timeoutErr = errors.New("Timed out waiting for monitor upgrade job")
 						break
-					} else if condition.(map[string]interface{})["type"] == "Progressing" && condition.(map[string]interface{})["status"] == "True" {
-						klog.V(2).Info(" Upgrade status " + condition.(map[string]interface{})["message"].(string))
+					} else if condition["type"] == "Progressing" && condition["status"] == "True" {
+						klog.V(2).Info(" Upgrade status " + message)
 						// update curator status to show upgrade %
-						strMessage := "Upgrade status - " + condition.(map[string]interface{})["message"].(string)
+						strMessage := "Upgrade status - " + message
 						utils.CheckError(utils.RecordCurrentStatusCondition(
 							client,
 							clusterName,
@@ -944,24 +968,38 @@ func MonitorUpgradeStatus(client clientv1.Client, clusterName string, curator *c
 							strMessage))
 					}
 				}
+			} else if i == (upgradeAttempts - 1) {
+				// Status never showed up (empty/partial view for the whole
+				// polling window); report a controlled timeout instead of
+				// silently returning success.
+				klog.Info("Timed out waiting for monitor upgrade job")
+				timeoutErr = errors.New("Timed out waiting for monitor upgrade job")
+				break
 			}
 		}
+		cvSpec, _ := clusterVersion["spec"].(map[string]interface{})
 		if desiredUpdate == "" && channel != "" {
-			if clusterVersion["spec"].(map[string]interface{})["channel"] == channel {
-				klog.V(2).Info("Updated channel successfully ✓")
+			if cvSpec["channel"] == channel {
+				klog.Info("Updated channel successfully ✓")
 				isChannelUpstreamUpdate = true
 			}
 		}
 		if desiredUpdate == "" && upstream != "" {
-			if clusterVersion["spec"].(map[string]interface{})["upstream"] == upstream {
-				klog.V(2).Info("Updated upstream successfully ✓")
+			if cvSpec["upstream"] == upstream {
+				klog.Info("Updated upstream successfully ✓")
 				isChannelUpstreamUpdate = true
 			}
 		}
 		if isChannelUpstreamUpdate {
 			break
 		}
-		time.Sleep(utils.PauseSixtySeconds)
+		// Success sets i to upgradeAttempts; timeoutErr is set on the final
+		// attempt. Skip the trailing sleep in both cases so the monitor
+		// returns as soon as the outcome is known.
+		if i >= upgradeAttempts || timeoutErr != nil {
+			break
+		}
+		time.Sleep(monitorUpgradePause)
 	}
 
 	if err := client.Delete(context.TODO(), &resultmcview); err != nil {
