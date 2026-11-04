@@ -1,0 +1,183 @@
+# Sample ClusterCurator resources for upgrading standalone (Hive) clusters
+# See docs/standalone-cluster-upgrade.md for detailed documentation
+#
+# For standalone clusters, MachineConfigPools stand in for Hypershift NodePools:
+#   ControlPlane → pause worker MCP(s), then update ClusterVersion
+#   NodePools    → unpause worker MCP(s), skip ClusterVersion update
+#   "" (default) → classic upgrade; no MCP pause/unpause
+
+---
+# Example 1: Classic full upgrade (control plane + workers together)
+apiVersion: cluster.open-cluster-management.io/v1beta1
+kind: ClusterCurator
+metadata:
+  name: my-cluster
+  namespace: my-cluster
+  labels:
+    open-cluster-management: curator
+spec:
+  desiredCuration: upgrade
+  upgrade:
+    desiredUpdate: "4.16.30"
+    # upgradeType omitted = default: both control plane and workers
+
+---
+# Example 2a: Two-stage — Step A, control plane only
+# Pauses worker MachineConfigPool(s), upgrades ClusterVersion, leaves pools paused.
+apiVersion: cluster.open-cluster-management.io/v1beta1
+kind: ClusterCurator
+metadata:
+  name: my-cluster
+  namespace: my-cluster
+  labels:
+    open-cluster-management: curator
+spec:
+  desiredCuration: upgrade
+  upgrade:
+    desiredUpdate: "4.16.30"
+    upgradeType: ControlPlane
+
+---
+# Example 2b: Two-stage — Step B, workers only
+# Unpauses worker MachineConfigPool(s). desiredUpdate must not exceed control plane version.
+# Apply after Example 2a completes (change upgradeType on the same ClusterCurator).
+apiVersion: cluster.open-cluster-management.io/v1beta1
+kind: ClusterCurator
+metadata:
+  name: my-cluster
+  namespace: my-cluster
+  labels:
+    open-cluster-management: curator
+spec:
+  desiredCuration: upgrade
+  upgrade:
+    desiredUpdate: "4.16.30"
+    upgradeType: NodePools
+
+---
+# Example 3a: Control plane with specific MachineConfigPools
+apiVersion: cluster.open-cluster-management.io/v1beta1
+kind: ClusterCurator
+metadata:
+  name: my-cluster
+  namespace: my-cluster
+  labels:
+    open-cluster-management: curator
+spec:
+  desiredCuration: upgrade
+  upgrade:
+    desiredUpdate: "4.16.30"
+    upgradeType: ControlPlane
+    nodePoolNames:
+      - worker
+      - infra
+    # Do not list "master"
+
+---
+# Example 3b: Unpause / roll those same pools
+apiVersion: cluster.open-cluster-management.io/v1beta1
+kind: ClusterCurator
+metadata:
+  name: my-cluster
+  namespace: my-cluster
+  labels:
+    open-cluster-management: curator
+spec:
+  desiredCuration: upgrade
+  upgrade:
+    desiredUpdate: "4.16.30"
+    upgradeType: NodePools
+    nodePoolNames:
+      - worker
+      - infra
+
+---
+# Example 4: Staggered worker rollout — unpause one pool at a time
+# (After a ControlPlane curation that paused worker + infra + gpu)
+apiVersion: cluster.open-cluster-management.io/v1beta1
+kind: ClusterCurator
+metadata:
+  name: my-cluster
+  namespace: my-cluster
+  labels:
+    open-cluster-management: curator
+spec:
+  desiredCuration: upgrade
+  upgrade:
+    desiredUpdate: "4.16.30"
+    upgradeType: NodePools
+    nodePoolNames:
+      - worker
+    # Later change to [infra], then [gpu]
+
+---
+# Example 5: Channel-only (ControlPlane without desiredUpdate does not pause workers)
+apiVersion: cluster.open-cluster-management.io/v1beta1
+kind: ClusterCurator
+metadata:
+  name: my-cluster
+  namespace: my-cluster
+  labels:
+    open-cluster-management: curator
+spec:
+  desiredCuration: upgrade
+  upgrade:
+    channel: "stable-4.16"
+    upgradeType: ControlPlane
+
+---
+# Example 6a: EUS-to-EUS control plane (workers paused across both hops)
+apiVersion: cluster.open-cluster-management.io/v1beta1
+kind: ClusterCurator
+metadata:
+  name: my-cluster
+  namespace: my-cluster
+  labels:
+    open-cluster-management: curator
+spec:
+  desiredCuration: upgrade
+  upgrade:
+    intermediateUpdate: "4.14.40"
+    desiredUpdate: "4.16.30"
+    channel: "eus-4.16"
+    upgradeType: ControlPlane
+    monitorTimeout: 240
+
+---
+# Example 6b: After EUS finishes — remove intermediateUpdate, release workers
+# NodePools is not supported while intermediateUpdate is set.
+apiVersion: cluster.open-cluster-management.io/v1beta1
+kind: ClusterCurator
+metadata:
+  name: my-cluster
+  namespace: my-cluster
+  labels:
+    open-cluster-management: curator
+spec:
+  desiredCuration: upgrade
+  upgrade:
+    desiredUpdate: "4.16.30"
+    upgradeType: NodePools
+
+---
+# Example 7: Two-stage control plane with Ansible hooks
+apiVersion: cluster.open-cluster-management.io/v1beta1
+kind: ClusterCurator
+metadata:
+  name: my-cluster
+  namespace: my-cluster
+  labels:
+    open-cluster-management: curator
+spec:
+  desiredCuration: upgrade
+  upgrade:
+    desiredUpdate: "4.16.30"
+    upgradeType: ControlPlane
+    monitorTimeout: 180
+    towerAuthSecret: toweraccess
+    prehook:
+      - name: Pre-Upgrade Health Check
+        extra_vars:
+          cluster_name: my-cluster
+    posthook:
+      - name: Notify Control Plane Complete

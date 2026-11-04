@@ -221,6 +221,40 @@ For more details on job flow within our architecture see our [**swimlane chart**
 
   See [deploy/samples/clusterCurator-upgrade.yaml](deploy/samples/clusterCurator-upgrade.yaml) for more examples.
 
+### Standalone (Hive) cluster upgrade example:
+
+  For detailed documentation on two-stage control-plane-then-workers upgrades (MachineConfigPools stand in for NodePools), see the [Standalone Cluster Upgrade Guide](docs/standalone-cluster-upgrade.md).
+
+  Quick example - control plane first, then workers:
+  ```yaml
+  # Step A: upgrade control plane only (pauses worker MachineConfigPool)
+  apiVersion: cluster.open-cluster-management.io/v1beta1
+  kind: ClusterCurator
+  metadata:
+    name: my-cluster
+    namespace: my-cluster
+  spec:
+    desiredCuration: upgrade
+    upgrade:
+      desiredUpdate: "4.16.30"
+      upgradeType: ControlPlane
+  ```
+  ```yaml
+  # Step B: after Step A completes, roll workers (unpauses MachineConfigPool)
+  apiVersion: cluster.open-cluster-management.io/v1beta1
+  kind: ClusterCurator
+  metadata:
+    name: my-cluster
+    namespace: my-cluster
+  spec:
+    desiredCuration: upgrade
+    upgrade:
+      desiredUpdate: "4.16.30"
+      upgradeType: NodePools
+  ```
+
+  See [deploy/samples/clusterCurator-standalone-upgrade.yaml](deploy/samples/clusterCurator-standalone-upgrade.yaml) for more examples.
+
 ---
 
 - ### Diagnostic steps:
