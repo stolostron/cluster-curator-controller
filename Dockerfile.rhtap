@@ -3,7 +3,7 @@ FROM registry.redhat.io/openshift/golang-builder:golang-builder-v1.26-rhel9 as b
 WORKDIR /go/src/github.com/stolostron/cluster-curator-controller
 COPY . .
 
-RUN make compile-curator-konflux
+RUN CGO_ENABLED=1 GOEXPERIMENT=strictfipsruntime make compile-curator-konflux
 
 #RUN go build -o build/_output/curator ./pkg/jobs/curator.go
 #RUN go build -o build/_output/cluster-curator-controller ./pkg/controller/controller.go
