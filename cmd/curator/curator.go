@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -516,14 +517,18 @@ func curatorRun(config *rest.Config, client clientv1.Client, clusterName string,
 	if jobChoice == "done" {
 		jobChoice = CuratorJob
 		msg = curator.Spec.CuratingJob + " DesiredCuration: " + desiredCuration
-		condition = v1.ConditionTrue
 
 		if desiredCuration == "upgrade" {
 			msg = msg + " Version (" + utils.GetCurrentVersionInfo(curator) + ")"
 		}
 
-		// Remove DesireCuration, CuratingJob, Status from curator resource
-		updateDoneClusterCurator(client, curator, clusterName)
+		// Publish the terminal condition and clear the active curation fields in one
+		// API update. A separate cleanup followed by a status update leaves a window
+		// where desiredCuration=upgrade has neither an active job nor a completion
+		// condition, which can launch the same NodePools curation again.
+		updateDoneClusterCurator(client, curator, msg)
+		klog.V(2).Info("Done!")
+		return
 	}
 
 	// Used to signal end of job as well as end of init container
@@ -538,16 +543,28 @@ func curatorRun(config *rest.Config, client clientv1.Client, clusterName string,
 	klog.V(2).Info("Done!")
 }
 
-func updateDoneClusterCurator(client clientv1.Client, curator *clustercuratorv1.ClusterCurator, clusterName string) {
-	if curator.Spec.DesiredCuration == "upgrade" {
-		patch := []byte(`{"spec":{"curatorJob": null},"status": null, "operation": null}`)
-		err := client.Patch(context.Background(), curator, clientv1.RawPatch(types.MergePatchType, patch))
-		utils.CheckError(err)
-		return
+func updateDoneClusterCurator(client clientv1.Client, curator *clustercuratorv1.ClusterCurator, message string) {
+	specPatch := map[string]interface{}{"curatorJob": nil}
+	if curator.Spec.DesiredCuration != "upgrade" {
+		specPatch["desiredCuration"] = nil
 	}
 
-	patch := []byte(`{"spec":{"curatorJob": null, "desiredCuration": null},"status": null, "operation": null}`)
-	err := client.Patch(context.Background(), curator, clientv1.RawPatch(types.MergePatchType, patch))
+	patch, err := json.Marshal(map[string]interface{}{
+		"spec": specPatch,
+		"status": map[string]interface{}{
+			"conditions": []v1.Condition{{
+				Type:               CuratorJob,
+				Status:             v1.ConditionTrue,
+				Reason:             utils.JobHasFinished,
+				Message:            message,
+				LastTransitionTime: v1.Now(),
+			}},
+		},
+		"operation": nil,
+	})
+	utils.CheckError(err)
+
+	err = client.Patch(context.Background(), curator, clientv1.RawPatch(types.MergePatchType, patch))
 	utils.CheckError(err)
 }
 

@@ -891,3 +891,72 @@ func TestAddIntermediateUpdateToExistingCurator(t *testing.T) {
 	assert.True(t, strings.Contains(err.Error(), "The intermediateUpdate cannot be added via update if desiredUpdate already exists"),
 		"Cannot add intermediateUpdate to existing curator validation successful")
 }
+
+func TestUpdateDoneClusterCuratorAtomicallyCompletesNodePoolsUpgrade(t *testing.T) {
+	testScheme := runtime.NewScheme()
+	assert.NoError(t, clustercuratorv1.AddToScheme(testScheme))
+
+	curator := &clustercuratorv1.ClusterCurator{
+		ObjectMeta: v1.ObjectMeta{Name: ClusterName, Namespace: ClusterName},
+		Spec: clustercuratorv1.ClusterCuratorSpec{
+			DesiredCuration: "upgrade",
+			CuratingJob:     "curator-job-abc",
+			Upgrade: clustercuratorv1.UpgradeHooks{
+				DesiredUpdate: "4.22.20",
+				UpgradeType:   clustercuratorv1.UpgradeTypeNodePools,
+			},
+		},
+		Operation: &clustercuratorv1.Operation{RetryPosthook: "upgradePosthook"},
+	}
+	testClient := clientfake.NewClientBuilder().WithScheme(testScheme).WithObjects(curator).Build()
+	message := "curator-job-abc DesiredCuration: upgrade Version (" + utils.GetCurrentVersionInfo(curator) + ")"
+
+	updateDoneClusterCurator(testClient, curator, message)
+
+	stored := &clustercuratorv1.ClusterCurator{}
+	assert.NoError(t, testClient.Get(context.Background(), types.NamespacedName{
+		Name: ClusterName, Namespace: ClusterName,
+	}, stored))
+	assert.Equal(t, "upgrade", stored.Spec.DesiredCuration)
+	assert.Empty(t, stored.Spec.CuratingJob)
+	assert.Nil(t, stored.Operation)
+	if assert.Len(t, stored.Status.Conditions, 1) {
+		assert.Equal(t, CuratorJob, stored.Status.Conditions[0].Type)
+		assert.Equal(t, v1.ConditionTrue, stored.Status.Conditions[0].Status)
+		assert.Equal(t, utils.JobHasFinished, stored.Status.Conditions[0].Reason)
+		assert.Equal(t, message, stored.Status.Conditions[0].Message)
+	}
+
+	needed, _, err := utils.NeedToUpgradeWithSkipCondition(nil, *stored)
+	assert.NoError(t, err)
+	assert.False(t, needed, "the completion state must not launch the NodePools curation again")
+}
+
+func TestUpdateDoneClusterCuratorAtomicallyCompletesInstall(t *testing.T) {
+	testScheme := runtime.NewScheme()
+	assert.NoError(t, clustercuratorv1.AddToScheme(testScheme))
+
+	curator := &clustercuratorv1.ClusterCurator{
+		ObjectMeta: v1.ObjectMeta{Name: ClusterName, Namespace: ClusterName},
+		Spec: clustercuratorv1.ClusterCuratorSpec{
+			DesiredCuration: "install",
+			CuratingJob:     "curator-job-install",
+		},
+	}
+	testClient := clientfake.NewClientBuilder().WithScheme(testScheme).WithObjects(curator).Build()
+	message := "curator-job-install DesiredCuration: install"
+
+	updateDoneClusterCurator(testClient, curator, message)
+
+	stored := &clustercuratorv1.ClusterCurator{}
+	assert.NoError(t, testClient.Get(context.Background(), types.NamespacedName{
+		Name: ClusterName, Namespace: ClusterName,
+	}, stored))
+	assert.Empty(t, stored.Spec.DesiredCuration)
+	assert.Empty(t, stored.Spec.CuratingJob)
+	if assert.Len(t, stored.Status.Conditions, 1) {
+		assert.Equal(t, CuratorJob, stored.Status.Conditions[0].Type)
+		assert.Equal(t, v1.ConditionTrue, stored.Status.Conditions[0].Status)
+		assert.Equal(t, message, stored.Status.Conditions[0].Message)
+	}
+}
