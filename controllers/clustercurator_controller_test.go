@@ -155,6 +155,29 @@ func TestClusterCuratorPredicateCuratingJobClearedIsAllowedThrough(t *testing.T)
 	assert.True(t, allowed, "reconcile should run when CuratingJob clears so curator-crb cleanup can happen")
 }
 
+// TestClusterCuratorPredicateAtomicUpgradeCompletionIsAllowedThrough verifies
+// the real atomic completion event: CuratingJob clears while the running
+// condition is replaced by the terminal condition in the same API update.
+// Reconcile must still run so post-curation RBAC cleanup is not skipped.
+func TestClusterCuratorPredicateAtomicUpgradeCompletionIsAllowedThrough(t *testing.T) {
+	pred := newClusterCuratorPredicate()
+
+	oldCurator := getHypershiftUpgradeDoneCurator()
+	oldCurator.Spec.CuratingJob = "curator-job-abc"
+	oldCurator.Status.Conditions[0].Status = metav1.ConditionFalse
+	oldCurator.Status.Conditions[0].Message = "curator-job-abc DesiredCuration: upgrade"
+
+	newCurator := oldCurator.DeepCopy()
+	newCurator.Spec.CuratingJob = ""
+	newCurator.Status.Conditions[0].Status = metav1.ConditionTrue
+	newCurator.Status.Conditions[0].Message =
+		"curator-job-abc DesiredCuration: upgrade Version (4.11.4;;;;)"
+
+	allowed := pred.Update(event.UpdateEvent{ObjectOld: oldCurator, ObjectNew: newCurator})
+	assert.True(t, allowed,
+		"atomic completion must trigger reconcile so post-curation RBAC cleanup can happen")
+}
+
 // TestClusterCuratorPredicateDesiredCurationClearedIsAllowedThrough is a
 // regression check for the earlier install/destroy completion fix, to make sure
 // it still behaves correctly alongside the new CuratingJob change.
@@ -304,4 +327,45 @@ func TestReconcileClearsUpgradeSkippedConditionWhenUpgradeProceeds(t *testing.T)
 	jobs, err := kubeset.BatchV1().Jobs(name).List(context.TODO(), metav1.ListOptions{})
 	assert.Nil(t, err)
 	assert.Len(t, jobs.Items, 1, "the upgrade job must be launched")
+}
+
+func TestReconcileDoesNotRelaunchCompletedNodePoolsUpgrade(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		cluster   string
+		namespace string
+	}{
+		{name: "Hive", cluster: "standalone-1", namespace: "standalone-1"},
+		{name: "HyperShift", cluster: "hosted-1", namespace: "clusters"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			curator := &clustercuratorv1.ClusterCurator{
+				ObjectMeta: metav1.ObjectMeta{Name: tc.cluster, Namespace: tc.namespace},
+				Spec: clustercuratorv1.ClusterCuratorSpec{
+					DesiredCuration: "upgrade",
+					Upgrade: clustercuratorv1.UpgradeHooks{
+						DesiredUpdate: "4.22.20",
+						UpgradeType:   clustercuratorv1.UpgradeTypeNodePools,
+					},
+				},
+			}
+			curator.Status.Conditions = []metav1.Condition{{
+				Type:   "clustercurator-job",
+				Status: metav1.ConditionTrue,
+				Reason: utils.JobHasFinished,
+				Message: "curator-job-abc DesiredCuration: upgrade Version (" +
+					utils.GetCurrentVersionInfo(curator) + ")",
+			}}
+
+			r, kubeset := newUpgradeTestReconciler(t, curator)
+			_, err := r.Reconcile(context.TODO(), ctrl.Request{
+				NamespacedName: types.NamespacedName{Name: tc.cluster, Namespace: tc.namespace},
+			})
+			assert.NoError(t, err)
+
+			jobs, err := kubeset.BatchV1().Jobs(tc.namespace).List(context.TODO(), metav1.ListOptions{})
+			assert.NoError(t, err)
+			assert.Empty(t, jobs.Items, "a completed NodePools request must not create another curator job")
+		})
+	}
 }
